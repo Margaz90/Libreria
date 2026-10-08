@@ -7,7 +7,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "added"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "scaffale", q: "", sort: "recenti", coverJob: null };
@@ -134,7 +134,7 @@
       edYear: yearOf(r.releaseDate || ""), pages: undefined,
       genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
       synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
-      isbn: "", lang: "it",
+      isbn: "", lang: "",
       cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
     })).filter(x => x.title);
   }
@@ -151,7 +151,7 @@
     return (j.docs || []).map(d => ({
       title: d.title || "", author: (d.author_name || []).join(", "),
       edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
-      isbn: (d.isbn || [])[0] || "", lang: (d.language || []).includes("ita") ? "it" : "",
+      isbn: (d.isbn || [])[0] || "", lang: "",
       cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : ""
     })).filter(x => x.title);
   }
@@ -183,23 +183,44 @@
     const m = /Titolo originale: (.+?)\.(?:\s|$)/.exec(b.synopsis || "");
     return m && !/nessuna edizione/.test(m[1]) ? m[1] : "";
   }
+  // Quanto un risultato sembra l'edizione italiana del libro: titolo italiano uguale, lingua italiana, negozio italiano.
+  function itScore(b, x) {
+    const t = norm(b.title), xt = norm(x.title), orig = norm(originalTitle(b));
+    let sc = 0;
+    if (xt && t && (xt === t || xt.startsWith(t + " ") || t.startsWith(xt + " "))) sc += 4;
+    else if (xt && t && (xt.includes(t) || t.includes(xt))) sc += 2;
+    if (x.lang === "it") sc += 3;
+    if (orig && orig !== t && xt && (xt === orig || xt.startsWith(orig))) sc -= 3;
+    if (x.src === "Apple Books") sc += 1;
+    return sc;
+  }
+  async function settle(jobs, errors) {
+    const res = await Promise.allSettled(jobs.map(j => j()));
+    return res.flatMap(r => {
+      if (r.status === "fulfilled") return r.value;
+      const code = r.reason && r.reason.code; if (code && errors) errors[code] = (errors[code] || 0) + 1;
+      return [];
+    });
+  }
+  const tag = src => list => list.map(x => ({ ...x, src }));
   async function findCover(b, errors) {
     const last = String(b.author || "").split(/\s+/).pop();
     const orig = originalTitle(b);
-    const pick = list => list.find(x => x.cover && sameAuthor(b.author, x.author));
-    const attempts = [
-      () => appleSearch(`${b.title} ${last}`, 8),
-      () => googleSearch(`intitle:"${b.title}"` + (last ? ` inauthor:${last}` : ""), { max: 6 }),
-      () => openLibrarySearch(b.title, last),
-      () => orig ? googleSearch(`intitle:"${orig}"` + (last ? ` inauthor:${last}` : ""), { italian: false, max: 6 }) : Promise.resolve([]),
-      () => orig ? openLibrarySearch(orig, last) : Promise.resolve([])
-    ];
-    for (const a of attempts) {
-      try { const hit = pick(await a()); if (hit) return hit; }
-      catch (e) { if (e && e.code) errors[e.code] = (errors[e.code] || 0) + 1; }
-      await sleep(150);
-    }
-    return null;
+    const ok = list => list.filter(x => x.cover && sameAuthor(b.author, x.author))
+      .map(x => ({ ...x, score: itScore(b, x) })).sort((p, q) => q.score - p.score);
+    // 1) edizioni italiane: Apple Books Italia, Google Books in italiano, Open Library con il titolo italiano
+    const first = ok(await settle([
+      () => appleSearch(`${b.title} ${last}`, 8).then(tag("Apple Books")),
+      () => googleSearch(`intitle:"${b.title}"` + (last ? ` inauthor:${last}` : ""), { max: 6 }).then(tag("Google Books")),
+      () => openLibrarySearch(b.title, last).then(tag("Open Library"))
+    ], errors));
+    if (first.length && first[0].score >= 2) return first[0];
+    // 2) ripiego: titolo originale
+    const second = orig ? ok(await settle([
+      () => googleSearch(`intitle:"${orig}"` + (last ? ` inauthor:${last}` : ""), { italian: false, max: 6 }).then(tag("Google Books")),
+      () => openLibrarySearch(orig, last).then(tag("Open Library"))
+    ], errors)) : [];
+    return first[0] || second[0] || null;
   }
   // Copertine alternative per un libro: fino a 6, dalle tre fonti, solo dello stesso autore.
   async function coverCandidates(b) {
@@ -213,19 +234,17 @@
     ];
     const all = (await Promise.allSettled(jobs)).flatMap(r => r.status === "fulfilled" ? r.value : []);
     const seen = new Set(), out = [];
-    // alterna le fonti, così compaiono edizioni diverse
-    const bySrc = {}; all.filter(x => x.cover && sameAuthor(b.author, x.author)).forEach(x => (bySrc[x.src] = bySrc[x.src] || []).push(x));
-    const queues = Object.values(bySrc);
-    while (out.length < 6 && queues.some(q => q.length)) {
-      for (const q of queues) { const x = q.shift(); if (x && !seen.has(x.cover)) { seen.add(x.cover); out.push(x); } if (out.length >= 6) break; }
-    }
+    all.filter(x => x.cover && sameAuthor(b.author, x.author))
+      .map(x => ({ ...x, score: itScore(b, x) }))
+      .sort((p, q) => q.score - p.score)
+      .forEach(x => { if (out.length < 6 && !seen.has(x.cover)) { seen.add(x.cover); out.push({ ...x, it: x.score >= 4 || x.lang === "it" }); } });
     return out;
   }
 
-  async function runCoverJob(onProgress) {
+  async function runCoverJob(onProgress, { redo = false } = {}) {
     if (state.coverJob) return;
     if (!navigator.onLine) { toast("Serve una connessione per cercare le copertine."); return; }
-    const todo = state.books.filter(b => !b.cover && !b.noCover);
+    const todo = redo ? state.books.filter(b => !b.coverManual && !b.spine) : state.books.filter(b => !b.cover && !b.noCover);
     if (!todo.length) { toast("Tutti i libri hanno già una copertina."); return; }
     state.coverJob = { done: 0, total: todo.length, found: 0 };
     const errors = {};
@@ -271,8 +290,8 @@
                  "radial-gradient(circle at 70% 30%, rgba(255,255,255,.14) 0 18%, transparent 19%)",
                  "repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 9px)",
                  "linear-gradient(160deg, rgba(255,255,255,.12), transparent 55%)"][hash(b.genre || b.title) % 4];
-    const img = b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
-    return `<div class="cover" style="background:${c}"><div class="pat" style="background:${pat}"></div>
+    const img = b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.remove()">` : "";
+    return `<div class="cover${b.cover ? " photo" : ""}" style="background:${c}"><div class="pat" style="background:${pat}"></div>
       <div class="ct">${esc(b.title)}</div><div class="ca">${esc(b.author || "")}</div>${img}</div>`;
   }
 
@@ -319,24 +338,16 @@
 
   function renderNotice() {
     const n = $("#notice");
-    if (!state.books.length) {
-      n.innerHTML = `<div class="notice"><span><strong>La libreria è vuota.</strong> Carica i 108 libri importati da Goodreads, oppure un backup esportato dal prototipo.</span>
-        <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button><button class="btn" id="open-import">Altre opzioni</button></span></div>`;
-      $("#seed-go").onclick = loadSeed;
-    } else {
-      const missing = state.books.filter(b => !b.cover && !b.noCover).length;
-      const last = getSet().lastBackup;
-      const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
-      const needBackup = days === null || days > 30;
-      const msgs = [];
-      if (missing) msgs.push(`<strong>${missing} libri senza copertina.</strong>`);
-      if (needBackup) msgs.push(`<strong>Backup:</strong> ${days === null ? "non ne hai ancora fatto uno" : `l'ultimo è di ${days} giorni fa`}. I dati stanno solo su questo iPhone.`);
-      n.innerHTML = `<div class="notice${msgs.length ? "" : " quiet"}"><span>${msgs.join("<br>") || "Libreria salvata su questo dispositivo."}</span>
-        <span class="actions">${missing && !state.coverJob ? `<button class="btn" id="covers-go">Cerca copertine</button>` : ""}${needBackup ? `<button class="btn primary" id="backup-go">Esporta backup</button>` : ""}<button class="btn" id="open-import">Importa / esporta</button></span></div>`;
-      const bg = $("#backup-go"); if (bg) bg.onclick = () => exportBackup({ set textContent(t) { toast(t); } });
-      const cg = $("#covers-go"); if (cg) cg.onclick = () => { cg.disabled = true; cg.textContent = "Cerco…"; runCoverJob(p => { if (p && cg.isConnected) cg.textContent = `${p.done}/${p.total}`; }); };
-    }
-    $("#open-import").onclick = openImport;
+    $("#archive-dot").hidden = !backupDue();
+    n.hidden = state.books.length > 0;
+    if (state.books.length) { n.innerHTML = ""; return; }
+    n.innerHTML = `<div class="notice"><span><strong>La libreria è vuota.</strong> Carica i 108 libri importati da Goodreads, oppure un backup dal pulsante Backup in basso.</span>
+      <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button></span></div>`;
+    $("#seed-go").onclick = loadSeed;
+  }
+  function backupDue() {
+    const last = getSet().lastBackup;
+    return state.books.length > 0 && (!last || Date.now() - last > 30 * 864e5);
   }
 
   // Dorso: foto vera se l'hai scattata, altrimenti una striscia della copertina, altrimenti il dorso disegnato.
@@ -399,9 +410,8 @@
   }
 
   function renderCovers(list) {
-    return `<div class="covers">${sorted(list).map(b => `<button class="card" data-id="${esc(b.id)}">${coverHTML(b)}
-      <div class="ttl">${esc(b.title)}</div>
-      <div class="meta"><span class="stars">${starStr(b.rating || 0) || STATUS_ONE[b.status] || ""}</span><span class="callno">${esc(b.callNo || "")}</span></div></button>`).join("")}</div>`;
+    return `<div class="covers">${sorted(list).map(b => `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}">${coverHTML(b)}
+      <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`).join("")}</div>`;
   }
 
   function renderStats(list) {
@@ -699,11 +709,12 @@
     const drawPicks = () => {
       cvPicks.hidden = false;
       cvPicks.innerHTML = cands.map((c, i) => `<button type="button" class="pick${c.cover === b.cover ? " on" : ""}" data-i="${i}" aria-label="Copertina ${i + 1}${c.src ? " da " + c.src : ""}">
-          <img src="${esc(c.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"><span>${esc(c.src || "")}</span></button>`).join("") +
+          <img src="${esc(c.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"><span>${c.it ? "🇮🇹 " : ""}${esc(c.src || "")}</span></button>`).join("") +
         `<button type="button" class="pick none${!b.cover ? " on" : ""}" data-i="-1">${coverHTML({ ...b, cover: "" })}<span>Disegnata</span></button>`;
       cvPicks.querySelectorAll(".pick").forEach(el => el.onclick = () => {
         const i = Number(el.dataset.i);
         if (i < 0) { delete b.cover; b.noCover = true; } else { b.cover = cands[i].cover; delete b.noCover; }
+        b.coverManual = true;
         cvPicks.querySelectorAll(".pick").forEach(x => x.classList.toggle("on", x === el));
         const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b);
         spSync(); cvStatus.textContent = "Tocca Salva per tenere questa copertina.";
@@ -807,19 +818,36 @@
   }
 
   function openImport() {
+    const last = getSet().lastBackup;
+    const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+    const missing = state.books.filter(b => !b.cover && !b.noCover).length;
     const sheet = openSheet(`
-      <h2>Importa ed esporta</h2>
-      <p class="hint">Puoi caricare un backup JSON (anche quello esportato dal prototipo) oppure il CSV esportato da Goodreads. I libri già presenti vengono saltati.</p>
-      <div class="field"><label for="i-file">File CSV o JSON</label><input id="i-file" type="file" accept=".csv,.json,text/csv,application/json"></div>
+      <h2>Backup e copertine</h2>
+      <section class="arch">
+        <span class="label">Backup</span>
+        <p class="${backupDue() ? "warn" : "hint"}">${days === null ? "Non hai ancora fatto un backup." : days === 0 ? "Ultimo backup: oggi." : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa.`} I dati stanno solo su questo iPhone: esportalo ogni tanto in File o iCloud.</p>
+        <div class="actions"><button class="btn primary" id="i-export">Esporta backup</button></div>
+      </section>
+      <section class="arch">
+        <span class="label">Copertine</span>
+        <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
+        <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
+        <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
+      </section>
+      <section class="arch">
+        <span class="label">Importa</span>
+        <p class="hint">Un backup JSON oppure il CSV esportato da Goodreads. I libri già presenti vengono saltati.</p>
+        <div class="field"><input id="i-file" type="file" accept=".csv,.json,text/csv,application/json" aria-label="File CSV o JSON"></div>
+        <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button><button class="btn" id="i-seed">Carica i libri Goodreads</button></div>
+      </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
-      <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button><button class="btn" id="i-seed">Carica i libri Goodreads</button></div>
-      <p class="hint">Fai un backup ogni tanto: i dati stanno solo su questo iPhone.</p>
-      <div class="actions"><button class="btn" id="i-export">Esporta backup</button><button class="btn" id="i-covers">Cerca copertine mancanti</button><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+      <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
     let pending = [];
     const st = $("#i-status", sheet), go = $("#i-go", sheet);
     $("#i-close", sheet).onclick = closeSheet;
     $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
-    $("#i-covers", sheet).onclick = () => { closeSheet(); runCoverJob(); };
+    const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
+    $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
       const f = e.target.files[0]; if (!f) return;
@@ -846,12 +874,17 @@
   /* ---------- avvio ---------- */
   document.querySelectorAll("nav.tabs button").forEach(btn => btn.onclick = () => {
     if (btn.dataset.action === "add") { openAdd(); return; }
+    if (btn.dataset.action === "archive") { openImport(); return; }
     state.view = btn.dataset.view;
     document.querySelectorAll("nav.tabs button[data-view]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
     render(); window.scrollTo({ top: 0 });
   });
   let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 120); };
   $("#sort").onchange = e => { state.sort = e.target.value; render(); };
+
+  const dock = $("#dock");
+  const fitDock = () => document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + "px");
+  fitDock(); if ("ResizeObserver" in window) new ResizeObserver(fitDock).observe(dock);
 
   state.books = load();
   try {

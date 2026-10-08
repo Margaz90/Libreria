@@ -29,7 +29,7 @@ html, body { background: var(--bg); color: var(--ink); margin: 0; }
 body {
   font-family: var(--body); font-size: 15px; line-height: 1.5;
   padding-inline: max(16px, env(safe-area-inset-left, 0px));
-  padding-block: env(safe-area-inset-top, 0px) calc(96px + env(safe-area-inset-bottom, 0px));
+  padding-block: env(safe-area-inset-top, 0px) calc(var(--dock-h, 150px) + 20px);
   -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%;
 }
 img { max-width: 100%; }
@@ -118,9 +118,15 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .list li span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* Barra in basso */
-nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--rule); display: flex; justify-content: center; z-index: 5; }
-nav.tabs .inner { display: flex; gap: 6px; width: 100%; max-width: 520px; }
-nav.tabs button { flex: 1; border: 0; background: none; padding: 9px 4px; border-radius: 10px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--surface); border-top: 1px solid var(--rule);
+  padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.dock > * { width: 100%; max-width: 560px; }
+.dock .search input, .dock .search select { background: var(--bg); padding: 8px 12px; }
+nav.tabs .inner { display: flex; gap: 6px; align-items: stretch; }
+nav.tabs .side { display: flex; flex-direction: column; gap: 4px; flex: 1.1; }
+nav.tabs .archive { position: relative; font-size: 12px; padding: 5px 4px; border: 1px solid var(--rule) !important; color: var(--ink) !important; }
+nav.tabs .archive .dot { position: absolute; top: 4px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+nav.tabs button { flex: 1; border: 0; background: none; padding: 7px 4px; border-radius: 10px; font-size: 13px; font-weight: 500; color: var(--muted); }
 nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--bg); }
 nav.tabs button.add { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
@@ -168,7 +174,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .result b { display: block; font-size: 14px; line-height: 1.3; }
 .result span { font-size: 12.5px; color: var(--muted); }
 
-.toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
+.toast { position: fixed; left: 50%; bottom: calc(var(--dock-h, 150px) + 12px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
 .toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .spine { transition: none; } .spine:hover { transform: none; } }
 
@@ -225,3 +231,12 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .scanner video { width: 100%; max-height: 260px; object-fit: cover; display: block; }
 .scan-frame { position: absolute; left: 12%; right: 12%; top: 50%; height: 34%; transform: translateY(-62%); border: 2px solid rgba(255,255,255,.85); border-radius: 10px; box-shadow: 0 0 0 999px rgba(0,0,0,.25); pointer-events: none; }
 .scanner .btn { border-radius: 0; border: 0; }
+
+/* Solo la copertina scaricata */
+.cover.photo { background: var(--rule) !important; }
+.cover.photo::after, .cover.photo .pat, .cover.photo .ct, .cover.photo .ca { visibility: hidden; }
+.cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; }
+.covers .card .meta { justify-content: center; min-height: 18px; }
+.arch { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.arch p { margin: 0; font-size: 13.5px; }
+.arch .warn { color: var(--accent); font-weight: 600; }

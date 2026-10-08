@@ -27,6 +27,10 @@
     <div class="tally" id="tally"></div>
   </header>
   <div id="notice"></div>
+  <main id="main"></main>
+</div>
+
+<div class="dock" id="dock">
   <div class="search" id="searchbar">
     <input id="q" type="search" placeholder="Cerca per titolo o autore" aria-label="Cerca nella libreria" autocomplete="off">
     <select id="sort" aria-label="Ordina">
@@ -36,17 +40,18 @@
       <option value="voto">Voto</option>
     </select>
   </div>
-  <main id="main"></main>
+  <nav class="tabs" aria-label="Sezioni">
+    <div class="inner">
+      <button id="tab-scaffale" data-view="scaffale" aria-pressed="true">Scaffale</button>
+      <button id="tab-copertine" data-view="copertine" aria-pressed="false">Copertine</button>
+      <button id="tab-stats" data-view="stats" aria-pressed="false">Statistiche</button>
+      <div class="side">
+        <button id="tab-add" class="add" data-action="add">+ Libro</button>
+        <button id="tab-archive" class="archive" data-action="archive">Backup<span class="dot" id="archive-dot" hidden></span></button>
+      </div>
+    </div>
+  </nav>
 </div>
-
-<nav class="tabs" aria-label="Sezioni">
-  <div class="inner">
-    <button id="tab-scaffale" data-view="scaffale" aria-pressed="true">Scaffale</button>
-    <button id="tab-copertine" data-view="copertine" aria-pressed="false">Copertine</button>
-    <button id="tab-stats" data-view="stats" aria-pressed="false">Statistiche</button>
-    <button id="tab-add" class="add" data-action="add">+ Libro</button>
-  </div>
-</nav>
 <div id="layer"></div>
 <script src="app.js"></script>
 </body>
