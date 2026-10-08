@@ -240,3 +240,31 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .arch { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
 .arch p { margin: 0; font-size: 13.5px; }
 .arch .warn { color: var(--accent); font-weight: 600; }
+
+/* ---------- Schermi grandi (computer, iPad in orizzontale) ---------- */
+@media (min-width: 1024px) {
+  body { padding-left: 272px; padding-right: 32px; padding-block: env(safe-area-inset-top, 0px) 48px; }
+  .wrap { max-width: 1200px; }
+  /* la barra in basso diventa una colonna laterale */
+  .dock { top: 0; bottom: 0; left: 0; right: auto; width: 240px; border-top: 0; border-right: 1px solid var(--rule);
+    padding: 32px 16px; justify-content: flex-start; align-items: stretch; gap: 18px; }
+  .dock .search { flex-direction: column; }
+  nav.tabs .inner { flex-direction: column; gap: 4px; }
+  nav.tabs button { text-align: left; padding: 10px 12px; font-size: 14px; flex: none; }
+  nav.tabs .side { margin-top: 14px; gap: 8px; flex: none; }
+  nav.tabs .side button { text-align: center; }
+  nav.tabs .archive { font-size: 13px; padding: 8px; }
+  .toast { bottom: 28px; left: calc(50% + 120px); }
+  .covers { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 18px; }
+  /* la scheda del libro si apre a lato, lo scaffale resta visibile */
+  .scrim { justify-content: flex-end; align-items: stretch; background: rgba(10, 14, 14, .18); }
+  .sheet { max-width: 460px; max-height: none; height: 100%; border-radius: 0; border-left: 1px solid var(--rule);
+    box-shadow: -18px 0 40px -20px var(--shadow); animation: slideIn .22s ease; }
+  .stats { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+}
+@keyframes slideIn { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+/* iPad in verticale e schermi medi: due colonne di schede in lettura, più spazio */
+@media (min-width: 700px) and (max-width: 1023px) {
+  .covers { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
