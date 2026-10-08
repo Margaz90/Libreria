@@ -7,7 +7,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "added"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "added"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "scaffale", q: "", sort: "recenti", coverJob: null };
@@ -33,6 +33,12 @@
     document.body.append(t);
     setTimeout(() => t.remove(), action ? 10000 : 2800);
   }
+
+  /* ---------- impostazioni ---------- */
+  const SET_KEY = "libreria-settings";
+  function getSet() { try { return JSON.parse(localStorage.getItem(SET_KEY) || "{}") || {}; } catch { return {}; } }
+  function setSet(patch) { const v = { ...getSet(), ...patch }; try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch {} return v; }
+  const today = () => new Date().toISOString().slice(0, 10);
 
   /* ---------- archivio sul dispositivo ---------- */
   function load() {
@@ -135,8 +141,9 @@
 
   // --- fonte 3: Open Library ---
   async function openLibrarySearch(title, author, max = 8) {
+    const byIsbn = /^isbn:/.test(title);
     const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language" +
-      "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : "");
+      (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
     let r;
     try { r = await fetch(url); } catch { throw { code: "openlibrary-rete" }; }
     if (!r.ok) throw { code: "openlibrary-" + r.status };
@@ -161,8 +168,8 @@
     const isbn = /^[\d-]{10,17}$/.test(q) ? q.replace(/-/g, "") : "";
     const tries = [
       () => googleSearch(isbn ? "isbn:" + isbn : q),
-      () => isbn ? Promise.resolve([]) : appleSearch(q),
-      () => isbn ? Promise.resolve([]) : openLibrarySearch(q, "")
+      () => appleSearch(isbn || q),
+      () => openLibrarySearch(isbn ? "isbn:" + isbn : q, "")
     ];
     for (const t of tries) {
       try { out = out.concat(await t()); } catch (e) { errors.push(e && e.code); }
@@ -272,9 +279,42 @@
   function renderTally() {
     const read = state.books.filter(b => b.status === "letto");
     const y = new Date().getFullYear();
-    const pages = read.reduce((s, b) => s + (Number(b.pages) || 0), 0);
-    $("#tally").innerHTML = `<span><b>${read.length}</b> letti</span><span><b>${read.filter(b => yearOf(b.finished) === y).length}</b> nel ${y}</span>` +
-      `<span><b>${pages.toLocaleString("it-IT")}</b> pagine</span><span><b>${state.books.filter(b => b.status === "in-lettura").length}</b> in lettura</span>`;
+    const done = read.filter(b => yearOf(b.finished) === y).length;
+    const goal = (getSet().goals || {})[y] || 0;
+    const pct = goal ? Math.min(1, done / goal) : 0;
+    const C = 2 * Math.PI * 19;
+    const ring = `<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><circle cx="24" cy="24" r="19" class="ring-bg"/>` +
+      (goal && done ? `<circle cx="24" cy="24" r="19" class="ring-fg" stroke-dasharray="${(C * pct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 24 24)"/>` : "") +
+      `<text x="24" y="28.5" text-anchor="middle">${done}</text></svg>`;
+    $("#tally").innerHTML = `<button class="goal" id="goal-btn" type="button">${ring}<span class="goal-txt">${goal
+        ? `<b>${done} di ${goal}</b> libri nel ${y}<em>${goalPace(done, goal, y)}</em>`
+        : `<b>${done} libri</b> letti nel ${y}<em>Tocca per fissare un obiettivo</em>`}</span></button>
+      <span class="tally-rest"><span><b>${read.length}</b> letti in tutto</span><span><b>${state.books.filter(b => b.status === "in-lettura").length}</b> in lettura</span><span><b>${state.books.filter(b => b.status === "da-leggere").length}</b> da leggere</span></span>`;
+    $("#goal-btn").onclick = openGoal;
+  }
+  function goalPace(done, goal, y) {
+    if (done >= goal) return "Obiettivo raggiunto!";
+    const now = new Date(), end = new Date(y, 11, 31), start = new Date(y, 0, 1);
+    const expected = Math.round(goal * (now - start) / (end - start));
+    const left = goal - done, weeks = Math.max(1, Math.round((end - now) / 6048e5));
+    const perMonth = Math.max(1, Math.round(left / weeks * 4.3));
+    return done >= expected ? `In linea · ne mancano ${left}` : `Ne mancano ${left} · circa ${perMonth} al mese`;
+  }
+  function openGoal() {
+    const y = new Date().getFullYear();
+    const goals = getSet().goals || {};
+    const sheet = openSheet(`<h2>Obiettivo ${y}</h2>
+      <p class="hint">Quanti libri vuoi leggere quest'anno? Contano quelli segnati come letti con una data di fine nel ${y}.</p>
+      <div class="field"><label for="g-n">Libri</label><input id="g-n" type="number" inputmode="numeric" min="1" max="365" value="${goals[y] || ""}" placeholder="Es. 20"></div>
+      <div class="actions"><button class="btn primary" id="g-save">Salva</button>${goals[y] ? `<button class="btn danger" id="g-del">Togli obiettivo</button>` : ""}<button class="btn ghost" id="g-close">Chiudi</button></div>`);
+    $("#g-close", sheet).onclick = closeSheet;
+    $("#g-save", sheet).onclick = () => {
+      const n = parseInt($("#g-n", sheet).value, 10);
+      if (!n || n < 1) { $("#g-n", sheet).focus(); return; }
+      setSet({ goals: { ...goals, [y]: n } }); closeSheet(); render(); toast("Obiettivo salvato");
+    };
+    const del = $("#g-del", sheet); if (del) del.onclick = () => { const g = { ...goals }; delete g[y]; setSet({ goals: g }); closeSheet(); render(); };
+    setTimeout(() => $("#g-n", sheet).focus(), 50);
   }
 
   function renderNotice() {
@@ -285,8 +325,15 @@
       $("#seed-go").onclick = loadSeed;
     } else {
       const missing = state.books.filter(b => !b.cover && !b.noCover).length;
-      n.innerHTML = `<div class="notice"><span>${missing ? `<strong>${missing} libri senza copertina.</strong>` : "Libreria salvata su questo dispositivo."}</span>
-        <span class="actions">${missing && !state.coverJob ? `<button class="btn" id="covers-go">Cerca copertine</button>` : ""}<button class="btn" id="open-import">Importa / esporta</button></span></div>`;
+      const last = getSet().lastBackup;
+      const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+      const needBackup = days === null || days > 30;
+      const msgs = [];
+      if (missing) msgs.push(`<strong>${missing} libri senza copertina.</strong>`);
+      if (needBackup) msgs.push(`<strong>Backup:</strong> ${days === null ? "non ne hai ancora fatto uno" : `l'ultimo è di ${days} giorni fa`}. I dati stanno solo su questo iPhone.`);
+      n.innerHTML = `<div class="notice${msgs.length ? "" : " quiet"}"><span>${msgs.join("<br>") || "Libreria salvata su questo dispositivo."}</span>
+        <span class="actions">${missing && !state.coverJob ? `<button class="btn" id="covers-go">Cerca copertine</button>` : ""}${needBackup ? `<button class="btn primary" id="backup-go">Esporta backup</button>` : ""}<button class="btn" id="open-import">Importa / esporta</button></span></div>`;
+      const bg = $("#backup-go"); if (bg) bg.onclick = () => exportBackup({ set textContent(t) { toast(t); } });
       const cg = $("#covers-go"); if (cg) cg.onclick = () => { cg.disabled = true; cg.textContent = "Cerco…"; runCoverJob(p => { if (p && cg.isConnected) cg.textContent = `${p.done}/${p.total}`; }); };
     }
     $("#open-import").onclick = openImport;
@@ -312,13 +359,43 @@
       <span class="band a"></span>${text}<span class="band b"></span></${tag}>`;
   }
 
+  function progressOf(b) {
+    const tot = Number(b.pages) || 0, pg = Math.max(0, Number(b.page) || 0);
+    return { tot, pg, pct: tot ? Math.min(100, Math.round(pg / tot * 100)) : 0 };
+  }
+  function readingCards(books) {
+    if (!books.length) return "";
+    return `<div class="reading">${books.map(b => {
+      const { tot, pg, pct } = progressOf(b);
+      return `<article class="rcard">
+        <button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b)}</button>
+        <div class="rbody">
+          <h3>${esc(b.title)}</h3><p class="hint">${esc(b.author || "")}</p>
+          <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+          <div class="prow">
+            <label class="pin">pag. <input type="number" inputmode="numeric" min="0" ${tot ? `max="${tot}"` : ""} value="${pg || ""}" placeholder="0" data-page="${esc(b.id)}" aria-label="Pagina attuale di ${esc(b.title)}"></label>
+            <span class="hint">${tot ? `di ${tot} · ${pct}%` : "pagine totali non note"}</span>
+          </div>
+          ${tot && pg >= tot ? `<button class="btn primary" data-finish="${esc(b.id)}">Finito! Segna come letto</button>` : ""}
+        </div></article>`;
+    }).join("")}</div>`;
+  }
   function renderShelves(list) {
     return Object.keys(STATUS).map(st => {
       const books = sorted(list.filter(b => b.status === st));
       const spines = books.map(b => spineHTML(b)).join("");
       return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
-        <div class="row">${spines || `<div class="empty-shelf">Scaffale vuoto.</div>`}</div></section>`;
+        ${st === "in-lettura" ? readingCards(books) : ""}
+        ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}</section>`;
     }).join("");
+  }
+  function setStatus(b, st) {
+    const nb = { ...b, status: st };
+    if (st === "letto" && !nb.finished) nb.finished = today();
+    if (st === "in-lettura" && !nb.started) nb.started = today();
+    if (st === "letto" && nb.pages) nb.page = nb.pages;
+    upsert(nb);
+    toast(`Spostato in ${STATUS[st]}`);
   }
 
   function renderCovers(list) {
@@ -358,7 +435,38 @@
     else if (state.view === "copertine") main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">Nessun libro corrisponde alla ricerca.</p>`;
     else main.innerHTML = renderStats(list);
     $("#searchbar").hidden = state.view === "stats";
-    main.querySelectorAll("[data-id]").forEach(el => el.onclick = () => { const b = state.books.find(x => x.id === el.dataset.id); if (b) openBook(b); });
+    main.querySelectorAll("[data-id]").forEach(el => {
+      el.onclick = () => { if (el.dataset.lp === "1") { el.dataset.lp = ""; return; } const b = state.books.find(x => x.id === el.dataset.id); if (b) openBook(b); };
+      wireLongPress(el);
+    });
+    main.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
+      const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
+      const v = Math.max(0, parseInt(inp.value, 10) || 0);
+      upsert({ ...b, page: b.pages ? Math.min(v, b.pages) : v });
+    });
+    main.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
+  }
+
+  // Pressione prolungata su un dorso o una copertina: menu rapido per cambiare stato.
+  function wireLongPress(el) {
+    let t = null, x0 = 0, y0 = 0;
+    const cancel = () => { clearTimeout(t); t = null; };
+    el.addEventListener("pointerdown", e => {
+      x0 = e.clientX; y0 = e.clientY; cancel();
+      t = setTimeout(() => { t = null; el.dataset.lp = "1"; const b = state.books.find(x => x.id === el.dataset.id); if (b) openQuick(b); }, 480);
+    });
+    el.addEventListener("pointermove", e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, cancel));
+    el.addEventListener("contextmenu", e => e.preventDefault());
+  }
+  function openQuick(b) {
+    const sheet = openSheet(`<div class="quick">
+      <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
+      <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
+      <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
+    sheet.querySelectorAll("[data-st]").forEach(btn => btn.onclick = () => { closeSheet(); setStatus(b, btn.dataset.st); });
+    $("#q-open", sheet).onclick = () => { closeSheet(); openBook(b); };
+    $("#q-close", sheet).onclick = closeSheet;
   }
 
   /* ---------- schede ---------- */
@@ -375,6 +483,7 @@
   }
   function escClose(e) { if (e.key === "Escape") closeSheet(); }
   function closeSheet() {
+    if (stopScan) stopScan();
     $("#layer").innerHTML = ""; document.removeEventListener("keydown", escClose); document.body.style.overflow = "";
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
@@ -390,6 +499,7 @@
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
         <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"></div>
       </div>
+      <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
   }
@@ -416,6 +526,7 @@
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
+    const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
     if (b.status === "letto" && !b.finished) b.finished = new Date().toISOString().slice(0, 10);
   }
   function readData(sheet, b) {
@@ -442,11 +553,21 @@
     const prev = $(".sheet-top .cover", sheet); if (prev) prev.outerHTML = coverHTML({ ...b, title: hit.title || b.title, author: hit.author || b.author });
   }
 
-  function searchBlock(prefill) {
+  function searchBlock(prefill, scan = false) {
     return `<div class="field"><label for="s-q">Cerca il libro</label>
-        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button></div></div>
+        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button>${scan ? `<button class="btn" id="s-scan" type="button" aria-label="Scansiona il codice a barre">▥ ISBN</button>` : ""}</div></div>
+      <div class="scanner" id="s-scanner" hidden><video id="s-video" playsinline muted></video><div class="scan-frame"></div><button class="btn" id="s-scan-stop" type="button">Chiudi fotocamera</button></div>
       <div class="status-line" id="s-status" aria-live="polite"></div>
       <div class="results" id="s-results"></div>`;
+  }
+  let zxingP = null, stopScan = null;
+  function loadZXing() {
+    return zxingP || (zxingP = new Promise((resolve, reject) => {
+      const sc = document.createElement("script"); sc.src = "zxing.min.js";
+      sc.onload = () => window.ZXing ? resolve(window.ZXing) : reject();
+      sc.onerror = () => { zxingP = null; reject(); };
+      document.head.append(sc);
+    }));
   }
   function wireSearch(sheet, onPick) {
     const input = $("#s-q", sheet), status = $("#s-status", sheet), box = $("#s-results", sheet);
@@ -467,6 +588,34 @@
       }
     };
     $("#s-go", sheet).onclick = go;
+    const scanBtn = $("#s-scan", sheet);
+    if (scanBtn) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) scanBtn.hidden = true;
+      scanBtn.onclick = async () => {
+        const box2 = $("#s-scanner", sheet), video = $("#s-video", sheet);
+        status.textContent = "Avvio la fotocamera…"; scanBtn.disabled = true;
+        try {
+          const ZX = await loadZXing();
+          const hints = new Map(); hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13]);
+          const reader = new ZX.BrowserMultiFormatReader(hints, 300);
+          box2.hidden = false;
+          stopScan = () => { try { reader.reset(); } catch {} box2.hidden = true; scanBtn.disabled = false; stopScan = null; };
+          $("#s-scan-stop", sheet).onclick = () => { stopScan && stopScan(); status.textContent = ""; };
+          await reader.decodeFromConstraints({ video: { facingMode: "environment" } }, video, res => {
+            if (!res) return;
+            const code = res.getText();
+            if (!/^97[89]\d{10}$/.test(code)) { status.textContent = "Questo non è un ISBN: inquadra il codice sul retro, quello che inizia con 978 o 979."; return; }
+            stopScan && stopScan(); input.value = code; go();
+          });
+          status.textContent = "Inquadra il codice a barre sul retro del libro.";
+        } catch (e) {
+          stopScan && stopScan(); scanBtn.disabled = false;
+          status.textContent = e && e.name === "NotAllowedError"
+            ? "Non ho il permesso di usare la fotocamera: consentilo quando te lo chiede, oppure scrivi l'ISBN a mano."
+            : "Non riesco ad avviare la fotocamera. Scrivi l'ISBN a mano: lo trovi sopra il codice a barre.";
+        }
+      };
+    }
     input.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go(); } };
   }
 
@@ -584,7 +733,7 @@
     const b = { status: "da-leggere", rating: 0 };
     const sheet = openSheet(`
       <h2>Nuovo libro</h2>
-      ${searchBlock("")}
+      ${searchBlock("", true)}
       <div class="sheet-top" hidden id="a-prev"></div>
       ${dataFields(b)}
       ${readingFields(b)}
@@ -649,10 +798,11 @@
     const name = `libreria-diego-${new Date().toISOString().slice(0, 10)}.json`;
     const file = new File([data], name, { type: "application/json" });
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Backup Libreria" }); status.textContent = "Backup condiviso."; return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Backup MyLibrary" }); setSet({ lastBackup: Date.now() }); status.textContent = "Backup condiviso."; render(); return; }
     } catch (e) { if (e && e.name === "AbortError") return; }
     const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name;
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    setSet({ lastBackup: Date.now() }); render();
     status.textContent = "Backup scaricato.";
   }
 

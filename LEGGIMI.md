@@ -34,3 +34,7 @@ App web installabile sulla schermata Home dell'iPhone. Funziona anche offline.
 - Se nel prototipo su Claude hai modificato dei libri dopo l'importazione, esporta il backup da lì e importalo qui invece di usare i libri Goodreads.
 - **Aggiornamenti**: per cambiare l'app basta ricaricare i file nuovi su GitHub. Al successivo avvio con connessione compare "Nuova versione disponibile — Aggiorna".
 - **Copertine**: vengono da Google Books e Open Library. Se una è sbagliata, apri il libro, scegli **Modifica dati e copertina** e cerca l'edizione giusta, oppure torna alla copertina disegnata.
+
+## Componenti esterni
+
+- `zxing.min.js`: lettore di codici a barre [ZXing for JS](https://github.com/zxing-js/library) 0.21.3, licenza MIT. Viene caricato solo quando tocchi "ISBN" nella scheda Nuovo libro.

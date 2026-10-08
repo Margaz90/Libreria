@@ -2,7 +2,7 @@
    - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
