@@ -41,13 +41,38 @@
   const today = () => new Date().toISOString().slice(0, 10);
 
   /* ---------- archivio sul dispositivo ---------- */
+  // Le foto dei dorsi stanno in chiavi separate: così l'elenco principale resta leggero da salvare.
+  const SPINE_KEY = id => "libreria-spine-" + id;
+  const spineWritten = new Map();
   function load() {
-    try { const v = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+    let v = [];
+    try { v = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); if (!Array.isArray(v)) v = []; } catch { v = []; }
+    for (const b of v) {
+      if (b.spine && b.spine !== 1) { spineWritten.set(b.id, null); continue; } // dati vecchi: verranno spostati al prossimo salvataggio
+      if (b.spine === 1) { try { const d = localStorage.getItem(SPINE_KEY(b.id)); if (d) { b.spine = d; spineWritten.set(b.id, d); } else delete b.spine; } catch { delete b.spine; } }
+    }
+    return v;
   }
   function persist() {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(state.books)); return true; }
-    catch { toast("Spazio esaurito sul dispositivo: esporta un backup ed elimina qualche libro."); return false; }
+    clearTimeout(persistTimer); persistTimer = null;
+    try {
+      const ids = new Set();
+      const slim = state.books.map(b => {
+        if (!b.spine) return b;
+        ids.add(b.id);
+        if (spineWritten.get(b.id) !== b.spine) { localStorage.setItem(SPINE_KEY(b.id), b.spine); spineWritten.set(b.id, b.spine); }
+        return { ...b, spine: 1 };
+      });
+      for (const id of [...spineWritten.keys()]) if (!ids.has(id)) { localStorage.removeItem(SPINE_KEY(id)); spineWritten.delete(id); }
+      localStorage.setItem(LS_KEY, JSON.stringify(slim));
+      return true;
+    } catch { toast("Spazio esaurito sul dispositivo: esporta un backup ed elimina qualche libro."); return false; }
   }
+  // Salvataggio raggruppato: più modifiche ravvicinate diventano una sola scrittura.
+  let persistTimer = null;
+  function schedulePersist() { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 700); }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && persistTimer) persist(); });
+  window.addEventListener("pagehide", () => { if (persistTimer) persist(); });
   function clean(b) {
     const out = {};
     for (const k of FIELDS) if (b[k] !== undefined && b[k] !== null && b[k] !== "") out[k] = b[k];
@@ -61,11 +86,17 @@
   }
   function upsert(b) {
     const data = clean(b);
-    if (b.id) {
-      const i = state.books.findIndex(x => x.id === b.id);
-      if (i >= 0) state.books[i] = { ...data, id: b.id }; else state.books.push({ ...data, id: b.id });
-    } else state.books.push({ ...data, id: newId() });
-    persist(); render();
+    let prev = null, id = b.id;
+    if (id) {
+      const i = state.books.findIndex(x => x.id === id);
+      if (i >= 0) { prev = state.books[i]; state.books[i] = { ...data, id }; } else state.books.push({ ...data, id });
+    } else { id = newId(); state.books.push({ ...data, id }); }
+    schedulePersist();
+    // Se cambiano solo dati che non spostano il libro, aggiorno solo il suo dorso/copertina.
+    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages"];
+    if (prev && state.view !== "stats" && data.status !== "in-lettura" && keep.every(k => prev[k] === state.books.find(x => x.id === id)[k])) {
+      patchBook(id); renderTally();
+    } else render();
   }
   function addMany(list) {
     const known = new Set(state.books.map(keyOf));
@@ -75,10 +106,10 @@
       if (known.has(keyOf(raw))) { skipped++; continue; }
       const b = { ...clean(raw), id: newId() }; state.books.push(b); known.add(keyOf(b)); added++;
     }
-    persist(); render();
+    schedulePersist(); render();
     return { added, skipped };
   }
-  function removeBook(id) { state.books = state.books.filter(x => x.id !== id); persist(); render(); }
+  function removeBook(id) { state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); }
 
   /* ---------- Google Books / Open Library ---------- */
   function normVolume(v) {
@@ -252,12 +283,13 @@
       for (const b of todo) {
         const hit = await findCover(b, errors);
         const cur = state.books.find(x => x.id === b.id);
-        if (cur && hit) {
+        if (cur && hit && cur.cover !== hit.cover) {
           cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages;
           state.coverJob.found++;
-        }
+          patchBook(cur.id);
+        } else if (cur && hit) state.coverJob.found++;
         state.coverJob.done++;
-        if (state.coverJob.done % 5 === 0) { persist(); render(); }
+        if (state.coverJob.done % 10 === 0) schedulePersist();
         onProgress && onProgress(state.coverJob);
         await sleep(200);
       }
@@ -284,13 +316,20 @@
     return q ? state.books.filter(b => (b.title + " " + (b.author || "") + " " + (b.genre || "")).toLowerCase().includes(q)) : state.books;
   }
 
-  function coverHTML(b) {
+  // Le copertine scaricate sono grandi (fino a 600x900): per dorsi e griglia ne chiedo una versione piccola.
+  function thumb(url, w) {
+    if (!url) return url;
+    if (/mzstatic\.com/.test(url)) return url.replace(/\/\d+x\d+bb\./, `/${w}x${Math.round(w * 1.5)}bb.`);
+    if (/covers\.openlibrary\.org/.test(url)) return url.replace(/-L\.jpg/, w <= 180 ? "-M.jpg" : "-L.jpg");
+    return url;
+  }
+  function coverHTML(b, w = 300) {
     const c = colorOf(b);
     const pat = ["repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 2px, transparent 2px 12px)",
                  "radial-gradient(circle at 70% 30%, rgba(255,255,255,.14) 0 18%, transparent 19%)",
                  "repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 9px)",
                  "linear-gradient(160deg, rgba(255,255,255,.12), transparent 55%)"][hash(b.genre || b.title) % 4];
-    const img = b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.remove()">` : "";
+    const img = b.cover ? `<img src="${esc(thumb(b.cover, w))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.remove()">` : "";
     return `<div class="cover${b.cover ? " photo" : ""}" style="background:${c}"><div class="pat" style="background:${pat}"></div>
       <div class="ct">${esc(b.title)}</div><div class="ca">${esc(b.author || "")}</div>${img}</div>`;
   }
@@ -364,7 +403,7 @@
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
       return `<${tag} class="spine fromcover" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
-        <img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}</${tag}>`;
+        <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}</${tag}>`;
     }
     return `<${tag} class="spine" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
       <span class="band a"></span>${text}<span class="band b"></span></${tag}>`;
@@ -409,9 +448,12 @@
     toast(`Spostato in ${STATUS[st]}`);
   }
 
+  function cardHTML(b) {
+    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}">${coverHTML(b, 300)}
+      <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
+  }
   function renderCovers(list) {
-    return `<div class="covers">${sorted(list).map(b => `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}">${coverHTML(b)}
-      <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`).join("")}</div>`;
+    return `<div class="covers">${sorted(list).map(cardHTML).join("")}</div>`;
   }
 
   function renderStats(list) {
@@ -445,16 +487,31 @@
     else if (state.view === "copertine") main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">Nessun libro corrisponde alla ricerca.</p>`;
     else main.innerHTML = renderStats(list);
     $("#searchbar").hidden = state.view === "stats";
-    main.querySelectorAll("[data-id]").forEach(el => {
-      el.onclick = () => { if (el.dataset.lp === "1") { el.dataset.lp = ""; return; } const b = state.books.find(x => x.id === el.dataset.id); if (b) openBook(b); };
-      wireLongPress(el);
-    });
+    main.querySelectorAll("[data-id]").forEach(wireItem);
     main.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
       const v = Math.max(0, parseInt(inp.value, 10) || 0);
       upsert({ ...b, page: b.pages ? Math.min(v, b.pages) : v });
     });
     main.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
+  }
+
+  function wireItem(el) {
+    el.onclick = () => { if (el.dataset.lp === "1") { el.dataset.lp = ""; return; } const b = state.books.find(x => x.id === el.dataset.id); if (b) openBook(b); };
+    wireLongPress(el);
+  }
+  // Sostituisce solo gli elementi di un libro (dorso, copertina) senza ridisegnare la pagina.
+  function patchBook(id) {
+    const b = state.books.find(x => x.id === id); if (!b) return;
+    document.querySelectorAll(`#main [data-id="${CSS.escape(id)}"]`).forEach(el => {
+      let html = null;
+      if (el.classList.contains("spine")) html = spineHTML(b);
+      else if (el.classList.contains("card")) html = cardHTML(b);
+      else if (el.classList.contains("rcover")) html = `<button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b, 160)}</button>`;
+      if (!html) return;
+      const t = document.createElement("template"); t.innerHTML = html.trim();
+      const n = t.content.firstElementChild; el.replaceWith(n); wireItem(n);
+    });
   }
 
   // Pressione prolungata su un dorso o una copertina: menu rapido per cambiare stato.
@@ -879,7 +936,7 @@
     document.querySelectorAll("nav.tabs button[data-view]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
     render(); window.scrollTo({ top: 0 });
   });
-  let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 120); };
+  let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 220); };
   $("#sort").onchange = e => { state.sort = e.target.value; render(); };
 
   const dock = $("#dock");
