@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Libreria di Diego</title>
+<meta name="description" content="La mia libreria personale: libri letti, in lettura e da leggere.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Libreria">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ECEEE7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Libre+Franklin:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="exlibris">Ex libris · Valle di Susa</div>
+    <h1>Libreria di Diego</h1>
+    <div class="tally" id="tally"></div>
+  </header>
+  <div id="notice"></div>
+  <div class="search" id="searchbar">
+    <input id="q" type="search" placeholder="Cerca per titolo o autore" aria-label="Cerca nella libreria" autocomplete="off">
+    <select id="sort" aria-label="Ordina">
+      <option value="recenti">Recenti</option>
+      <option value="autore">Autore</option>
+      <option value="titolo">Titolo</option>
+      <option value="voto">Voto</option>
+    </select>
+  </div>
+  <main id="main"></main>
+</div>
+
+<nav class="tabs" aria-label="Sezioni">
+  <div class="inner">
+    <button id="tab-scaffale" data-view="scaffale" aria-pressed="true">Scaffale</button>
+    <button id="tab-copertine" data-view="copertine" aria-pressed="false">Copertine</button>
+    <button id="tab-stats" data-view="stats" aria-pressed="false">Statistiche</button>
+    <button id="tab-add" class="add" data-action="add">+ Libro</button>
+  </div>
+</nav>
+<div id="layer"></div>
+<script src="app.js"></script>
+</body>
+</html>
