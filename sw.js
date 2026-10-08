@@ -2,7 +2,7 @@
    - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
@@ -66,7 +66,8 @@ self.addEventListener("fetch", e => {
   if (url.hostname === "www.googleapis.com") return; // ricerche: solo rete
   if (url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") ||
       url.hostname.endsWith("books.google.com") || url.hostname.endsWith("books.googleusercontent.com") ||
-      url.hostname.endsWith("covers.openlibrary.org") || url.hostname.endsWith("archive.org")) {
+      url.hostname.endsWith("covers.openlibrary.org") || url.hostname.endsWith("archive.org") ||
+      url.hostname.endsWith("mzstatic.com")) {
     e.respondWith(cacheFirst(req));
   }
 });

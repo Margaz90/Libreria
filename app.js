@@ -94,30 +94,103 @@
       isbn, cover, lang: i.language || ""
     };
   }
-  async function searchBooks(q, { italian = true, max = 12 } = {}) {
+  // --- fonte 1: Google Books ---
+  async function googleSearch(q, { italian = true, max = 12 } = {}) {
+    if (state.googleDown) throw { code: "google-" + state.googleDown };
     const url = "https://www.googleapis.com/books/v1/volumes?printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
-    const r = await fetch(url);
-    if (r.status === 429) throw { code: "rate" };
-    if (!r.ok) throw { code: "http" };
+    let r;
+    try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status }; }
+    if (!r.ok) throw { code: "google-" + r.status };
     const j = await r.json();
     return (j.items || []).map(normVolume).filter(x => x.title);
   }
+
+  // --- fonte 2: Apple Books (negozio italiano, via JSONP) ---
+  let jsonpN = 0;
+  function jsonp(url, ms = 8000) {
+    return new Promise((resolve, reject) => {
+      const cb = "__mlcb" + (++jsonpN) + "_" + Date.now();
+      const s = document.createElement("script");
+      const done = (fn, v) => { clearTimeout(t); delete window[cb]; s.remove(); fn(v); };
+      const t = setTimeout(() => done(reject, { code: "apple-timeout" }), ms);
+      window[cb] = data => done(resolve, data);
+      s.onerror = () => done(reject, { code: "apple-rete" });
+      s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
+      document.head.append(s);
+    });
+  }
+  async function appleSearch(term, max = 10) {
+    const j = await jsonp("https://itunes.apple.com/search?media=ebook&entity=ebook&country=it&lang=it_it&limit=" + max + "&term=" + encodeURIComponent(term));
+    return (j.results || []).map(r => ({
+      title: r.trackName || "", author: r.artistName || "",
+      edYear: yearOf(r.releaseDate || ""), pages: undefined,
+      genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
+      synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
+      isbn: "", lang: "it",
+      cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
+    })).filter(x => x.title);
+  }
+
+  // --- fonte 3: Open Library ---
+  async function openLibrarySearch(title, author, max = 8) {
+    const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language" +
+      "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : "");
+    let r;
+    try { r = await fetch(url); } catch { throw { code: "openlibrary-rete" }; }
+    if (!r.ok) throw { code: "openlibrary-" + r.status };
+    const j = await r.json();
+    return (j.docs || []).map(d => ({
+      title: d.title || "", author: (d.author_name || []).join(", "),
+      edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
+      isbn: (d.isbn || [])[0] || "", lang: (d.language || []).includes("ita") ? "it" : "",
+      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : ""
+    })).filter(x => x.title);
+  }
+
+  const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  function sameAuthor(a, b) {
+    const la = norm(a).split(" ").pop(), lb = norm(b);
+    return !la || lb.includes(la);
+  }
+
+  // Ricerca per il campo "Cerca il libro": prova le fonti in ordine e unisce i risultati.
+  async function searchBooks(q) {
+    const errors = []; let out = [];
+    const isbn = /^[\d-]{10,17}$/.test(q) ? q.replace(/-/g, "") : "";
+    const tries = [
+      () => googleSearch(isbn ? "isbn:" + isbn : q),
+      () => isbn ? Promise.resolve([]) : appleSearch(q),
+      () => isbn ? Promise.resolve([]) : openLibrarySearch(q, "")
+    ];
+    for (const t of tries) {
+      try { out = out.concat(await t()); } catch (e) { errors.push(e && e.code); }
+      if (out.filter(x => x.cover).length >= 6) break;
+    }
+    if (!out.length && errors.length === tries.length) throw { code: errors.join(", ") };
+    return out.slice(0, 15);
+  }
+
   function originalTitle(b) {
     const m = /Titolo originale: (.+?)\.(?:\s|$)/.exec(b.synopsis || "");
     return m && !/nessuna edizione/.test(m[1]) ? m[1] : "";
   }
-  async function findCover(b) {
+  async function findCover(b, errors) {
     const last = String(b.author || "").split(/\s+/).pop();
-    const tries = [
-      { q: `intitle:"${b.title}"` + (last ? ` inauthor:${last}` : ""), italian: true },
-      { q: `intitle:"${originalTitle(b) || b.title}"` + (last ? ` inauthor:${last}` : ""), italian: false }
+    const orig = originalTitle(b);
+    const pick = list => list.find(x => x.cover && sameAuthor(b.author, x.author));
+    const attempts = [
+      () => appleSearch(`${b.title} ${last}`, 8),
+      () => googleSearch(`intitle:"${b.title}"` + (last ? ` inauthor:${last}` : ""), { max: 6 }),
+      () => openLibrarySearch(b.title, last),
+      () => orig ? googleSearch(`intitle:"${orig}"` + (last ? ` inauthor:${last}` : ""), { italian: false, max: 6 }) : Promise.resolve([]),
+      () => orig ? openLibrarySearch(orig, last) : Promise.resolve([])
     ];
-    for (const t of tries) {
-      const res = await searchBooks(t.q, { italian: t.italian, max: 5 });
-      const hit = res.find(x => x.cover);
-      if (hit) return hit;
-      await sleep(250);
+    for (const a of attempts) {
+      try { const hit = pick(await a()); if (hit) return hit; }
+      catch (e) { if (e && e.code) errors[e.code] = (errors[e.code] || 0) + 1; }
+      await sleep(150);
     }
     return null;
   }
@@ -127,27 +200,25 @@
     const todo = state.books.filter(b => !b.cover && !b.noCover);
     if (!todo.length) { toast("Tutti i libri hanno già una copertina."); return; }
     state.coverJob = { done: 0, total: todo.length, found: 0 };
+    const errors = {};
     try {
       for (const b of todo) {
-        try {
-          const hit = await findCover(b);
-          const cur = state.books.find(x => x.id === b.id);
-          if (cur) {
-            if (hit) { cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages; state.coverJob.found++; }
-            else cur.noCover = true;
-          }
-        } catch (e) {
-          if (e && e.code === "rate") { toast("Google Books ha chiesto una pausa. Riprova tra qualche minuto: riparto da dove mi sono fermato."); break; }
+        const hit = await findCover(b, errors);
+        const cur = state.books.find(x => x.id === b.id);
+        if (cur && hit) {
+          cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages;
+          state.coverJob.found++;
         }
         state.coverJob.done++;
         if (state.coverJob.done % 5 === 0) { persist(); render(); }
         onProgress && onProgress(state.coverJob);
-        await sleep(300);
+        await sleep(200);
       }
     } finally {
       const { found, done } = state.coverJob; state.coverJob = null;
       persist(); render(); onProgress && onProgress(null);
-      toast(`Copertine trovate: ${found} su ${done}.`);
+      const errs = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
+      toast(`Copertine trovate: ${found} su ${done}.` + (found < done && errs ? ` Errori: ${errs}.` : ""));
     }
   }
 
@@ -349,16 +420,14 @@
       if (!navigator.onLine) { status.textContent = "Sei offline: compila i campi a mano."; return; }
       status.textContent = "Cerco tra le edizioni italiane…"; box.innerHTML = "";
       try {
-        const query = /^[\d-]{10,17}$/.test(q) ? "isbn:" + q.replace(/-/g, "") : q;
-        results = await searchBooks(query);
-        if (!results.length) results = await searchBooks(query, { italian: false });
+        results = await searchBooks(q);
         status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati." : "Nessun risultato: prova con meno parole o compila a mano.";
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
           <div><b>${esc(r.title)}</b><span>${esc(r.author || "Autore sconosciuto")}${r.edYear ? " · " + r.edYear : ""}${r.pages ? " · " + r.pages + " pp." : ""}${r.lang && r.lang !== "it" ? " · " + r.lang.toUpperCase() : ""}</span></div></button>`).join("");
         box.querySelectorAll(".result").forEach(el => el.onclick = () => { onPick(results[Number(el.dataset.i)]); box.innerHTML = ""; status.textContent = "Dati inseriti: controllali prima di salvare."; });
       } catch (e) {
-        status.textContent = e && e.code === "rate" ? "Troppe ricerche ravvicinate. Riprova tra un minuto." : "Ricerca non riuscita. Controlla la connessione o compila a mano.";
+        status.textContent = "Ricerca non riuscita (" + ((e && e.code) || "errore") + "). Controlla la connessione o compila a mano.";
       }
     };
     $("#s-go", sheet).onclick = go;
@@ -523,6 +592,12 @@
   $("#sort").onchange = e => { state.sort = e.target.value; render(); };
 
   state.books = load();
+  try {
+    if (localStorage.getItem("libreria-schema") !== "2") {
+      state.books.forEach(b => { if (!b.cover) delete b.noCover; });
+      persist(); localStorage.setItem("libreria-schema", "2");
+    }
+  } catch {}
   render();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 

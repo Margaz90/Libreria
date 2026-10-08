@@ -1,6 +1,6 @@
 {
-  "name": "Libreria di Diego",
-  "short_name": "Libreria",
+  "name": "Margaz_Library",
+  "short_name": "Margaz_Library",
   "description": "La mia libreria personale: libri letti, in lettura e da leggere.",
   "lang": "it",
   "start_url": "./",
@@ -10,8 +10,23 @@
   "background_color": "#ECEEE7",
   "theme_color": "#ECEEE7",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
