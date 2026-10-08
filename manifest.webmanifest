@@ -1,6 +1,6 @@
 {
-  "name": "Margaz_Library",
-  "short_name": "Margaz_Library",
+  "name": "MyLibrary",
+  "short_name": "MyLibrary",
   "description": "La mia libreria personale: libri letti, in lettura e da leggere.",
   "lang": "it",
   "start_url": "./",

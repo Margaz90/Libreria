@@ -1,4 +1,4 @@
-# Libreria di Diego — PWA
+# MyLibrary — PWA
 
 App web installabile sulla schermata Home dell'iPhone. Funziona anche offline.
 
