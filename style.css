@@ -59,9 +59,25 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .shelf-head h2 { font-family: var(--display); font-weight: 400; font-size: 21px; margin: 0; }
 .shelf-head span { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .row { display: flex; align-items: flex-end; gap: 3px; flex-wrap: wrap; width: 100%; padding: 14px 8px 0; border-bottom: 12px solid var(--wood); box-shadow: 0 2px 0 var(--wood-hi) inset, 0 10px 14px -10px var(--shadow); background: linear-gradient(to bottom, transparent 70%, var(--shadow)); border-radius: 2px; }
-.spine { border: 0; padding: 10px 0; border-radius: 3px 3px 1px 1px; color: var(--spine-ink); position: relative; display: flex; align-items: center; justify-content: center; box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18); transition: transform .18s ease; }
+.spine { border: 0; padding: 12px 0 8px; border-radius: 3px 3px 1px 1px; color: var(--spine-ink); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; background-size: 100% 100%; background-position: center; box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18); transition: transform .18s ease; }
 .spine:hover, .spine:focus-visible { transform: translateY(-8px); }
-.spine .t { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--display); font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 100%; }
+.spine .t { flex: 1; min-height: 0; writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--display); font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 2; }
+.spine .au { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .85; white-space: nowrap; max-height: 64px; overflow: hidden; position: relative; z-index: 2; }
+/* dorso ricavato dalla copertina */
+.spine.fromcover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.spine.fromcover .shade { position: absolute; inset: 0; z-index: 1; background:
+  linear-gradient(90deg, rgba(0,0,0,.55) 0, rgba(0,0,0,.18) 16%, rgba(255,255,255,.10) 42%, rgba(0,0,0,.10) 72%, rgba(0,0,0,.55) 100%),
+  rgba(0,0,0,.28); }
+.spine.fromcover .t, .spine.fromcover .au { text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+/* dorso fotografato */
+.spine.photo { padding: 0; }
+.spine.photo .gloss { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 35%, transparent 60%, rgba(0,0,0,.35)); }
+.spine-edit { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.spine-row { display: flex; gap: 16px; align-items: flex-end; }
+.spine-prev { flex: none; display: flex; align-items: flex-end; min-height: 140px; padding: 0 6px; border-bottom: 6px solid var(--wood); }
+.spine-prev .spine { cursor: default; }
+.spine-actions { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.spine-actions label.btn { text-align: center; cursor: pointer; }
 .spine .band { position: absolute; left: 0; right: 0; height: 3px; background: rgba(255,255,255,.28); }
 .spine .band.a { top: 8px; } .spine .band.b { bottom: 8px; }
 .spine.demo { opacity: .78; }

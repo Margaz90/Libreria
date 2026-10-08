@@ -7,7 +7,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "added"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "added"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "scaffale", q: "", sort: "recenti", coverJob: null };
@@ -271,15 +271,30 @@
     $("#open-import").onclick = openImport;
   }
 
+  // Dorso: foto vera se l'hai scattata, altrimenti una striscia della copertina, altrimenti il dorso disegnato.
+  function spineHTML(b, tag = "button") {
+    const p = Math.min(Number(b.pages) || 280, 900);
+    const h = Math.round(132 + p / 900 * 72);
+    let w = Math.round(26 + p / 900 * 24);
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}"` : `aria-hidden="true"`;
+    const last = String(b.author || "").trim().split(/\s+/).pop() || "";
+    if (b.spine) {
+      if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
+      return `<${tag} class="spine photo" ${attrs} style="height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span></${tag}>`;
+    }
+    const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
+    if (b.cover) {
+      return `<${tag} class="spine fromcover" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
+        <img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}</${tag}>`;
+    }
+    return `<${tag} class="spine" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
+      <span class="band a"></span>${text}<span class="band b"></span></${tag}>`;
+  }
+
   function renderShelves(list) {
     return Object.keys(STATUS).map(st => {
       const books = sorted(list.filter(b => b.status === st));
-      const spines = books.map(b => {
-        const p = Math.min(Number(b.pages) || 280, 900);
-        const h = Math.round(132 + p / 900 * 72), w = Math.round(26 + p / 900 * 24);
-        return `<button class="spine" data-id="${esc(b.id)}" style="height:${h}px;width:${w}px;background:${colorOf(b)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}">
-          <span class="band a"></span><span class="t">${esc(b.title)}</span><span class="band b"></span></button>`;
-      }).join("");
+      const spines = books.map(b => spineHTML(b)).join("");
       return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
         <div class="row">${spines || `<div class="empty-shelf">Scaffale vuoto.</div>`}</div></section>`;
     }).join("");
@@ -434,6 +449,31 @@
     input.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go(); } };
   }
 
+  // Riduce la foto, la mette in verticale (testo dal basso verso l'alto, come nei libri italiani) e la salva come JPEG leggero.
+  function processSpine(src, extraRotate = 0) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = typeof src === "string" ? src : URL.createObjectURL(src);
+      img.onload = () => {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        let deg = (w > h ? -90 : 0) + extraRotate;
+        deg = ((deg % 360) + 360) % 360;
+        const swap = deg === 90 || deg === 270;
+        const W0 = swap ? h : w, H0 = swap ? w : h;
+        const scale = Math.min(1, 640 / H0);
+        const cw = Math.max(1, Math.round(W0 * scale)), ch = Math.max(1, Math.round(H0 * scale));
+        const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+        const ctx = c.getContext("2d");
+        ctx.translate(cw / 2, ch / 2); ctx.rotate(deg * Math.PI / 180);
+        ctx.drawImage(img, -w * scale / 2, -h * scale / 2, w * scale, h * scale);
+        if (typeof src !== "string") URL.revokeObjectURL(url);
+        resolve({ dataUrl: c.toDataURL("image/jpeg", 0.72), ratio: +(cw / ch).toFixed(3) });
+      };
+      img.onerror = () => { if (typeof src !== "string") URL.revokeObjectURL(url); reject(); };
+      img.src = url;
+    });
+  }
+
   function openBook(book) {
     const b = { ...book };
     const sheet = openSheet(`
@@ -444,6 +484,18 @@
       </div></div>
       ${b.synopsis ? `<p class="synopsis">${esc(b.synopsis)}</p>` : ""}
       ${readingFields(b)}
+      <div class="spine-edit">
+        <span class="label">Dorso sullo scaffale</span>
+        <div class="spine-row">
+          <div class="spine-prev" id="sp-prev">${spineHTML(b, "div")}</div>
+          <div class="spine-actions">
+            <label class="btn" for="sp-file">${b.spine ? "Cambia foto del dorso" : "Fotografa il dorso"}</label>
+            <input type="file" id="sp-file" accept="image/*" hidden>
+            <span class="actions"><button class="btn" id="sp-rot" type="button">Ruota</button><button class="btn danger" id="sp-del" type="button">Rimuovi</button></span>
+            <p class="hint">Inquadra solo il dorso, da vicino e con buona luce. Va bene anche in orizzontale: lo raddrizzo io.</p>
+          </div>
+        </div>
+      </div>
       <details class="edit"><summary>Modifica dati e copertina</summary><div class="inner">
         ${searchBlock(b.title + " " + (b.author || ""))}
         ${dataFields(b)}
@@ -456,6 +508,17 @@
       </div>`);
     wireRating(sheet, b);
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
+    const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
+    const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.disabled = spDel.disabled = !b.spine; };
+    spSync();
+    $("#sp-file", sheet).onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { const r = await processSpine(f); b.spine = r.dataUrl; b.spineRatio = r.ratio; spSync(); toast("Foto pronta: tocca Salva per tenerla."); }
+      catch { toast("Non riesco a leggere questa foto. Riprova con un'altra."); }
+      e.target.value = "";
+    };
+    spRot.onclick = async () => { const r = await processSpine(b.spine, 180); b.spine = r.dataUrl; b.spineRatio = r.ratio; spSync(); };
+    spDel.onclick = () => { delete b.spine; delete b.spineRatio; spSync(); };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
