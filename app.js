@@ -194,6 +194,27 @@
     }
     return null;
   }
+  // Copertine alternative per un libro: fino a 6, dalle tre fonti, solo dello stesso autore.
+  async function coverCandidates(b) {
+    const last = String(b.author || "").split(/\s+/).pop();
+    const orig = originalTitle(b);
+    const jobs = [
+      appleSearch(`${b.title} ${last}`, 8).then(r => r.map(x => ({ ...x, src: "Apple Books" }))),
+      googleSearch(`intitle:"${b.title}"` + (last ? ` inauthor:${last}` : ""), { max: 8 }).then(r => r.map(x => ({ ...x, src: "Google Books" }))),
+      openLibrarySearch(b.title, last).then(r => r.map(x => ({ ...x, src: "Open Library" }))),
+      orig ? openLibrarySearch(orig, last).then(r => r.map(x => ({ ...x, src: "Open Library" }))) : Promise.resolve([])
+    ];
+    const all = (await Promise.allSettled(jobs)).flatMap(r => r.status === "fulfilled" ? r.value : []);
+    const seen = new Set(), out = [];
+    // alterna le fonti, così compaiono edizioni diverse
+    const bySrc = {}; all.filter(x => x.cover && sameAuthor(b.author, x.author)).forEach(x => (bySrc[x.src] = bySrc[x.src] || []).push(x));
+    const queues = Object.values(bySrc);
+    while (out.length < 6 && queues.some(q => q.length)) {
+      for (const q of queues) { const x = q.shift(); if (x && !seen.has(x.cover)) { seen.add(x.cover); out.push(x); } if (out.length >= 6) break; }
+    }
+    return out;
+  }
+
   async function runCoverJob(onProgress) {
     if (state.coverJob) return;
     if (!navigator.onLine) { toast("Serve una connessione per cercare le copertine."); return; }
@@ -484,6 +505,11 @@
       </div></div>
       ${b.synopsis ? `<p class="synopsis">${esc(b.synopsis)}</p>` : ""}
       ${readingFields(b)}
+      <div class="cover-edit">
+        <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
+        <div class="status-line" id="cv-status" aria-live="polite"></div>
+        <div class="cover-picks" id="cv-picks" hidden></div>
+      </div>
       <div class="spine-edit">
         <span class="label">Dorso sullo scaffale</span>
         <div class="spine-row">
@@ -519,6 +545,29 @@
     };
     spRot.onclick = async () => { const r = await processSpine(b.spine, 180); b.spine = r.dataUrl; b.spineRatio = r.ratio; spSync(); };
     spDel.onclick = () => { delete b.spine; delete b.spineRatio; spSync(); };
+    const cvMore = $("#cv-more", sheet), cvPicks = $("#cv-picks", sheet), cvStatus = $("#cv-status", sheet);
+    let cands = [];
+    const drawPicks = () => {
+      cvPicks.hidden = false;
+      cvPicks.innerHTML = cands.map((c, i) => `<button type="button" class="pick${c.cover === b.cover ? " on" : ""}" data-i="${i}" aria-label="Copertina ${i + 1}${c.src ? " da " + c.src : ""}">
+          <img src="${esc(c.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"><span>${esc(c.src || "")}</span></button>`).join("") +
+        `<button type="button" class="pick none${!b.cover ? " on" : ""}" data-i="-1">${coverHTML({ ...b, cover: "" })}<span>Disegnata</span></button>`;
+      cvPicks.querySelectorAll(".pick").forEach(el => el.onclick = () => {
+        const i = Number(el.dataset.i);
+        if (i < 0) { delete b.cover; b.noCover = true; } else { b.cover = cands[i].cover; delete b.noCover; }
+        cvPicks.querySelectorAll(".pick").forEach(x => x.classList.toggle("on", x === el));
+        const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b);
+        spSync(); cvStatus.textContent = "Tocca Salva per tenere questa copertina.";
+      });
+    };
+    cvMore.onclick = async () => {
+      if (!navigator.onLine) { cvStatus.textContent = "Serve una connessione per cercare le copertine."; return; }
+      cvMore.disabled = true; cvStatus.textContent = "Cerco le copertine…";
+      cands = await coverCandidates(b);
+      if (b.cover && !cands.some(c => c.cover === b.cover)) cands.unshift({ cover: b.cover, src: "attuale" });
+      cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica dati.";
+      drawPicks(); cvMore.disabled = false; cvMore.textContent = "Cerca di nuovo";
+    };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };

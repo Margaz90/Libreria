@@ -171,3 +171,14 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
 .toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .spine { transition: none; } .spine:hover { transform: none; } }
+
+/* Scelta della copertina */
+.cover-edit { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.cover-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cover-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
+.pick { border: 2px solid transparent; background: none; padding: 3px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 0; }
+.pick img, .pick .cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; box-shadow: 0 4px 10px -6px var(--shadow); }
+.pick .cover { padding: 6px; }
+.pick .cover .ct { font-size: 10px; } .pick .cover .ca { font-size: 7px; }
+.pick span { font-size: 10.5px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick.on { border-color: var(--accent); }
