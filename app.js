@@ -551,15 +551,20 @@
   function escClose(e) { if (e.key === "Escape") closeSheet(); }
   function closeSheet() {
     if (stopScan) stopScan();
-    $("#layer").innerHTML = ""; document.removeEventListener("keydown", escClose); document.body.style.overflow = "";
-    if (lastFocus && lastFocus.focus) lastFocus.focus();
+    document.removeEventListener("keydown", escClose); document.body.style.overflow = "";
+    const scrim = $("#scrim");
+    const done = () => { if (scrim && scrim.isConnected) scrim.remove(); };
+    if (scrim && !matchMedia("(prefers-reduced-motion: reduce)").matches) { scrim.classList.add("closing"); setTimeout(done, 180); } else done();
+    if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
 
   function readingFields(b) {
     return `
-      <div class="grid2">
-        <div class="field"><label for="f-status">Stato</label><select id="f-status">
-          ${Object.keys(STATUS_ONE).map(k => `<option value="${k}" ${b.status === k ? "selected" : ""}>${STATUS_ONE[k]}</option>`).join("")}</select></div>
+      <div class="field"><span class="label" id="f-status-l">Stato</span>
+        <input type="hidden" id="f-status" value="${esc(b.status || "da-leggere")}">
+        <div class="seg" role="radiogroup" aria-labelledby="f-status-l">${["da-leggere", "in-lettura", "letto"].map(k => `<button type="button" role="radio" data-v="${k}" aria-checked="${b.status === k}">${STATUS_ONE[k]}</button>`).join("")}<span class="seg-ink"></span></div>
+      </div>
+      <div>
         <div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div></div>
       </div>
       <div class="grid2">
@@ -584,6 +589,16 @@
       </div>`;
   }
   function wireRating(sheet, holder) {
+    const seg = $(".seg", sheet);
+    if (seg) {
+      const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
+        if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
+      seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
+        seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
+        $("#f-status", sheet).value = btn.dataset.v; sync();
+      });
+      requestAnimationFrame(sync);
+    }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
@@ -934,10 +949,67 @@
     if (btn.dataset.action === "archive") { openImport(); return; }
     state.view = btn.dataset.view;
     document.querySelectorAll("nav.tabs button[data-view]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
+    const main = $("#main"); main.classList.remove("swap"); void main.offsetWidth; main.classList.add("swap");
     render(); window.scrollTo({ top: 0 });
   });
   let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 220); };
-  $("#sort").onchange = e => { state.sort = e.target.value; render(); };
+  // Menu "Ordina" personalizzato
+  (() => {
+    const dd = $("#sort-dd"), btn = $("#sort-btn"), menu = $("#sort-menu");
+    const items = [...menu.querySelectorAll("[role=option]")];
+    const open = v => {
+      menu.hidden = !v; btn.setAttribute("aria-expanded", String(v)); dd.classList.toggle("open", v);
+      if (v) (items.find(i => i.getAttribute("aria-selected") === "true") || items[0]).focus();
+    };
+    const pick = it => {
+      state.sort = it.dataset.v; $("#sort-label").textContent = it.textContent.trim();
+      items.forEach(i => i.setAttribute("aria-selected", String(i === it)));
+      open(false); btn.focus(); render();
+    };
+    btn.onclick = () => open(menu.hidden);
+    items.forEach((it, i) => {
+      it.onclick = () => pick(it);
+      it.onkeydown = e => {
+        if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+        if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+        if (e.key === "Escape") { open(false); btn.focus(); }
+      };
+    });
+    document.addEventListener("pointerdown", e => { if (!menu.hidden && !dd.contains(e.target)) open(false); });
+  })();
+
+  // Scorciatoia "/" per cercare (su computer)
+  document.addEventListener("keydown", e => {
+    if (e.key === "/" && !$("#scrim") && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); }
+  });
+
+  // Anteprima al passaggio del mouse sui dorsi (solo dove c'è un mouse)
+  const canHover = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const peek = document.createElement("div"); peek.className = "peek"; peek.setAttribute("aria-hidden", "true"); document.body.append(peek);
+  let peekT = null;
+  function showPeek(el) {
+    const b = state.books.find(x => x.id === el.dataset.id); if (!b) return;
+    const { pct, tot } = progressOf(b);
+    peek.innerHTML = `${coverHTML(b, 160)}<div class="pk-body"><b>${esc(b.title)}</b><span>${esc(b.author || "Autore sconosciuto")}</span>
+      <span class="pk-meta">${[b.year, b.pages ? b.pages + " pp." : "", b.genre].filter(Boolean).map(esc).join(" · ")}</span>
+      ${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}
+      <span class="pk-st">${b.status === "in-lettura" && tot ? `In lettura · ${pct}%` : STATUS_ONE[b.status]}${b.finished && b.status === "letto" ? " · " + fmtDate(b.finished) : ""}</span></div>`;
+    const r = el.getBoundingClientRect(), W = 280, H = peek.offsetHeight || 150, m = 10;
+    let x = r.left + r.width / 2 - W / 2; x = Math.max(m, Math.min(innerWidth - W - m, x));
+    let y = r.top - H - 12; const below = y < m; if (below) y = r.bottom + 12;
+    peek.style.left = x + "px"; peek.style.top = y + "px"; peek.classList.toggle("below", below); peek.classList.add("on");
+  }
+  function hidePeek() { clearTimeout(peekT); peek.classList.remove("on"); }
+  if (canHover) {
+    document.addEventListener("mouseover", e => {
+      const el = e.target.closest && e.target.closest("#main .spine[data-id]");
+      if (!el) return;
+      clearTimeout(peekT); peekT = setTimeout(() => showPeek(el), peek.classList.contains("on") ? 40 : 260);
+    });
+    document.addEventListener("mouseout", e => { const el = e.target.closest && e.target.closest("#main .spine[data-id]"); if (el && !el.contains(e.relatedTarget)) hidePeek(); });
+    addEventListener("scroll", hidePeek, { passive: true });
+    document.addEventListener("pointerdown", hidePeek);
+  }
 
   const dock = $("#dock");
   const fitDock = () => document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + "px");

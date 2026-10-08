@@ -32,13 +32,20 @@
 
 <div class="dock" id="dock">
   <div class="search" id="searchbar">
-    <input id="q" type="search" placeholder="Cerca per titolo o autore" aria-label="Cerca nella libreria" autocomplete="off">
-    <select id="sort" aria-label="Ordina">
-      <option value="recenti">Recenti</option>
-      <option value="autore">Autore</option>
-      <option value="titolo">Titolo</option>
-      <option value="voto">Voto</option>
-    </select>
+    <input id="q" type="search" placeholder="Cerca titolo o autore" aria-label="Cerca nella libreria" autocomplete="off">
+    <div class="dd" id="sort-dd">
+      <button class="dd-btn" id="sort-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Ordina">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M6 4v12M6 16l-3-3M6 16l3-3M14 16V4M14 4l-3 3M14 4l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="sort-label">Recenti</span>
+        <svg class="chev" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="dd-menu" id="sort-menu" role="listbox" aria-label="Ordina per" hidden>
+        <button type="button" role="option" data-v="recenti" aria-selected="true">Recenti</button>
+        <button type="button" role="option" data-v="autore" aria-selected="false">Autore</button>
+        <button type="button" role="option" data-v="titolo" aria-selected="false">Titolo</button>
+        <button type="button" role="option" data-v="voto" aria-selected="false">Voto</button>
+      </div>
+    </div>
   </div>
   <nav class="tabs" aria-label="Sezioni">
     <div class="inner">
