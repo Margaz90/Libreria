@@ -308,9 +308,14 @@
   }
 
   /* ---------- vista ---------- */
+  const SHELF_ORDER = { daleggere: ["da-leggere", "in-lettura", "letto"] }; // con "Da leggere prima" cambia anche l'ordine degli scaffali
+  const shelfOrder = () => SHELF_ORDER[state.sort] || Object.keys(STATUS);
   function sorted(list) {
+    const recenti = (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0);
+    const rank = st => shelfOrder().indexOf(st);
     const by = {
-      recenti: (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0),
+      recenti,
+      daleggere: (a, b) => rank(a.status) - rank(b.status) || recenti(a, b),
       autore: (a, b) => (surname3(a.author) + a.author).localeCompare(surname3(b.author) + b.author, "it") || (a.year || 0) - (b.year || 0),
       titolo: (a, b) => a.title.localeCompare(b.title, "it"),
       voto: (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, "it")
@@ -436,7 +441,7 @@
     }).join("")}</div>`;
   }
   function renderShelves(list) {
-    return (state.filter === "tutti" ? Object.keys(STATUS) : [state.filter]).map(st => {
+    return (state.filter === "tutti" ? shelfOrder() : [state.filter]).map(st => {
       const books = sorted(list.filter(b => b.status === st));
       const spines = books.map(b => spineHTML(b)).join("");
       return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
@@ -1062,11 +1067,9 @@
       menu.hidden = !v; btn.setAttribute("aria-expanded", String(v)); dd.classList.toggle("open", v);
       if (v) (items.find(i => i.getAttribute("aria-selected") === "true") || items[0]).focus();
     };
-    const pick = it => {
-      state.sort = it.dataset.v; $("#sort-label").textContent = it.textContent.trim();
-      items.forEach(i => i.setAttribute("aria-selected", String(i === it)));
-      open(false); btn.focus(); render();
-    };
+    const show = it => { state.sort = it.dataset.v; $("#sort-label").textContent = it.dataset.short || it.textContent.trim(); items.forEach(i => i.setAttribute("aria-selected", String(i === it))); };
+    const pick = it => { show(it); setSet({ sort: state.sort }); open(false); btn.focus(); render(); };
+    const saved = items.find(i => i.dataset.v === getSet().sort); if (saved) show(saved); // ordine ricordato sul dispositivo
     btn.onclick = () => open(menu.hidden);
     items.forEach((it, i) => {
       it.onclick = () => pick(it);

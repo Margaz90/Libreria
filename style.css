@@ -165,6 +165,11 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--surface); width: 100%; max-width: 560px; max-height: 92vh; max-height: 92dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; border-radius: 18px 18px 0 0; padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; }
 @media (min-width: 640px) { .scrim { align-items: center; } .sheet { border-radius: 18px; } }
+/* Su iPhone la scheda scorre solo in verticale: niente slittamenti di lato */
+.sheet { overflow-x: hidden; touch-action: pan-y pinch-zoom; }
+/* I campi data di Safari hanno una larghezza minima propria che può sforare la colonna */
+.field input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; min-height: 44px; display: block; }
+.field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .sheet h2 { font-family: var(--display); font-weight: 400; font-size: 24px; margin: 0; text-wrap: balance; }
 .sheet .sub { color: var(--muted); font-size: 14px; margin-top: -8px; }
 .sheet-top { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start; }
