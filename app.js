@@ -10,7 +10,8 @@
   const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
-  const state = { books: [], view: "scaffale", q: "", sort: "recenti", coverJob: null };
+  const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null };
+  const FILTERS = [["tutti", "Tutti"], ["in-lettura", "In lettura"], ["letto", "Letti"], ["da-leggere", "Da leggere"]];
 
   /* ---------- utilità ---------- */
   const $ = (s, r = document) => r.querySelector(s);
@@ -351,8 +352,7 @@
       `<text x="24" y="28.5" text-anchor="middle">${done}</text></svg>`;
     $("#tally").innerHTML = `<button class="goal" id="goal-btn" type="button">${ring}<span class="goal-txt">${goal
         ? `<b>${done} di ${goal}</b> libri nel ${y}<em>${goalPace(done, goal, y)}</em>`
-        : `<b>${done} libri</b> letti nel ${y}<em>Tocca per fissare un obiettivo</em>`}</span></button>
-      <span class="tally-rest"><span><b>${read.length}</b> letti in tutto</span><span><b>${state.books.filter(b => b.status === "in-lettura").length}</b> in lettura</span><span><b>${state.books.filter(b => b.status === "da-leggere").length}</b> da leggere</span></span>`;
+        : `<b>${done} libri</b> letti nel ${y}<em>Tocca per fissare un obiettivo</em>`}</span></button>`;
     $("#goal-btn").onclick = openGoal;
   }
   function goalPace(done, goal, y) {
@@ -385,7 +385,7 @@
     $("#archive-dot").hidden = !backupDue();
     n.hidden = state.books.length > 0;
     if (state.books.length) { n.innerHTML = ""; return; }
-    n.innerHTML = `<div class="notice"><span><strong>La libreria è vuota.</strong> Carica i 108 libri importati da Goodreads, oppure un backup dal pulsante Backup in basso.</span>
+    n.innerHTML = `<div class="notice"><span><strong>La libreria è vuota.</strong> Carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
       <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button></span></div>`;
     $("#seed-go").onclick = loadSeed;
   }
@@ -436,7 +436,7 @@
     }).join("")}</div>`;
   }
   function renderShelves(list) {
-    return Object.keys(STATUS).map(st => {
+    return (state.filter === "tutti" ? Object.keys(STATUS) : [state.filter]).map(st => {
       const books = sorted(list.filter(b => b.status === st));
       const spines = books.map(b => spineHTML(b)).join("");
       return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
@@ -485,13 +485,28 @@
     </div>`;
   }
 
+  // Menu: filtri a pillole (telefono), scaffali nella colonna laterale (computer), sezione attiva, vista dorsi/copertine.
+  function renderNav() {
+    const n = { tutti: state.books.length }; for (const b of state.books) n[b.status] = (n[b.status] || 0) + 1;
+    const lib = state.view === "libreria";
+    $("#pills").innerHTML = FILTERS.filter(([k]) => k === "tutti" || n[k] || state.filter === k)
+      .map(([k, l]) => `<button type="button" class="pill" role="radio" data-filter="${k}" aria-checked="${state.filter === k}">${l}<b>${n[k] || 0}</b></button>`).join("");
+    $("#side-shelves").innerHTML = `<span class="label">Scaffali</span>` + FILTERS
+      .map(([k, l]) => `<button type="button" class="shelf-link" data-filter="${k}" aria-pressed="${lib && state.filter === k}">${l}<em>${n[k] || 0}</em></button>`).join("");
+    $("#n-all").textContent = n.tutti || "";
+    document.querySelectorAll("#dock [data-view]").forEach(t => t.setAttribute("aria-current", t.dataset.view === state.view ? "page" : "false"));
+    document.querySelectorAll(".viewsw [data-mode]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.mode === state.mode)));
+  }
   function render() {
-    renderTally(); renderNotice();
-    const list = visible(), main = $("#main");
-    if (state.view === "scaffale") main.innerHTML = renderShelves(list);
-    else if (state.view === "copertine") main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">Nessun libro corrisponde alla ricerca.</p>`;
-    else main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
-    $("#searchbar").hidden = state.view === "stats";
+    renderTally(); renderNotice(); renderNav();
+    const main = $("#main");
+    if (state.view === "stats") main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
+    else {
+      const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
+      if (state.mode === "dorsi") main.innerHTML = renderShelves(list);
+      else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
+    }
+    $("#toolbar").hidden = state.view === "stats";
     main.querySelectorAll("[data-id]").forEach(wireItem);
     main.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
@@ -842,7 +857,7 @@
     guardSheet(sheet, () => $("#s-save", sheet).click(), () => JSON.stringify(b));
   }
 
-  function openAdd() {
+  function openAdd({ scan = false } = {}) {
     const b = { status: "da-leggere", rating: 0 };
     const sheet = openSheet(`
       <h2>Nuovo libro</h2>
@@ -857,7 +872,8 @@
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;
       fillData(sheet, hit, b);
     });
-    setTimeout(() => $("#s-q", sheet).focus(), 50);
+    const sb = $("#s-scan", sheet);
+    if (scan && sb && !sb.hidden) sb.click(); else setTimeout(() => $("#s-q", sheet).focus(), 50);
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
       readData(sheet, b);
@@ -867,6 +883,23 @@
       upsert(b); closeSheet(); toast("Aggiunto alla libreria");
     };
     guardSheet(sheet, () => $("#a-save", sheet).click(), () => JSON.stringify(b));
+  }
+
+  function openMore() {
+    const y = new Date().getFullYear(), goal = (getSet().goals || {})[y];
+    const done = state.books.filter(b => b.status === "letto" && yearOf(b.finished) === y).length;
+    const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+    const missing = state.books.filter(b => !b.cover && !b.noCover).length;
+    const sheet = openSheet(`<h2>Altro</h2>
+      <div class="menu-list">
+        <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
+        <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
+        <div class="soon"><b>Accedi e sincronizza</b><span>In arrivo: la stessa libreria su iPhone, iPad e computer</span></div>
+      </div>
+      <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
+    $("[data-m=goal]", sheet).onclick = openGoal;
+    $("[data-m=backup]", sheet).onclick = openImport;
+    $("#m-close", sheet).onclick = closeSheet;
   }
 
   /* ---------- importa / esporta ---------- */
@@ -984,14 +1017,42 @@
   }
 
   /* ---------- avvio ---------- */
-  document.querySelectorAll("nav.tabs button").forEach(btn => btn.onclick = () => {
-    if (btn.dataset.action === "add") { openAdd(); return; }
-    if (btn.dataset.action === "archive") { openImport(); return; }
-    state.view = btn.dataset.view;
-    document.querySelectorAll("nav.tabs button[data-view]").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
-    const main = $("#main"); main.classList.remove("swap"); void main.offsetWidth; main.classList.add("swap");
-    render(); window.scrollTo({ top: 0 });
+  function swapIn() { const main = $("#main"); main.classList.remove("swap"); void main.offsetWidth; main.classList.add("swap"); }
+  function setView(v) { state.view = v; document.body.classList.remove("bars-off"); swapIn(); render(); window.scrollTo({ top: 0 }); }
+  function goSearch() {
+    if (state.view !== "libreria") setView("libreria");
+    document.body.classList.remove("bars-off");
+    $("#q").focus({ preventScroll: true }); window.scrollTo({ top: 0 });
+  }
+  $("#dock").addEventListener("click", e => {
+    const t = e.target.closest(".tab"); if (!t) return;
+    if (t.dataset.lp === "1") { t.dataset.lp = ""; return; }
+    const a = t.dataset.act;
+    if (a === "add") openAdd(); else if (a === "more") openMore(); else if (a === "search") goSearch();
+    else if (t.dataset.view) setView(t.dataset.view);
   });
+  document.addEventListener("click", e => {
+    const f = e.target.closest && e.target.closest("[data-filter]");
+    if (f) { state.filter = f.dataset.filter; if (state.view !== "libreria") setView("libreria"); else { swapIn(); render(); } return; }
+    const m = e.target.closest && e.target.closest(".viewsw [data-mode]");
+    if (m && m.dataset.mode !== state.mode) { state.mode = m.dataset.mode; setSet({ mode: state.mode }); swapIn(); render(); }
+  });
+  // Pressione prolungata su Aggiungi: apre subito la fotocamera per l'ISBN.
+  (() => {
+    const add = $("#dock .add"); let t = null;
+    const cancel = () => { clearTimeout(t); t = null; };
+    add.addEventListener("pointerdown", () => { cancel(); t = setTimeout(() => { add.dataset.lp = "1"; openAdd({ scan: true }); }, 480); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => add.addEventListener(ev, cancel));
+    add.addEventListener("contextmenu", e => e.preventDefault());
+  })();
+  // Sul telefono le barre si nascondono scorrendo verso il basso e tornano scorrendo verso l'alto.
+  let lastY = scrollY;
+  addEventListener("scroll", () => {
+    const y = scrollY, d = y - lastY; if (Math.abs(d) < 8) return;
+    const busy = !$("#sort-menu").hidden || document.activeElement === $("#q");
+    document.body.classList.toggle("bars-off", d > 0 && y > 160 && !busy);
+    lastY = y;
+  }, { passive: true });
   let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 220); };
   // Menu "Ordina" personalizzato
   (() => {
@@ -1018,9 +1079,13 @@
     document.addEventListener("pointerdown", e => { if (!menu.hidden && !dd.contains(e.target)) open(false); });
   })();
 
-  // Scorciatoia "/" per cercare (su computer)
+  // Scorciatoie da tastiera (su computer): / cerca, N nuovo libro, 1 e 2 per le sezioni
   document.addEventListener("keydown", e => {
-    if (e.key === "/" && !$("#scrim") && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); }
+    if ($("#scrim") || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if (e.key === "/") { e.preventDefault(); goSearch(); }
+    else if (e.key === "n" || e.key === "N") { e.preventDefault(); openAdd(); }
+    else if (e.key === "1") setView("libreria");
+    else if (e.key === "2") setView("stats");
   });
 
   // Anteprima al passaggio del mouse sui dorsi (solo dove c'è un mouse)
@@ -1056,6 +1121,7 @@
   fitDock(); if ("ResizeObserver" in window) new ResizeObserver(fitDock).observe(dock);
 
   state.books = load();
+  if (getSet().mode === "copertine") state.mode = "copertine";
   try {
     if (localStorage.getItem("libreria-schema") !== "2") {
       state.books.forEach(b => { if (!b.cover) delete b.noCover; });

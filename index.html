@@ -27,38 +27,43 @@
     <div class="tally" id="tally"></div>
   </header>
   <div id="notice"></div>
-  <main id="main"></main>
-</div>
-
-<div class="dock" id="dock">
-  <div class="search" id="searchbar">
-    <input id="q" type="search" placeholder="Cerca titolo o autore" aria-label="Cerca nella libreria" autocomplete="off">
-    <div class="dd" id="sort-dd">
-      <button class="dd-btn" id="sort-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Ordina">
-        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M6 4v12M6 16l-3-3M6 16l3-3M14 16V4M14 4l-3 3M14 4l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span id="sort-label">Recenti</span>
-        <svg class="chev" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="dd-menu" id="sort-menu" role="listbox" aria-label="Ordina per" hidden>
-        <button type="button" role="option" data-v="recenti" aria-selected="true">Recenti</button>
-        <button type="button" role="option" data-v="autore" aria-selected="false">Autore</button>
-        <button type="button" role="option" data-v="titolo" aria-selected="false">Titolo</button>
-        <button type="button" role="option" data-v="voto" aria-selected="false">Voto</button>
+  <div class="toolbar" id="toolbar">
+    <div class="search" id="searchbar">
+      <input id="q" type="search" placeholder="Cerca titolo, autore o genere" aria-label="Cerca nella libreria" autocomplete="off">
+      <div class="dd" id="sort-dd">
+        <button class="dd-btn" id="sort-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Ordina">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M6 4v12M6 16l-3-3M6 16l3-3M14 16V4M14 4l-3 3M14 4l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="sort-label">Recenti</span>
+          <svg class="chev" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="dd-menu" id="sort-menu" role="listbox" aria-label="Ordina per" hidden>
+          <button type="button" role="option" data-v="recenti" aria-selected="true">Recenti</button>
+          <button type="button" role="option" data-v="autore" aria-selected="false">Autore</button>
+          <button type="button" role="option" data-v="titolo" aria-selected="false">Titolo</button>
+          <button type="button" role="option" data-v="voto" aria-selected="false">Voto</button>
+        </div>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="pills" id="pills" role="radiogroup" aria-label="Mostra"></div>
+      <div class="viewsw" role="radiogroup" aria-label="Vista">
+        <button type="button" role="radio" data-mode="dorsi" aria-checked="true" aria-label="Dorsi sullo scaffale" title="Dorsi"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3.5 4h3v12h-3zM8.5 2.5h3V16h-3zM13.2 5.2l2.8-.8 2.6 10.8-2.8.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+        <button type="button" role="radio" data-mode="copertine" aria-checked="false" aria-label="Copertine" title="Copertine"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 3h5.5v7H3zM11.5 3H17v7h-5.5zM3 12.5h5.5V17H3zM11.5 12.5H17V17h-5.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
       </div>
     </div>
   </div>
-  <nav class="tabs" aria-label="Sezioni">
-    <div class="inner">
-      <button id="tab-scaffale" data-view="scaffale" aria-pressed="true">Scaffale</button>
-      <button id="tab-copertine" data-view="copertine" aria-pressed="false">Copertine</button>
-      <button id="tab-stats" data-view="stats" aria-pressed="false">Statistiche</button>
-      <div class="side">
-        <button id="tab-add" class="add" data-action="add">+ Libro</button>
-        <button id="tab-archive" class="archive" data-action="archive">Backup<span class="dot" id="archive-dot" hidden></span></button>
-      </div>
-    </div>
-  </nav>
+  <main id="main"></main>
 </div>
+
+<nav class="dock" id="dock" aria-label="Sezioni">
+  <button class="tab" type="button" data-view="libreria" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5h3.5v15H4zM9.5 3h3.5v16.5H9.5zM15 5.6l3.3-.9 3 13.9-3.3.9z"/></svg><span>Libreria</span><em class="n" id="n-all"></em></button>
+  <div class="shelves" id="side-shelves"></div>
+  <button class="tab" type="button" data-act="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><span>Cerca</span></button>
+  <button class="tab add" type="button" data-act="add" aria-label="Aggiungi un libro (tieni premuto per l'ISBN)"><i class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i><span>Aggiungi</span></button>
+  <button class="tab" type="button" data-view="stats" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5M3 20h18"/></svg><span>Statistiche</span></button>
+  <button class="tab more" type="button" data-act="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></svg><span>Altro</span><i class="dot" id="archive-dot" hidden></i></button>
+  <p class="kbd">Scorciatoie: <kbd>/</kbd> cerca · <kbd>N</kbd> nuovo libro · <kbd>1</kbd> <kbd>2</kbd> sezioni</p>
+</nav>
 <div id="layer"></div>
 <script src="app.js"></script>
 </body>

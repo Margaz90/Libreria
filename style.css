@@ -1,4 +1,4 @@
-/* Una stanza di lettura: scaffali con dorsi, copertine, segnature in stile biblioteca; navigazione a schede in basso */
+/* Una stanza di lettura: scaffali con dorsi, copertine, segnature in stile biblioteca; barra a icone in basso (colonna laterale su computer) */
 :root {
   --bg: #ECEEE7;
   --surface: #F8F8F3;
@@ -29,7 +29,7 @@ html, body { background: var(--bg); color: var(--ink); margin: 0; }
 body {
   font-family: var(--body); font-size: 15px; line-height: 1.5;
   padding-inline: max(16px, env(safe-area-inset-left, 0px));
-  padding-block: env(safe-area-inset-top, 0px) calc(var(--dock-h, 150px) + 20px);
+  padding-block: env(safe-area-inset-top, 0px) calc(var(--dock-h, 70px) + 20px);
   -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%;
 }
 img { max-width: 100%; }
@@ -117,18 +117,46 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .list li { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
 .list li span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); }
 
-/* Barra in basso */
-.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--surface); border-top: 1px solid var(--rule);
-  padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.dock > * { width: 100%; max-width: 560px; }
-.dock .search input, .dock .search select { background: var(--bg); padding: 8px 12px; }
-nav.tabs .inner { display: flex; gap: 6px; align-items: stretch; }
-nav.tabs .side { display: flex; flex-direction: column; gap: 4px; flex: 1.1; }
-nav.tabs .archive { position: relative; font-size: 12px; padding: 5px 4px; border: 1px solid var(--rule) !important; color: var(--ink) !important; }
-nav.tabs .archive .dot { position: absolute; top: 4px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-nav.tabs button { flex: 1; border: 0; background: none; padding: 7px 4px; border-radius: 10px; font-size: 13px; font-weight: 500; color: var(--muted); }
-nav.tabs button[aria-pressed="true"] { color: var(--ink); background: var(--bg); }
-nav.tabs button.add { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+/* Barra in alto: ricerca, ordine, filtri a pillole, vista dorsi/copertine. Resta in cima mentre scorri. */
+.toolbar { position: sticky; top: 0; z-index: 4; margin: -12px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) -10px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-left, 0px)) 8px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 8px; transition: transform .25s ease; }
+.filters { display: flex; gap: 8px; align-items: center; }
+.pills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.pills::-webkit-scrollbar { display: none; }
+.pill { flex: none; border: 1px solid var(--rule); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background .15s ease, color .15s ease; }
+.pill b { font-weight: 600; margin-left: 5px; font-variant-numeric: tabular-nums; opacity: .75; }
+.pill[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.viewsw { display: flex; flex: none; padding: 2px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.viewsw button { border: 0; background: none; padding: 5px 8px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
+.viewsw button[aria-checked="true"] { background: var(--bg); color: var(--ink); }
+
+/* Barra in basso a icone (telefono e iPad in verticale) */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--rule);
+  padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(5, 1fr); max-width: none; transition: transform .25s ease; }
+.dock .tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 56px; border: 0; background: none; padding: 4px 0; font-size: 10.5px; font-weight: 600; color: var(--muted); -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.dock .tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.dock .tab.more svg { fill: currentColor; }
+.dock .tab[aria-current="page"] { color: var(--accent); }
+.dock .tab .n { display: none; }
+.dock .tab.add .ico { width: 46px; height: 46px; margin-top: -16px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; box-shadow: 0 6px 16px -6px var(--accent); }
+.dock .tab.add .ico svg { stroke-width: 2.2; }
+.dock .dot { position: absolute; top: 2px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.dock .shelves, .dock .kbd { display: none; }
+@media (max-width: 1023px) {
+  body.bars-off .dock { transform: translateY(calc(100% + 24px)); } /* 24px: anche il cerchio di Aggiungi che sporge */
+  body.bars-off .toolbar { transform: translateY(calc(-100% - 2px)); }
+}
+@media (min-width: 560px) and (max-width: 1023px) { .dock { padding-inline: calc(50% - 280px); } }
+
+/* Menu Altro */
+.menu-list { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+.menu-list > * { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; border-bottom: 1px solid var(--rule); background: var(--bg); padding: 13px 16px; position: relative; }
+.menu-list > *:last-child { border-bottom: 0; }
+.menu-list b { font-size: 15px; font-weight: 600; }
+.menu-list span { font-size: 12.5px; color: var(--muted); }
+.menu-list button::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-top: 2px solid var(--muted); transform: translateY(-50%) rotate(45deg); }
+.menu-list .due span { color: var(--accent); font-weight: 600; }
+.menu-list .soon { opacity: .55; }
 
 /* Schede a comparsa */
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
@@ -174,7 +202,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .result b { display: block; font-size: 14px; line-height: 1.3; }
 .result span { font-size: 12.5px; color: var(--muted); }
 
-.toast { position: fixed; left: 50%; bottom: calc(var(--dock-h, 150px) + 12px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
+.toast { position: fixed; left: 50%; bottom: calc(var(--dock-h, 70px) + 12px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
 .toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .spine { transition: none; } .spine:hover { transform: none; } }
 
@@ -199,7 +227,6 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .goal-txt { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); line-height: 1.3; }
 .goal-txt b { color: var(--ink); font-size: 14px; }
 .goal-txt em { font-style: normal; font-size: 12px; }
-.tally-rest { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .notice.quiet { border-style: solid; padding: 8px 12px; }
 
 /* Libri in lettura */
@@ -248,15 +275,33 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 @media (min-width: 1024px) {
   body { padding-left: 272px; padding-right: 32px; padding-block: env(safe-area-inset-top, 0px) 48px; }
   .wrap { max-width: 1200px; }
-  /* la barra in basso diventa una colonna laterale */
-  .dock { top: 0; bottom: 0; left: 0; right: auto; width: 240px; border-top: 0; border-right: 1px solid var(--rule);
-    padding: 32px 16px; justify-content: flex-start; align-items: stretch; gap: 18px; }
-  .dock .search { flex-direction: column; }
-  nav.tabs .inner { flex-direction: column; gap: 4px; }
-  nav.tabs button { text-align: left; padding: 10px 12px; font-size: 14px; flex: none; }
-  nav.tabs .side { margin-top: 14px; gap: 8px; flex: none; }
-  nav.tabs .side button { text-align: center; }
-  nav.tabs .archive { font-size: 13px; padding: 8px; }
+  /* la barra in basso diventa una colonna laterale con conteggi */
+  .dock { top: 0; bottom: 0; left: 0; right: auto; width: 240px; border-top: 0; border-right: 1px solid var(--rule); background: var(--surface);
+    padding: 28px 16px 20px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+  .dock .tab { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; transition: background .15s ease, color .15s ease; }
+  .dock .tab svg { width: 20px; height: 20px; }
+  .dock .tab:hover, .dock .tab[aria-current="page"] { background: var(--bg); color: var(--ink); }
+  .dock .tab .n { display: block; margin-left: auto; font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .dock .tab[data-view="libreria"] { order: 1; } .dock .tab[data-view="stats"] { order: 2; }
+  .dock .tab[data-act="search"] { display: none; }
+  .dock .tab.add { order: 0; justify-content: center; gap: 6px; margin-bottom: 16px; padding: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .dock .tab.add:hover { background: var(--accent); color: var(--accent-ink); filter: brightness(1.06); }
+  .dock .tab.add .ico { width: auto; height: auto; margin: 0; background: none; box-shadow: none; color: inherit; }
+  .dock .tab.add .ico svg { width: 18px; height: 18px; }
+  .dock .shelves { order: 3; display: flex; flex-direction: column; gap: 2px; margin-top: 20px; }
+  .dock .shelves .label { padding: 0 12px 6px; }
+  .shelf-link { display: flex; justify-content: space-between; border: 0; background: none; padding: 7px 12px 7px 32px; border-radius: 10px; font-size: 14px; color: var(--muted); text-align: left; transition: background .15s ease, color .15s ease; }
+  .shelf-link em { font-style: normal; font-family: var(--mono); font-size: 12px; }
+  .shelf-link:hover, .shelf-link[aria-pressed="true"] { background: var(--bg); color: var(--ink); }
+  .shelf-link[aria-pressed="true"] { font-weight: 600; }
+  .dock .tab.more { order: 4; margin-top: auto; }
+  .dock .dot { position: static; margin-left: auto; }
+  .dock .kbd { order: 5; display: block; margin: 10px 12px 0; font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+  .kbd kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--bg); }
+  .toolbar { flex-direction: row; align-items: center; gap: 12px; margin: -12px -16px -10px; padding: 12px 16px; }
+  .toolbar .search { flex: 1; max-width: 560px; }
+  .toolbar .filters { margin-left: auto; }
+  .toolbar .pills { display: none; }
   .toast { bottom: 28px; left: calc(50% + 120px); }
   .covers { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 18px; }
   /* la scheda del libro si apre a lato, lo scaffale resta visibile */
@@ -283,7 +328,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .dd-btn:hover { border-color: var(--muted); }
 .dd-btn .chev { transition: transform .2s ease; color: var(--muted); }
 .dd.open .dd-btn .chev { transform: rotate(180deg); }
-.dd-menu { position: absolute; right: 0; bottom: calc(100% + 8px); min-width: 170px; padding: 6px; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 14px 34px -14px var(--shadow); display: flex; flex-direction: column; gap: 2px; z-index: 8; transform-origin: bottom right; animation: ddIn .16s ease; }
+.dd-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 170px; padding: 6px; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 14px 34px -14px var(--shadow); display: flex; flex-direction: column; gap: 2px; z-index: 8; transform-origin: top right; animation: ddIn .16s ease; }
 .dd-menu[hidden] { display: none; }
 .dd-menu [role=option] { text-align: left; border: 0; background: none; padding: 9px 12px 9px 32px; border-radius: 8px; font-size: 14px; position: relative; color: var(--ink); }
 .dd-menu [role=option]:hover, .dd-menu [role=option]:focus-visible { background: var(--bg); outline: none; }
@@ -322,11 +367,6 @@ html { scroll-behavior: smooth; }
 @media (min-width: 1024px) {
   .sheet { animation: slideIn .24s cubic-bezier(.2,.8,.2,1); }
   .scrim.closing .sheet { animation: slideOut .18s ease forwards; }
-  .dd-menu { bottom: auto; top: calc(100% + 8px); transform-origin: top right; left: 0; right: 0; }
-  .dd { width: 100%; } .dd-btn { width: 100%; }
-  .dd-btn #sort-label { flex: 1; text-align: left; }
-  nav.tabs button[data-view] { transition: background .15s ease, color .15s ease; }
-  nav.tabs button[data-view]:hover { background: var(--bg); color: var(--ink); }
   .card .cover { transition: transform .2s ease, box-shadow .2s ease; }
   .card:hover .cover { transform: translateY(-4px); box-shadow: 0 16px 28px -14px var(--shadow); }
   .btn { transition: filter .15s ease, border-color .15s ease; }
@@ -343,5 +383,6 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .scrim, .scrim.closing, .sheet, .scrim.closing .sheet, #main.swap, .dd-menu { animation: none !important; }
+  .dock, .toolbar { transition: none; }
   .peek, .seg-ink { transition: none; }
 }
