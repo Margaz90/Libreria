@@ -126,6 +126,9 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .pill { flex: none; border: 1px solid var(--rule); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background .15s ease, color .15s ease; }
 .pill b { font-weight: 600; margin-left: 5px; font-variant-numeric: tabular-nums; opacity: .75; }
 .pill[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+/* iPhone: senza numeri e più compatte, così le quattro pillole entrano tutte */
+@media (max-width: 699px) { .pill b { display: none; } .pills { gap: 4px; } .pill { padding-inline: 9px; } }
+@media (max-width: 380px) { .pill { padding-inline: 7px; } .viewsw button { padding-inline: 6px; } }
 .viewsw { display: flex; flex: none; padding: 2px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
 .viewsw button { border: 0; background: none; padding: 5px 8px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
 .viewsw button[aria-checked="true"] { background: var(--bg); color: var(--ink); }
