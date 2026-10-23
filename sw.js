@@ -2,9 +2,10 @@
    - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v11";
+const VERSION = "v12";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
+const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
 const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 const MAX_ASSETS = 400;
 
@@ -43,13 +44,13 @@ async function networkFirst(req) {
   }
 }
 
-async function cacheFirst(req) {
-  const cache = await caches.open(ASSETS);
+async function cacheFirst(req, cacheName = ASSETS) {
+  const cache = await caches.open(cacheName);
   const hit = await cache.match(req);
   if (hit) return hit;
   try {
     const res = await fetch(req);
-    if (res.ok || res.type === "opaque") { cache.put(req, res.clone()); trim(ASSETS, MAX_ASSETS); }
+    if (res.ok || res.type === "opaque") { cache.put(req, res.clone()); if (cacheName === ASSETS) trim(ASSETS, MAX_ASSETS); }
     return res;
   } catch { return Response.error(); }
 }
@@ -60,6 +61,7 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     if (url.pathname.endsWith("seed.json")) return; // sempre dalla rete
+    if (url.pathname.endsWith("zxing.min.js")) { e.respondWith(cacheFirst(req, LIBS)); return; }
     e.respondWith(networkFirst(req));
     return;
   }

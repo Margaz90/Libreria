@@ -38,7 +38,8 @@
   const SET_KEY = "libreria-settings";
   function getSet() { try { return JSON.parse(localStorage.getItem(SET_KEY) || "{}") || {}; } catch { return {}; } }
   function setSet(patch) { const v = { ...getSet(), ...patch }; try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch {} return v; }
-  const today = () => new Date().toISOString().slice(0, 10);
+  // Data di oggi nel fuso del dispositivo (toISOString darebbe quella di Greenwich: dopo mezzanotte risulterebbe ieri).
+  const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
 
   /* ---------- archivio sul dispositivo ---------- */
   // Le foto dei dorsi stanno in chiavi separate: così l'elenco principale resta leggero da salvare.
@@ -80,6 +81,7 @@
     out.status = STATUS_ONE[out.status] ? out.status : "da-leggere";
     if (out.year) out.year = Number(out.year) || undefined;
     if (out.pages) out.pages = Number(out.pages) || undefined;
+    if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
     return out;
@@ -98,16 +100,19 @@
       patchBook(id); renderTally();
     } else render();
   }
-  function addMany(list) {
-    const known = new Set(state.books.map(keyOf));
-    let added = 0, skipped = 0;
+  // update: i libri già presenti prendono i dati del file (quelli che il file non ha restano com'erano).
+  function addMany(list, { update = false } = {}) {
+    const known = new Map(state.books.map(b => [keyOf(b), b]));
+    let added = 0, updated = 0, skipped = 0;
     for (const raw of list) {
       if (!raw || !raw.title) continue;
-      if (known.has(keyOf(raw))) { skipped++; continue; }
-      const b = { ...clean(raw), id: newId() }; state.books.push(b); known.add(keyOf(b)); added++;
+      const cur = known.get(keyOf(raw));
+      if (cur && !update) { skipped++; continue; }
+      if (cur) { const i = state.books.indexOf(cur); state.books[i] = { ...cur, ...clean(raw), id: cur.id, added: cur.added || Date.now() }; known.set(keyOf(raw), state.books[i]); updated++; continue; }
+      const b = { ...clean(raw), id: newId() }; state.books.push(b); known.set(keyOf(b), b); added++;
     }
     schedulePersist(); render();
-    return { added, skipped };
+    return { added, updated, skipped };
   }
   function removeBook(id) { state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); }
 
@@ -312,8 +317,8 @@
     return [...list].sort(by);
   }
   function visible() {
-    const q = state.q.trim().toLowerCase();
-    return q ? state.books.filter(b => (b.title + " " + (b.author || "") + " " + (b.genre || "")).toLowerCase().includes(q)) : state.books;
+    const q = norm(state.q);
+    return q ? state.books.filter(b => norm(b.title + " " + (b.author || "") + " " + (b.genre || "")).includes(q)) : state.books;
   }
 
   // Le copertine scaricate sono grandi (fino a 600x900): per dorsi e griglia ne chiedo una versione piccola.
@@ -485,7 +490,7 @@
     const list = visible(), main = $("#main");
     if (state.view === "scaffale") main.innerHTML = renderShelves(list);
     else if (state.view === "copertine") main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">Nessun libro corrisponde alla ricerca.</p>`;
-    else main.innerHTML = renderStats(list);
+    else main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
     $("#searchbar").hidden = state.view === "stats";
     main.querySelectorAll("[data-id]").forEach(wireItem);
     main.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
@@ -537,19 +542,43 @@
   }
 
   /* ---------- schede ---------- */
-  let lastFocus = null;
+  let lastFocus = null, sheetGuard = null;
   function openSheet(html) {
-    lastFocus = document.activeElement;
+    lastFocus = document.activeElement; sheetGuard = null;
     document.querySelectorAll(".toast").forEach(t => t.remove());
     const layer = $("#layer");
     layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
-    $("#scrim").onclick = e => { if (e.target.id === "scrim") closeSheet(); };
+    $("#scrim").onclick = e => { if (e.target.id === "scrim") dismissSheet(); };
     document.addEventListener("keydown", escClose);
     document.body.style.overflow = "hidden";
     return $(".sheet", layer);
   }
-  function escClose(e) { if (e.key === "Escape") closeSheet(); }
+  function escClose(e) { if (e.key === "Escape") dismissSheet(); }
+  // Ricorda lo stato iniziale dei campi: se l'utente chiude (sfondo, Esc, Chiudi) dopo aver cambiato qualcosa, chiede cosa fare.
+  function guardSheet(sheet, save, extra = () => "") {
+    const snap = () => JSON.stringify([...sheet.querySelectorAll("input:not([type=file]):not(#s-q), textarea")].map(i => i.value)) + extra();
+    const first = snap();
+    sheetGuard = { dirty: () => snap() !== first, save };
+  }
+  function dismissSheet() {
+    const sheet = $("#layer .sheet");
+    if (!sheet || !sheetGuard || !sheetGuard.dirty()) { closeSheet(); return; }
+    let bar = $(".unsaved", sheet);
+    if (!bar) {
+      bar = document.createElement("div"); bar.className = "unsaved"; bar.setAttribute("role", "alert");
+      bar.innerHTML = `<span>Hai modifiche non salvate.</span><span class="actions"><button class="btn primary" type="button" data-u="save">Salva</button><button class="btn danger" type="button" data-u="drop">Scarta</button><button class="btn ghost" type="button" data-u="back">Continua</button></span>`;
+      bar.onclick = e => {
+        const u = e.target.dataset && e.target.dataset.u; if (!u) return;
+        if (u === "drop") closeSheet();
+        else if (u === "back") bar.remove();
+        else { bar.remove(); sheetGuard.save(); }
+      };
+      sheet.append(bar);
+    }
+    bar.querySelector("button").focus();
+  }
   function closeSheet() {
+    sheetGuard = null;
     if (stopScan) stopScan();
     document.removeEventListener("keydown", escClose); document.body.style.overflow = "";
     const scrim = $("#scrim");
@@ -609,7 +638,7 @@
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
     const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
-    if (b.status === "letto" && !b.finished) b.finished = new Date().toISOString().slice(0, 10);
+    if (b.status === "letto" && !b.finished) b.finished = today();
   }
   function readData(sheet, b) {
     b.title = $("#d-title", sheet).value.trim() || b.title;
@@ -803,13 +832,14 @@
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
-    $("#s-close", sheet).onclick = closeSheet;
+    $("#s-close", sheet).onclick = dismissSheet;
     $("#s-save", sheet).onclick = () => { readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const del = $("#s-del", sheet);
     del.onclick = () => {
       if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Conferma eliminazione"; return; }
       removeBook(b.id); closeSheet(); toast("Libro eliminato");
     };
+    guardSheet(sheet, () => $("#s-save", sheet).click(), () => JSON.stringify(b));
   }
 
   function openAdd() {
@@ -828,7 +858,7 @@
       fillData(sheet, hit, b);
     });
     setTimeout(() => $("#s-q", sheet).focus(), 50);
-    $("#a-cancel", sheet).onclick = closeSheet;
+    $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
@@ -836,6 +866,7 @@
       if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
       upsert(b); closeSheet(); toast("Aggiunto alla libreria");
     };
+    guardSheet(sheet, () => $("#a-save", sheet).click(), () => JSON.stringify(b));
   }
 
   /* ---------- importa / esporta ---------- */
@@ -878,7 +909,7 @@
   }
   async function exportBackup(status) {
     const data = JSON.stringify({ app: "libreria-diego", version: 1, exported: new Date().toISOString(), books: state.books.map(clean) }, null, 2);
-    const name = `libreria-diego-${new Date().toISOString().slice(0, 10)}.json`;
+    const name = `libreria-diego-${today()}.json`;
     const file = new File([data], name, { type: "application/json" });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Backup MyLibrary" }); setSet({ lastBackup: Date.now() }); status.textContent = "Backup condiviso."; render(); return; }
@@ -908,14 +939,23 @@
       </section>
       <section class="arch">
         <span class="label">Importa</span>
-        <p class="hint">Un backup JSON oppure il CSV esportato da Goodreads. I libri già presenti vengono saltati.</p>
+        <p class="hint">Un backup JSON oppure il CSV esportato da Goodreads.</p>
         <div class="field"><input id="i-file" type="file" accept=".csv,.json,text/csv,application/json" aria-label="File CSV o JSON"></div>
+        <label class="check"><input type="checkbox" id="i-upd"> Aggiorna i libri già presenti con i dati del file (per ripristinare un backup)</label>
         <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button><button class="btn" id="i-seed">Carica i libri Goodreads</button></div>
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
-    let pending = [];
-    const st = $("#i-status", sheet), go = $("#i-go", sheet);
+    let pending = [], counts = { fresh: 0, dup: 0 };
+    const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet);
+    const showCounts = () => {
+      const { fresh, dup } = counts, u = upd.checked;
+      st.textContent = !pending.length ? "" : (fresh || (u && dup))
+        ? `Pronti: ${fresh} libri nuovi` + (dup ? (u ? `, ${dup} da aggiornare` : ` (${dup} già presenti, saltati)`) : "") + "."
+        : "Nessun libro nuovo in questo file.";
+      go.disabled = !(fresh || (u && dup));
+    };
+    upd.onchange = showCounts;
     $("#i-close", sheet).onclick = closeSheet;
     $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
@@ -930,16 +970,16 @@
           if (/\.json$/i.test(f.name) || txt.trim().startsWith("{") || txt.trim().startsWith("[")) { const j = JSON.parse(txt); pending = Array.isArray(j) ? j : (j.books || []); }
           else pending = fromGoodreads(txt);
           const known = new Set(state.books.map(keyOf));
-          const fresh = pending.filter(b => b && b.title && !known.has(keyOf(b)));
-          st.textContent = fresh.length ? `Pronti da importare: ${fresh.length} libri${pending.length - fresh.length ? ` (${pending.length - fresh.length} già presenti)` : ""}.` : "Nessun libro nuovo in questo file.";
-          go.disabled = !fresh.length;
+          const valid = pending.filter(b => b && b.title);
+          counts = { fresh: valid.filter(b => !known.has(keyOf(b))).length, dup: valid.filter(b => known.has(keyOf(b))).length };
+          showCounts();
         } catch { pending = []; go.disabled = true; st.textContent = "File non leggibile. Usa un backup JSON o il CSV di Goodreads."; }
       };
       rd.readAsText(f);
     };
     go.onclick = () => {
-      const { added } = addMany(pending); pending = []; go.disabled = true;
-      st.textContent = `Importati ${added} libri.`;
+      const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
+      st.textContent = `Importati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".";
     };
   }
 
