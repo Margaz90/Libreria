@@ -5,7 +5,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 ## Cos'è e dove gira
 - PWA statica, nessun build: `index.html`, `style.css`, `app.js`, `sw.js`, `manifest.webmanifest`.
 - Pubblicata con GitHub Pages dal branch `main`, cartella root: https://margaz90.github.io/Libreria/ (la L maiuscola conta: il repository si chiama `Libreria`).
-- Usata soprattutto come app installata sulla Home dell'iPhone (Safari), ma anche da computer e iPad: il layout è responsive (sotto 1024 px barra in basso, sopra colonna laterale e scheda libro a lato).
+- Usata soprattutto come app installata sulla Home dell'iPhone (Safari), ma anche da computer e iPad: il layout è responsive (sotto 1024 px barra a icone in basso Libreria · Cerca · Aggiungi · Statistiche · Altro, che si nasconde scorrendo; sopra colonna laterale con scaffali e conteggi, scheda libro a lato).
 - Nome sull'iPhone: "MyLibrary", icona = libro aperto a forma di M su fondo rosso. Intestazione: "Libreria di Margaira Diego".
 
 ## Dati
@@ -16,7 +16,9 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Non esiste sincronizzazione tra dispositivi.** È il prossimo passo previsto (vedi sotto).
 
 ## Funzioni presenti
-- Scaffale con dorsi (foto vera > striscia della copertina > dorso disegnato), vista Copertine (solo immagine scaricata), Statistiche.
+- Sezione Libreria con vista Dorsi (foto vera > striscia della copertina > dorso disegnato) o Copertine (solo immagine scaricata), filtri a pillole per stato (senza numeri sotto 700 px), sezione Statistiche (sempre su tutta la libreria). Menu Altro: obiettivo, backup/import/copertine, posto per la sincronizzazione.
+- Scorciatoie su computer: `/` cerca, `N` nuovo libro, `1`/`2` sezioni. Pressione prolungata su Aggiungi = scansione ISBN diretta.
+- Chiudendo una scheda con modifiche compare "Salva / Scarta / Continua". Import con opzione "aggiorna i libri già presenti".
 - Libri in lettura come schede con pagina attuale e barra di avanzamento; obiettivo annuale con anello.
 - Pressione prolungata su dorso/copertina = menu rapido per cambiare stato.
 - Ricerca libri e copertine da Apple Books Italia (JSONP itunes.apple.com), Google Books, Open Library; punteggio che preferisce le edizioni italiane (`itScore`). Scelta tra più copertine nella scheda.
