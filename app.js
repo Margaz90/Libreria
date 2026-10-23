@@ -320,7 +320,8 @@
       titolo: (a, b) => a.title.localeCompare(b.title, "it"),
       voto: (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, "it")
     }[state.sort];
-    return [...list].sort(by);
+    // I libri in lettura vengono sempre per primi, qualunque sia l'ordine scelto.
+    return [...list].sort((a, b) => (b.status === "in-lettura") - (a.status === "in-lettura") || by(a, b));
   }
   function visible() {
     const q = norm(state.q);
@@ -441,7 +442,11 @@
     }).join("")}</div>`;
   }
   function renderShelves(list) {
-    return (state.filter === "tutti" ? shelfOrder() : [state.filter]).map(st => {
+    // In lettura, se ha libri, è sempre il primo scaffale (con qualunque filtro e ordine); vuoto resta in cima solo con l'ordine normale.
+    const order = (state.filter === "tutti" ? shelfOrder() : [state.filter]).filter(st => st !== "in-lettura");
+    if (list.some(b => b.status === "in-lettura") || state.filter === "in-lettura" || (state.filter === "tutti" && !SHELF_ORDER[state.sort])) order.unshift("in-lettura");
+    else if (state.filter === "tutti") order.push("in-lettura");
+    return order.map(st => {
       const books = sorted(list.filter(b => b.status === st));
       const spines = books.map(b => spineHTML(b)).join("");
       return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
@@ -508,7 +513,7 @@
     if (state.view === "stats") main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
-      if (state.mode === "dorsi") main.innerHTML = renderShelves(list);
+      if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
       else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
     }
     $("#toolbar").hidden = state.view === "stats";
