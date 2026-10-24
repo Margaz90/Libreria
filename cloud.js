@@ -35,6 +35,10 @@
   const later = (ms = 600) => { clearTimeout(timer); timer = setTimeout(flush, ms); };
   const changed = id => { if (!user) return; gone.delete(id); pending.add(id); later(); };
   const removed = id => { if (!user) return; pending.delete(id); gone.add(id); later(); };
+  // iOS può sospendere l'app subito dopo una modifica: in quel caso invio ora, senza aspettare il ritardo.
+  const sendNow = () => { if (timer && (pending.size || gone.size)) flush(); };
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendNow(); });
+  addEventListener("pagehide", sendNow);
 
   async function flush() {
     timer = null;
