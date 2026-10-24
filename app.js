@@ -4,6 +4,8 @@
   "use strict";
 
   const LS_KEY = "libreria-diego-v1";
+  // Chiave per Google Books: limitata al sito dell'app e alla sola Books API.
+  const GBOOKS_KEY = "AIzaSyDsTZ7a1APohAMSTQ_eUuVOKKwoe7ozeLE";
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
@@ -240,7 +242,7 @@
   // --- fonte 1: Google Books ---
   async function googleSearch(q, { italian = true, max = 12 } = {}) {
     if (state.googleDown) throw { code: "google-" + state.googleDown };
-    const url = "https://www.googleapis.com/books/v1/volumes?printType=books&maxResults=" + max +
+    const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }

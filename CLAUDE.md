@@ -29,12 +29,13 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Libri in lettura come schede con pagina attuale e barra di avanzamento; obiettivo annuale con anello.
 - Modifiche dal cloud: `refreshChanged` aggiorna solo lo scaffale o il libro cambiato (niente sfarfallio). Lo scanner ISBN parte solo da un tocco (iOS blocca la fotocamera senza gesto); la pressione prolungata su Aggiungi mostra solo un suggerimento.
 - Pressione prolungata su dorso/copertina = menu rapido per cambiare stato, con "Elimina" (conferma in due tocchi).
+- Google Books usa una chiave API propria (`GBOOKS_KEY` in `app.js`), limitata al sito e alla sola Books API.
 - Ricerca libri e copertine da Apple Books Italia (JSONP itunes.apple.com), Google Books, Open Library; punteggio che preferisce le edizioni italiane (`itScore`). Scelta tra più copertine nella scheda.
 - Scansione ISBN con `zxing.min.js` (ZXing 0.21.3, MIT), caricato solo al bisogno.
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v34), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v35), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
