@@ -38,7 +38,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v42), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v43), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -52,7 +52,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - In `app.js`: `libreriaHost` è il ponte con `cloud.js`; `cloudHook("changed"|"removed", id)` dopo ogni modifica; `libreria-tombs` tiene le eliminazioni fatte da disconnesso.
 - Obiettivo di lettura sincronizzato (`users/{uid}/meta/goals`, vince la data più recente). La scheda Sincronizzazione mostra le modifiche non ancora inviate e ha il pulsante Riconnetti.
 - SDK Firebase 10.14.1 (compat) da cdn.jsdelivr.net, messo in cache dal service worker.
-- Accesso: Google sempre con popup, anche nell'app installata (da iOS 16.1 il redirect torna senza accesso perché Safari blocca i dati tra `firebaseapp.com` e `github.io`); il redirect resta solo se il popup è bloccato, e al ritorno senza accesso compare un avviso. Il selettore chiede sempre l'account (`prompt: select_account`). Dopo l'accesso il messaggio dice quanti libri sono arrivati; se account e dispositivo sono vuoti avvisa che i libri potrebbero essere su un altro account. Oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
+- Accesso: Google con popup su computer e in Safari. Nell'app installata su iPhone (`navigator.standalone`) Google non funziona: il redirect torna senza accesso (Safari blocca i dati tra `firebaseapp.com` e `github.io`) e il popup resta in attesa per sempre; lì la scheda mostra solo il link via email, con una spiegazione. Per avere Google anche sull'iPhone servirebbe pubblicare l'app sullo stesso dominio dell'accesso (Firebase Hosting). Se il popup è bloccato si ripiega sul redirect, con avviso al ritorno senza accesso. Il selettore chiede sempre l'account (`prompt: select_account`). Dopo l'accesso il messaggio dice quanti libri sono arrivati; se account e dispositivo sono vuoti avvisa che i libri potrebbero essere su un altro account. Oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
 
 ## Storia del lavoro (versioni principali)
 - **Menu e layout** (c931d51 → eb9688c, v24-v28): barra a icone in basso sotto 1024 px, colonna laterale con conteggi, filtri a pillole, barra in alto fissa, selettore scaffale/copertina, libri in lettura in primo piano, sezione in alto come da mockup.
@@ -66,6 +66,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **Link via email nell'app su iPhone** (v43): il popup di Google restava bloccato su «Apro l'accesso con Google…»; nell'app installata su iPhone si accede con il link via email.
 - **Accesso con Google su iPhone** (v42): popup al posto del redirect nell'app installata, avvisi chiari se l'accesso non si completa o se l'account non ha libri; «Accedi e sincronizza» in cima al menu Altro.
 - **Nuova icona** (v41): scelta tra varie proposte (scaffale + segnalibro, fondo petrolio, colori crema e corallo); aggiunta `icon-maskable-512.png` per Android.
 - **Avviso di aggiornamento** (469700e, v39): l'avviso "Nuova versione disponibile" è fisso in alto e non viene coperto da "Libreria sincronizzata"; "Aggiorna" ricarica la pagina.
