@@ -148,21 +148,47 @@
   const samePurchase = (x, raw) => (raw.isbn && x.isbn && String(x.isbn) === String(raw.isbn)) || keyOf(x) === keyOf(raw) || (!raw.author && baseTitle(x.title) === baseTitle(raw.title));
   // Acquisti: un libro nuovo va in Da leggere; uno già nella lista dei desideri passa in Da leggere; gli altri non si toccano.
   function addPurchases(list) {
-    const now = Date.now(), ids = [];
+    const now = Date.now(), ids = [], newIds = [];
     let added = 0, moved = 0;
     for (const raw of list) {
       if (!raw || !raw.title) continue;
       const i = state.books.findIndex(x => samePurchase(x, raw));
       if (i < 0) {
         const b = { ...clean({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
-        state.books.push(b); ids.push(b.id); added++;
+        state.books.push(b); ids.push(b.id); newIds.push(b.id); added++;
       } else if (state.books[i].status === "desiderato") {
         state.books[i] = { ...state.books[i], status: "da-leggere", updated: now }; ids.push(state.books[i].id); moved++;
       }
     }
     schedulePersist(); render();
     ids.forEach(id => cloudHook("changed", id));
-    return { added, moved };
+    return { added, moved, newIds };
+  }
+  // Dopo l'importazione cerco per ISBN autore, anno, pagine e copertina dei libri nuovi (serve la connessione).
+  async function enrichPurchases(ids, st) {
+    let fixed = 0;
+    for (let k = 0; k < ids.length; k++) {
+      st.textContent = `Cerco autore e copertina: ${k + 1} di ${ids.length}…`;
+      const b = state.books.find(x => x.id === ids[k]);
+      if (b && b.isbn) {
+        try {
+          const res = await searchBooks(String(b.isbn));
+          const hit = res.find(x => String(x.isbn) === String(b.isbn)) || res.find(x => x.author) || res[0];
+          if (hit) {
+            if (!b.author && hit.author) b.author = hit.author;
+            if (!b.year && hit.edYear) b.year = hit.edYear;
+            if (!b.pages && hit.pages) b.pages = hit.pages;
+            if (!b.genre && hit.genre) b.genre = hit.genre;
+            if (!b.cover && hit.cover) { b.cover = hit.cover; delete b.noCover; }
+            b.updated = Date.now(); fixed++;
+            cloudHook("changed", b.id);
+          }
+        } catch { /* nessun risultato per questo ISBN: resta com'è */ }
+      }
+      await sleep(250);
+    }
+    schedulePersist(); render();
+    st.textContent = `Dati completati per ${fixed} libri su ${ids.length}.` + (fixed < ids.length ? " Gli altri puoi completarli dalla scheda del libro." : "");
   }
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
@@ -1283,6 +1309,7 @@
     const last = getSet().lastBackup;
     const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
     const missing = state.books.filter(b => !b.cover && !b.noCover).length;
+    const noAuthor = state.books.filter(b => !b.author && b.isbn).length;
     const sheet = openSheet(`
       <h2>Backup e copertine</h2>
       <section class="arch">
@@ -1294,6 +1321,7 @@
         <span class="label">Copertine</span>
         <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
         <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
+        ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore: li cerco per ISBN (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
         <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
       </section>
       <section class="arch">
@@ -1326,6 +1354,12 @@
     $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
+    const ia = $("#i-authors", sheet);
+    if (ia) ia.onclick = () => {
+      if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
+      const ids = state.books.filter(b => !b.author && b.isbn).map(b => b.id);
+      enrichPurchases(ids, st);
+    };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
       const f = e.target.files[0]; if (!f) return;
@@ -1349,6 +1383,8 @@
       if (purchases) {
         const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
         st.textContent = `Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`;
+        if (r.newIds.length && navigator.onLine) enrichPurchases(r.newIds, st);
+        else if (r.newIds.length) st.textContent += " Connettiti per completare autori e copertine.";
         return;
       }
       const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
