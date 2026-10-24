@@ -206,6 +206,7 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 /* Lista dei desideri */
 .wish-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--rule); border-radius: 14px; }
 .wish-box .btn { align-self: flex-start; }
+.refresh { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 
 /* Pulsanti Mostra altri / Nascondi */
 .pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; margin: 14px 0 0; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 14px; }

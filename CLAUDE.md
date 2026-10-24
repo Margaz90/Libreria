@@ -20,7 +20,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Libri in lettura in primo piano, sopra obiettivo e filtri (sezione `#hero`, in entrambe le viste, con Aggiorna e Dettagli); negli scaffali non compaiono. Sul telefono: obiettivo su una riga (ring + "2 di 5 libri nel 2026") con il selettore scaffale/copertina alla stessa altezza, poi filtri e ricerca. Sul computer il selettore sta nella barra.
 - Barra in alto (ricerca, ordina, filtri, vista): piena e sempre fissa in cima; sotto 1024 px i filtri sono un controllo segmentato a larghezza piena, la vista scaffale/copertina sta sotto, a destra; la barra in basso invece si nasconde scorrendo.
 - Paginazione: ogni scaffale e le copertine mostrano 15 libri, poi "Mostra altri 15" e "Nascondi" (pulsanti in `.pager`). Le ricerche mettono prima le edizioni italiane (`ita`). Le letture in corso sono sempre tutte visibili.
-- Acquisti (su richiesta, da Gmail): si importa un file JSON con `"acquisti": true` da Altro → Backup. Libro nuovo → Da leggere; libro in lista dei desideri → Da leggere (stessa scheda); gli altri invariati. Il confronto è per ISBN, poi titolo e autore, o solo titolo principale se il file non ha l'autore. Dopo l'import i libri nuovi si completano in sottofondo per ISBN (Google Books e Open Library, non Apple): riga "Aggiornamento informazioni…" in alto, l'app resta usabile, messaggio finale con i motivi degli errori. La scheda Backup ha "Completa autori e copertine" per quelli già importati.
+- Acquisti (su richiesta, da Gmail): si importa un file JSON con `"acquisti": true` da Altro → Backup. Libro nuovo → Da leggere; libro in lista dei desideri → Da leggere (stessa scheda); gli altri invariati. Il confronto è per ISBN, poi titolo e autore, o solo titolo principale se il file non ha l'autore. Dopo l'import i libri nuovi si completano in sottofondo con `fetchInfo` (prima per ISBN su Google Books e Open Library, poi per titolo e autore anche su Apple Books Italia): riga "Aggiornamento informazioni…" in alto, l'app resta usabile, messaggio finale con i motivi degli errori. La scheda Backup ha "Completa autori e copertine" per quelli già importati.
 - Lista dei desideri: stato `desiderato` (scaffale "Lista dei desideri", filtro "Desideri"). Dalla scheda o dalla scheda rapida, "Ho acquistato" lo porta a `da-leggere`. Si aggiunge da Nuovo libro con il pulsante "Lista dei desideri".
 - Nuovo libro: si possono scegliere altre copertine (stesso criterio della scheda di modifica) prima di salvare.
 - Scanner ISBN: la fotocamera si apre dal tocco su ▥ ISBN; il riquadro ha `flex: none` (altrimenti lo schiaccia la scheda). Il codice viene cercato su fotogrammi con ZXing (`MultiFormatReader`).
@@ -29,6 +29,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Libri in lettura come schede con pagina attuale e barra di avanzamento; obiettivo annuale con anello.
 - Modifiche dal cloud: `refreshChanged` aggiorna solo lo scaffale o il libro cambiato (niente sfarfallio). Lo scanner ISBN parte solo da un tocco (iOS blocca la fotocamera senza gesto); la pressione prolungata su Aggiungi mostra solo un suggerimento.
 - Pressione prolungata su dorso/copertina = menu rapido per cambiare stato, con "Elimina" (conferma in due tocchi).
+- Scheda del libro → "Aggiorna informazioni": cerca il libro con `fetchInfo` e riempie i campi (autore, pagine, trama, copertina; anno, genere e segnatura solo se vuoti). Non salva da solo: si conferma con Salva. Titolo, dati di lettura e copertine scelte a mano non si toccano.
 - Backup → "Verifica ricerche": prova Google Books e Open Library dal dispositivo e mostra il motivo dell'errore.
 - Google Books usa una chiave API propria (`GBOOKS_KEY` in `app.js`), limitata al sito e alla sola Books API.
 - Ricerca libri e copertine da Apple Books Italia (JSONP itunes.apple.com), Google Books, Open Library; punteggio che preferisce le edizioni italiane (`itScore`). Scelta tra più copertine nella scheda.
@@ -36,7 +37,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v39), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v40), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -63,6 +64,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Chiave Google Books** (de640d7, v35): chiave propria in `GBOOKS_KEY`, limitata al sito e alla Books API. Nota: la chiave è pubblica nel codice, quindi la restrizione per sito è quella che la protegge.
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
+- **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
 - **Avviso di aggiornamento** (469700e, v39): l'avviso "Nuova versione disponibile" è fisso in alto e non viene coperto da "Libreria sincronizzata"; "Aggiorna" ricarica la pagina.
 - Il 503 e il 403 di Google sono due casi diversi: 403 = chiave o referer non ammessi (sistemare da Google Cloud); 503 = servizio momentaneamente giù (si risolve da solo).
 
