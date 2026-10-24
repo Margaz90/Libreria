@@ -248,6 +248,10 @@
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    if (r.status === 503) { // servizio momentaneamente giù: un nuovo tentativo dopo una pausa
+      await new Promise(res => setTimeout(res, 1500));
+      try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    }
     if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status, msg: await googleMsg(r) }; }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     const j = await r.json();
@@ -1354,6 +1358,7 @@
         <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
         <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
         <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button></div>
+        <div class="status-line" id="v-status" aria-live="polite"></div>
         ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore: li cerco per ISBN (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
         <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
       </section>
@@ -1387,15 +1392,15 @@
     $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
-    const iv = $("#i-verify", sheet);
+    const iv = $("#i-verify", sheet), vs = $("#v-status", sheet);
     if (iv) iv.onclick = async () => {
-      st.textContent = "Verifico le ricerche…";
+      vs.textContent = "Verifico le ricerche…";
       const out = [];
       try { const g = await googleSearch("isbn:9788804731481", { max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
       catch (e) { out.push(`Google Books: ${e.code || "errore"}${e.msg ? " — " + e.msg : ""}`); }
       try { const o = await openLibrarySearch("isbn:9788804731481", "", 1); out.push(`Open Library: OK (${o.length} risultati)`); }
       catch (e) { out.push(`Open Library: ${e.code || "errore"}`); }
-      st.textContent = out.join(" · ");
+      vs.textContent = out.join(" · ");
     };
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
