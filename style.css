@@ -128,8 +128,13 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .pill b { font-weight: 600; margin-left: 5px; font-variant-numeric: tabular-nums; opacity: .75; }
 .pill[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 /* iPhone: senza numeri e più compatte, così le quattro pillole entrano tutte */
-@media (max-width: 699px) { .pill b { display: none; } .pills { gap: 4px; } .pill { padding-inline: 9px; } }
-@media (max-width: 380px) { .pill { padding-inline: 7px; } .viewsw button { padding-inline: 6px; } }
+/* Sotto 1024 px i filtri sono un controllo segmentato a larghezza piena (proposta A); sotto 700 px senza conteggi */
+@media (max-width: 1023px) {
+  .pills { display: flex; gap: 0; overflow: visible; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 3px; }
+  .pill { flex: 1 1 auto; min-width: 0; border: 0; background: none; border-radius: 9px; padding: 7px 4px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+  .pill[aria-checked="true"] { background: var(--ink); color: var(--bg); font-weight: 600; }
+}
+@media (max-width: 699px) { .pill b { display: none; } }
 .viewsw { display: flex; flex: none; padding: 2px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
 .viewsw button { border: 0; background: none; padding: 5px 8px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
 .viewsw button[aria-checked="true"] { background: var(--bg); color: var(--ink); }

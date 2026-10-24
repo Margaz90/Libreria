@@ -548,7 +548,7 @@
   function renderNav() {
     const n = { tutti: state.books.length }; for (const b of state.books) n[b.status] = (n[b.status] || 0) + 1;
     const lib = state.view === "libreria";
-    $("#pills").innerHTML = FILTERS.filter(([k]) => k === "tutti" || n[k] || state.filter === k)
+    $("#pills").innerHTML = FILTERS // tutti i filtri sempre presenti: il controllo segmentato non cambia forma
       .map(([k, l]) => `<button type="button" class="pill" role="radio" data-filter="${k}" aria-checked="${state.filter === k}">${l}<b>${n[k] || 0}</b></button>`).join("");
     $("#side-shelves").innerHTML = `<span class="label">Scaffali</span>` + FILTERS
       .map(([k, l]) => `<button type="button" class="shelf-link" data-filter="${k}" aria-pressed="${lib && state.filter === k}">${l}<em>${n[k] || 0}</em></button>`).join("");
