@@ -27,6 +27,7 @@
   const plain = o => JSON.parse(JSON.stringify(o));
   const books = () => db.collection(`users/${user.uid}/books`);
   const spines = () => db.collection(`users/${user.uid}/spines`);
+  const goalsDoc = () => db.doc(`users/${user.uid}/meta/goals`);
   const fromDoc = ({ hasSpine, deleted, ...rest }) => rest;
   const toDoc = ({ id, spine, ...rest }) => plain({ ...rest, hasSpine: !!spine, deleted: false });
   const why = e => (e && (e.code || e.message)) || "errore";
@@ -92,6 +93,15 @@
     H.setLocal(id, { ...fromDoc(r), id, spine: spine || undefined });
   }
 
+  // Obiettivo di lettura: vince la versione con la data più recente.
+  async function syncGoals() {
+    const snap = await goalsDoc().get();
+    const r = snap.exists ? snap.data() : null, l = H.goals();
+    const lu = l.updated || (Object.keys(l.goals).length ? 1 : 0);
+    if (r && r.updated > lu) H.setGoals(r.goals || {}, r.updated);
+    else if (lu && (!r || lu > r.updated)) await goalsDoc().set({ goals: l.goals, updated: lu });
+  }
+
   // Confronta tutto il cloud con il dispositivo e applica la scelta: "merge" (vince il più recente), "cloud" o "device".
   async function reconcile(choice = "merge", snap = null) {
     snap = snap || await books().get();
@@ -126,12 +136,23 @@
     ck.uid = user.uid; saveCk();
     H.refresh();
     await flush();
+    await syncGoals();
   }
 
   // Ascolto il cloud: le modifiche fatte su altri dispositivi arrivano qui, anche a app aperta.
+  // Stato mostrato nella scheda: ci sono modifiche non ancora inviate? quanti libri ci sono nel cloud?
+  let info = null;
+  function showInfo() {
+    if (!info) { H.info("Non ancora sincronizzato su questo dispositivo."); return; }
+    const t = new Date(info.at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    H.info(`Modifiche non ancora inviate: ${info.pending ? "sì" : "no"} · libri nel cloud: ${info.count} · aggiornato alle ${t}${info.fromCache ? " (copia locale: nessuna rete)" : ""}`);
+  }
+
   function listen() {
     if (unsub) unsub();
-    unsub = books().onSnapshot(snap => {
+    unsub = books().onSnapshot({ includeMetadataChanges: true }, snap => {
+      info = { pending: !!snap.metadata.hasPendingWrites, fromCache: !!snap.metadata.fromCache, at: Date.now(), count: snap.docs.filter(d => !d.data().deleted).length };
+      showInfo();
       let n = 0; const jobs = [];
       snap.docChanges().forEach(ch => {
         if (ch.type === "removed") return;
@@ -143,7 +164,14 @@
       });
       Promise.all(jobs).then(() => { if (n) H.refresh(); }).catch(e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
     }, e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
+    if (goalsUnsub) goalsUnsub();
+    goalsUnsub = goalsDoc().onSnapshot(d => {
+      if (!d.exists) return;
+      const r = d.data(), l = H.goals();
+      if (r.updated > l.updated) { H.setGoals(r.goals || {}, r.updated); H.refresh(); }
+    });
   }
+  let goalsUnsub = null;
 
   async function start() {
     const first = ck.uid !== user.uid;
@@ -186,6 +214,14 @@
       return auth.signInWithEmailLink(email, link).then(() => history.replaceState(null, "", location.pathname));
     },
     signOut() { return auth.signOut(); },
+    goals() { if (user) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato (" + why(e) + ")."));
+    },
+    reconnect() {
+      H.info("Riconnessione in corso…");
+      return db.disableNetwork().then(() => db.enableNetwork()).then(() => { if (user) return reconcile("merge"); })
+        .then(() => showInfo(), e => H.info("Riconnessione non riuscita (" + why(e) + ")."));
+    },
+    refreshInfo() { showInfo(); },
     syncNow() {
       if (!user) return Promise.resolve();
       H.status("Sincronizzo i libri…");
@@ -200,6 +236,8 @@
     clearTimeout(timer); pending.clear(); gone.clear();
     if (unsub) unsub();
     unsub = null;
+    if (goalsUnsub) goalsUnsub();
+    goalsUnsub = null;
     ck.email = ""; saveCk();
     H.connected("");
   });

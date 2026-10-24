@@ -38,7 +38,13 @@
   /* ---------- impostazioni ---------- */
   const SET_KEY = "libreria-settings";
   function getSet() { try { return JSON.parse(localStorage.getItem(SET_KEY) || "{}") || {}; } catch { return {}; } }
-  function setSet(patch) { const v = { ...getSet(), ...patch }; try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch {} return v; }
+  function setSet(patch) {
+    const v = { ...getSet(), ...patch };
+    if (patch.goals) v.goalsAt = Date.now(); // quando è cambiato l'obiettivo: serve per capire quale versione è più recente
+    try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch {}
+    if (patch.goals) cloudHook("goals");
+    return v;
+  }
   // Data di oggi nel fuso del dispositivo (toISOString darebbe quella di Greenwich: dopo mezzanotte risulterebbe ieri).
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
@@ -975,6 +981,9 @@
     error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; else toast(msg); },
     done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
     connected(email) { cloud.email = email || ""; },
+    goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
+    setGoals(goals, updated) { try { localStorage.setItem(SET_KEY, JSON.stringify({ ...getSet(), goals, goalsAt: updated })); } catch {} },
+    info(text) { const el = $("#sy-info"); if (el) el.textContent = text; },
     askMerge
   };
   function openSync() {
@@ -1019,11 +1028,15 @@
     const sheet = openSheet(`<h2>Sincronizzazione</h2>
       <p class="hint">Collegato come <b>${esc(cloud.email)}</b>. Ogni modifica va nel cloud e arriva anche sugli altri dispositivi.</p>
       <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
+      <div class="status-line" id="sy-info">Controllo lo stato…</div>
+      <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
       <p class="hint">Uscendo i libri restano su questo dispositivo, ma smettono di aggiornarsi dal cloud.</p>
       <div class="status-line" id="sy-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
     $("#sy-close", sheet).onclick = closeSheet;
+    loadCloud().then(c => c.refreshInfo()).catch(() => {});
     $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(() => { $("#sy-status", sheet).textContent = "Sincronizzazione non riuscita: controlla la connessione."; });
+    $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(() => { $("#sy-info", sheet).textContent = "Non riesco a riconnettermi."; });
     $("#sy-out", sheet).onclick = () => { if (window.libreriaCloud) window.libreriaCloud.signOut(); closeSheet(); toast("Sei uscito: i libri restano su questo dispositivo."); };
   }
   // Primo accesso con libri da entrambe le parti: decide l'utente. Annullare = non sincronizzare.
