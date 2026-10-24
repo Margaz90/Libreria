@@ -730,9 +730,15 @@
     const sheet = openSheet(`<div class="quick">
       <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
       <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
-      <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
+      <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn danger" id="q-del" type="button">Elimina</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
     sheet.querySelectorAll("[data-st]").forEach(btn => btn.onclick = () => { closeSheet(); setStatus(b, btn.dataset.st); });
     $("#q-open", sheet).onclick = () => { closeSheet(); openBook(b); };
+    // Eliminazione in due tocchi, come nella scheda del libro.
+    const del = $("#q-del", sheet);
+    del.onclick = () => {
+      if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Conferma eliminazione"; return; }
+      removeBook(b.id); closeSheet(); toast("Libro eliminato");
+    };
     $("#q-close", sheet).onclick = closeSheet;
   }
 
