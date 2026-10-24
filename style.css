@@ -156,6 +156,26 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 }
 @media (min-width: 560px) and (max-width: 1023px) { .dock { padding-inline: calc(50% - 280px); } }
 
+/* Obiettivo compatto sotto la lettura, sul telefono */
+@media (max-width: 1023px) {
+  .tally { margin-top: -6px; }
+  .goal { padding: 4px 14px 4px 4px; }
+  .goal svg { width: 40px; height: 40px; }
+  .goal-txt em { display: none; }
+}
+
+/* Sezione in lettura in primo piano (in alto) */
+.hero { display: flex; flex-direction: column; gap: 12px; }
+.hero-h { font: 400 21px var(--display); margin: 0; display: flex; justify-content: space-between; align-items: baseline; }
+.hero-h span { font: 500 12px var(--mono); color: var(--muted); }
+.hero .reading { grid-template-columns: 1fr; gap: 12px; }
+.hero .rcard { grid-template-columns: 104px 1fr; gap: 16px; padding: 14px; border-radius: 18px; box-shadow: 0 10px 24px -18px var(--shadow); }
+.hero .rcover .cover { padding: 10px 8px; }
+.hero .rcover .cover .ct { font-size: 12px; } .hero .rcover .cover .ca { font-size: 8px; }
+.hero .rbody h3 { font-size: 20px; }
+.hero .pbar { height: 9px; }
+@media (min-width: 1024px) { .hero .reading { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); } }
+
 /* Lista dei desideri */
 .wish-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--rule); border-radius: 14px; }
 .wish-box .btn { align-self: flex-start; }

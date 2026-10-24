@@ -458,6 +458,16 @@
     const tot = Number(b.pages) || 0, pg = Math.max(0, Number(b.page) || 0);
     return { tot, pg, pct: tot ? Math.min(100, Math.round(pg / tot * 100)) : 0 };
   }
+  // Sezione in alto con i libri in lettura (sempre visibile con "Tutti" e "In lettura", in entrambe le viste).
+  function renderHero() {
+    const hero = $("#hero");
+    const reading = sorted(state.books.filter(b => b.status === "in-lettura"));
+    const show = reading.length && (state.filter === "tutti" || state.filter === "in-lettura") && state.view === "libreria";
+    hero.hidden = !show;
+    if (!show) { hero.innerHTML = ""; return; }
+    hero.innerHTML = `<h2 class="hero-h">In lettura <span>${reading.length} ${reading.length === 1 ? "libro" : "libri"}</span></h2>${readingCards(reading)}`;
+    wireMain(hero);
+  }
   function readingCards(books) {
     if (!books.length) return "";
     return `<div class="reading">${books.map(b => {
@@ -476,10 +486,8 @@
     }).join("")}</div>`;
   }
   function renderShelves(list) {
-    // In lettura, se ha libri, è sempre il primo scaffale (con qualunque filtro e ordine); vuoto resta in cima solo con l'ordine normale.
+    // Le letture in corso stanno in alto, nella sezione "hero": negli scaffali non le ripeto.
     const order = (state.filter === "tutti" ? shelfOrder() : [state.filter]).filter(st => st !== "in-lettura");
-    if (list.some(b => b.status === "in-lettura") || state.filter === "in-lettura" || (state.filter === "tutti" && !SHELF_ORDER[state.sort])) order.unshift("in-lettura");
-    else if (state.filter === "tutti") order.push("in-lettura");
     return order.map(st => shelfHTML(st, list)).join("");
   }
   function shelfHTML(st, list) {
@@ -557,7 +565,7 @@
     document.querySelectorAll(".viewsw [data-mode]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.mode === state.mode)));
   }
   function render() {
-    renderTally(); renderNotice(); renderNav();
+    renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
     if (state.view === "stats") main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
     else {
@@ -597,6 +605,7 @@
   function refreshChanged(list) {
     if (!list.length) return;
     schedulePersist(); // i dati ricevuti vanno salvati sul dispositivo in ogni caso
+    if (list.some(x => x.from === "in-lettura" || x.to === "in-lettura" || x.removed)) renderHero();
     const main = $("#main");
     const visibleNow = () => visible().filter(b => state.filter === "tutti" || b.status === state.filter);
     const focused = document.activeElement;
@@ -607,7 +616,6 @@
     const shelves = new Set();
     for (const x of list) {
       if (x.moved || x.from !== x.to) { if (x.from) shelves.add(x.from); if (x.to) shelves.add(x.to); }
-      else if (x.to === "in-lettura") shelves.add("in-lettura"); // pagina o pagine lette: aggiorno anche la scheda di lettura
       else patchBookSafe(x.id, focused);
     }
     for (const st of shelves) {
@@ -636,7 +644,7 @@
   // Sostituisce solo gli elementi di un libro (dorso, copertina) senza ridisegnare la pagina.
   function patchBook(id) {
     const b = state.books.find(x => x.id === id); if (!b) return;
-    document.querySelectorAll(`#main [data-id="${CSS.escape(id)}"]`).forEach(el => {
+    document.querySelectorAll(`#main [data-id="${CSS.escape(id)}"], #hero [data-id="${CSS.escape(id)}"]`).forEach(el => {
       let html = null;
       if (el.classList.contains("spine")) html = spineHTML(b);
       else if (el.classList.contains("card")) html = cardHTML(b);
