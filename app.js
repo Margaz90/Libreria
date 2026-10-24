@@ -5,15 +5,15 @@
 
   const LS_KEY = "libreria-diego-v1";
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
-  const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere" };
-  const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere" };
+  const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
+  const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
   const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
   const PAGE = 15; // libri mostrati per volta in ogni scaffale e nelle copertine: il resto si apre con "Mostra altri"
   const resetLimits = () => { state.limit = {}; };
-  const FILTERS = [["tutti", "Tutti"], ["in-lettura", "In lettura"], ["letto", "Letti"], ["da-leggere", "Da leggere"]];
+  const FILTERS = [["tutti", "Tutti"], ["in-lettura", "In lettura"], ["letto", "Letti"], ["da-leggere", "Da leggere"], ["desiderato", "Desideri"]];
 
   /* ---------- utilità ---------- */
   const $ = (s, r = document) => r.querySelector(s);
@@ -342,7 +342,7 @@
   }
 
   /* ---------- vista ---------- */
-  const SHELF_ORDER = { daleggere: ["da-leggere", "in-lettura", "letto"] }; // con "Da leggere prima" cambia anche l'ordine degli scaffali
+  const SHELF_ORDER = { daleggere: ["da-leggere", "in-lettura", "letto", "desiderato"] }; // con "Da leggere prima" cambia anche l'ordine degli scaffali
   const shelfOrder = () => SHELF_ORDER[state.sort] || Object.keys(STATUS);
   function sorted(list) {
     const recenti = (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0);
@@ -490,7 +490,7 @@
     const moreBtn = st === "in-lettura" ? "" : pagerHTML(st, books.length, all.length);
     return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
       ${st === "in-lettura" ? readingCards(books) : ""}
-      ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}
+      ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : st === "desiderato" ? "Nessun desiderio. Con + Libro puoi salvare un libro nella lista dei desideri." : "Scaffale vuoto."}</div>`}</div>`}
       ${moreBtn}</section>`;
   }
   function setStatus(b, st) {
@@ -662,7 +662,7 @@
   function openQuick(b) {
     const sheet = openSheet(`<div class="quick">
       <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
-      <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
+      <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
       <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
     sheet.querySelectorAll("[data-st]").forEach(btn => btn.onclick = () => { closeSheet(); setStatus(b, btn.dataset.st); });
     $("#q-open", sheet).onclick = () => { closeSheet(); openBook(b); };
@@ -763,6 +763,7 @@
     });
   }
   function readReading(sheet, b) {
+    if (!$("#f-status", sheet)) return; // un libro nella lista dei desideri non ha campi di lettura
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
@@ -906,7 +907,7 @@
         ${b.finished ? `<p class="hint">Finito il ${fmtDate(b.finished)}</p>` : ""}
       </div></div>
       ${b.synopsis ? `<p class="synopsis">${esc(b.synopsis)}</p>` : ""}
-      ${readingFields(b)}
+      ${b.status === "desiderato" ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>` : readingFields(b)}
       <div class="cover-edit">
         <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
         <div class="status-line" id="cv-status" aria-live="polite"></div>
@@ -976,6 +977,8 @@
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
     $("#s-close", sheet).onclick = dismissSheet;
     $("#s-save", sheet).onclick = () => { readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
+    const bought = $("#s-bought", sheet);
+    if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
     const del = $("#s-del", sheet);
     del.onclick = () => {
       if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Conferma eliminazione"; return; }
@@ -997,7 +1000,7 @@
       </div>
       ${dataFields(b)}
       ${readingFields(b)}
-      <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
+      <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
     wireRating(sheet, b);
     wireSearch(sheet, hit => {
       const prev = $("#a-prev", sheet); prev.hidden = false;
@@ -1040,6 +1043,13 @@
       readReading(sheet, b);
       if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
       upsert(b); closeSheet(); toast("Aggiunto alla libreria");
+    };
+    $("#a-wish", sheet).onclick = () => {
+      readData(sheet, b);
+      if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
+      if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
+      b.status = "desiderato";
+      upsert(b); closeSheet(); toast("Aggiunto alla lista dei desideri");
     };
     guardSheet(sheet, () => $("#a-save", sheet).click(), () => JSON.stringify(b));
   }

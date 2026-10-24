@@ -151,6 +151,10 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 }
 @media (min-width: 560px) and (max-width: 1023px) { .dock { padding-inline: calc(50% - 280px); } }
 
+/* Lista dei desideri */
+.wish-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--rule); border-radius: 14px; }
+.wish-box .btn { align-self: flex-start; }
+
 /* Pulsanti Mostra altri / Nascondi */
 .pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; margin: 14px 0 0; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 14px; }
 .pager-count { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
