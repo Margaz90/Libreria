@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icona MyLibrary, versione finale</title>
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Libre+Franklin:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #ECEEE7; --surface: #F7F8F3; --ink: #1C2A2B; --muted: #5F6B69; --rule: #D5D9CF; --accent: #8C2F2B; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939; --accent: #D46A5E; }
+  }
+  :root[data-theme="dark"] { --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939; --accent: #D46A5E; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Libre Franklin", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 56px; }
+  h1 { font: 400 32px/1.15 "Young Serif", Georgia, serif; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 28px; max-width: 660px; }
+  .home { background: linear-gradient(160deg, #2B3F4A, #14202A 60%, #2A1F2C); border-radius: 28px; padding: 26px 18px 18px; margin-bottom: 14px; }
+  .home.light { background: linear-gradient(160deg, #DCE6EE, #F4EFE9 60%, #E7DDE8); margin-bottom: 32px; }
+  .home-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 8px; justify-items: center; }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #fff; font-size: 11.5px; }
+  .home.light .app { color: #1C2A2B; }
+  .app svg { width: 62px; height: 62px; border-radius: 22.4%; box-shadow: 0 2px 8px rgba(0,0,0,.35); display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--rule); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .icons { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+  .big { width: 240px; height: 240px; border-radius: 22.4%; box-shadow: 0 10px 26px rgba(0,0,0,.22); display: block; max-width: 100%; }
+  .small { display: flex; gap: 8px; align-items: flex-end; }
+  .small svg { border-radius: 22.4%; display: block; }
+  .tag { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  h2 { font: 400 22px/1.2 "Young Serif", Georgia, serif; margin: 2px 0 4px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Icona MyLibrary: versione finale</h1>
+  <p class="lead">Rispetto alla P4: segnalibro più largo e lungo, che scende accanto ai libri; libri più grandi e più vicini al bordo superiore. In più tre modi di decorare segnalibro e dorsi, dal più sobrio al più ricco. Le decorazioni si apprezzano nell'icona grande; sulla Home restano una texture leggera.</p>
+
+  <section class="home" aria-label="Anteprima su sfondo scuro"><div class="home-row" id="home-dark"></div></section>
+  <section class="home light" aria-label="Anteprima su sfondo chiaro"><div class="home-row" id="home-light"></div></section>
+
+  <div class="grid" id="cards"></div>
+</main>
+<script>
+const shade = (hex, t) => {
+  const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255];
+  return "#" + c.map(v => Math.round(t > 0 ? v + (255 - v) * t : v * (1 + t)).toString(16).padStart(2, "0")).join("");
+};
+const P = { bg: ["#2F4547", "#0F1818"], spines: ["#E6D5B8", "#CDB894", "#F4EAD8", "#D9C6A4"], ribbon: "#F06A5C", shelf: "#6B5644", ink: "#6E5236", cream: "#FFF3E2" };
+// Dorsi: x, larghezza, altezza, inclinazione. Mensola a y = 800 (prima della scala).
+const SPINES = [[188, 122, 470], [326, 102, 410], [444, 134, 560], [604, 108, 460, 16]];
+// Il libro aperto della proposta B, usato come stemma ricamato.
+const BOOK = `<path d="M180 300C300 270 430 290 512 360V760C430 690 300 670 180 700Z"/><path d="M844 300C724 270 594 290 512 360V760C594 690 724 670 844 700Z"/>`;
+const RIB = { x: 779, w: 110, bottom: 640, notch: 48 };
+const ribPath = `M${RIB.x} 0H${RIB.x + RIB.w}V${RIB.bottom}L${RIB.x + RIB.w / 2} ${RIB.bottom - RIB.notch}L${RIB.x} ${RIB.bottom}Z`;
+const cx = RIB.x + RIB.w / 2;
+
+// Scritte sui dorsi: "titoli" = una parola vera sul dorso alto e righe di testo stilizzate sugli altri; "tutti" = parole su ogni dorso.
+function spineText(mode, i, x, w, h) {
+  const top = 800 - h, mid = x + w / 2;
+  const word = (t, size, y0) => `<text transform="translate(${mid + size * .34} ${y0}) rotate(-90)" font-family="Young Serif, Georgia, serif" font-size="${size}" fill="${P.ink}" opacity=".78" letter-spacing="1">${t}</text>`;
+  const lines = y0 => `<rect x="${mid - 5}" y="${y0}" width="10" height="${h * .22}" rx="5" fill="${P.ink}" opacity=".45"/><rect x="${mid - 4}" y="${y0 + h * .26}" width="8" height="${h * .12}" rx="4" fill="${P.ink}" opacity=".35"/>`;
+  if (mode === "titoli") {
+    if (i === 2) return word("MyLibrary", 54, 800 - 46);
+    return lines(top + 150);
+  }
+  const words = ["Romanzi", "Poesie", "MyLibrary", "Saggi"], sizes = [46, 38, 54, 40];
+  return word(words[i], sizes[i], 800 - 44);
+}
+// Decorazioni del segnalibro.
+function ribbonArt(kind) {
+  const c = P.cream;
+  const stitch = `<g stroke="${c}" stroke-width="5" stroke-dasharray="16 11" opacity=".75" fill="none"><path d="M${RIB.x + 12} 0V${RIB.bottom - 12}"/><path d="M${RIB.x + RIB.w - 12} 0V${RIB.bottom - 12}"/></g>`;
+  if (kind === "ricamo") return stitch +
+    `<g transform="translate(${cx} 528) scale(.11) translate(-512 -530)" fill="${c}">${BOOK}</g>
+     <path d="M${cx} 420l14 22-14 22-14-22Z" fill="${c}" opacity=".9"/>
+     <circle cx="${cx}" cy="600" r="7" fill="${c}" opacity=".85"/>`;
+  if (kind === "foglie") {
+    let leaves = "";
+    for (let k = 0; k < 6; k++) {
+      const y = 282 + k * 48, s = k % 2 ? 1 : -1;
+      leaves += `<ellipse cx="${cx + s * 15}" cy="${y}" rx="10" ry="23" transform="rotate(${s * 38} ${cx + s * 15} ${y})" fill="${c}" opacity=".85"/>`;
+    }
+    return stitch + `<path d="M${cx} 256V${RIB.bottom - RIB.notch - 22}" stroke="${c}" stroke-width="5" opacity=".8"/>${leaves}<circle cx="${cx}" cy="246" r="8" fill="${c}"/>`;
+  }
+  // art déco: frecce sovrapposte e una riga centrale
+  let chev = "";
+  for (let k = 0; k < 7; k++) { const y = 270 + k * 54; chev += `<path d="M${RIB.x + 18} ${y}L${cx} ${y + 30}L${RIB.x + RIB.w - 18} ${y}" fill="none" stroke="${c}" stroke-width="${k % 2 ? 4 : 7}" opacity=".8"/>`; }
+  return `<g stroke="${c}" opacity=".7" fill="none" stroke-width="3"><path d="M${RIB.x + 10} 0V${RIB.bottom - 10}"/><path d="M${RIB.x + RIB.w - 10} 0V${RIB.bottom - 10}"/></g>${chev}`;
+}
+const VARIANTS = [
+  { id: "Q2", name: "Foglie", spines: "titoli", ribbon: "foglie",
+    note: "Versione finale: segnalibro largo 110 e un po' più corto, ramo di foglie al centro; «MyLibrary» sul dorso alto e righe di titolo sugli altri." }
+];
+function icon(v, size, safe = false) {
+  const u = v.id + size + (safe ? "m" : "");
+  const grads = P.spines.map((c, i) => `<linearGradient id="s${i}${u}" x1="0" x2="1"><stop offset="0" stop-color="${shade(c, .18)}"/><stop offset=".28" stop-color="${shade(c, .06)}"/><stop offset=".7" stop-color="${c}"/><stop offset="1" stop-color="${shade(c, -.28)}"/></linearGradient>`).join("");
+  const spines = SPINES.map(([x, w, h, rot], i) => `<g${rot ? ` transform="rotate(${rot} ${x} 800)"` : ""}>
+      <rect x="${x}" y="${800 - h}" width="${w}" height="${h}" rx="9" fill="url(#s${i}${u})"/>
+      <rect x="${x}" y="${800 - h + 46}" width="${w}" height="12" fill="#7E5A3C" opacity=".32"/>
+      <rect x="${x}" y="${800 - h + 66}" width="${w}" height="5" fill="#7E5A3C" opacity=".22"/>
+      ${spineText(v.spines, i, x, w, h)}
+      <rect x="${x + w * .1}" y="${800 - h + 14}" width="${w * .09}" height="${h - 40}" rx="${w * .045}" fill="#fff" opacity=".3"/>
+    </g>`).join("");
+  return `<svg viewBox="0 0 1024 1024" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Variante ${v.id}: ${v.name}">
+  <defs>
+    <radialGradient id="bg${u}" cx=".35" cy=".2" r="1.05"><stop offset="0" stop-color="${P.bg[0]}"/><stop offset="1" stop-color="${P.bg[1]}"/></radialGradient>
+    <linearGradient id="gloss${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rib${u}" x1="0" x2="1"><stop offset="0" stop-color="${shade(P.ribbon, .22)}"/><stop offset=".45" stop-color="${P.ribbon}"/><stop offset="1" stop-color="${shade(P.ribbon, -.28)}"/></linearGradient>
+    <linearGradient id="shelf${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(P.shelf, .3)}"/><stop offset=".5" stop-color="${P.shelf}"/><stop offset="1" stop-color="${shade(P.shelf, -.35)}"/></linearGradient>
+    ${grads}
+    <clipPath id="rc${u}"><path d="${ribPath}"/></clipPath>
+    <filter id="sh${u}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="10" dy="14" stdDeviation="14" flood-color="#000" flood-opacity=".3"/></filter>
+    <filter id="sh2${u}" x="-30%" y="-10%" width="160%" height="130%"><feDropShadow dx="7" dy="12" stdDeviation="11" flood-color="#000" flood-opacity=".35"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg${u})"/>
+  <g${safe ? ' transform="translate(102 102) scale(.8)"' : ""}>
+  <g transform="translate(-26 12) scale(.93)"><g filter="url(#sh${u})">${spines}
+    <rect x="148" y="796" width="728" height="44" rx="22" fill="url(#shelf${u})"/>
+    <rect x="170" y="800" width="684" height="8" rx="4" fill="#fff" opacity=".35"/>
+  </g></g>
+  <path d="M0 0H1024V420C760 470 300 470 0 400Z" fill="url(#gloss${u})"/>
+  <g filter="url(#sh2${u})"><path d="${ribPath}" fill="url(#rib${u})"/></g>
+  <g clip-path="url(#rc${u})">${ribbonArt(v.ribbon)}<rect x="${RIB.x}" y="0" width="${RIB.w * .22}" height="${RIB.bottom}" fill="#fff" opacity=".12"/></g>
+  </g>
+</svg>`;
+}
+const R = /^#render-(\d+)(-m)?$/.exec(location.hash);
+if (R) { document.body.innerHTML = icon(VARIANTS[0], Number(R[1]), !!R[2]); document.body.style.cssText = "margin:0;background:transparent"; }
+const app = v => `<div class="app">${icon(v, 62)}<span>${v.id} · MyLibrary</span></div>`;
+if (!R) document.getElementById("home-dark").innerHTML = VARIANTS.map(app).join("");
+if (!R) document.getElementById("home-light").innerHTML = VARIANTS.map(app).join("");
+if (!R) document.getElementById("cards").innerHTML = VARIANTS.map(v => `
+  <article class="card" id="icona-${v.id}">
+    <div class="icons">${icon(v, 240).replace("<svg ", '<svg class="big" ')}<div class="small">${icon(v, 54)}${icon(v, 36)}${icon(v, 26)}</div></div>
+    <div><span class="tag">Variante ${v.id}</span><h2>${v.name}</h2><p>${v.note}</p></div>
+  </article>`).join("");
+</script>
+</body>
+</html>
