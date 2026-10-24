@@ -195,7 +195,10 @@
       }
       await reconcile(choice, snap);
       listen();
-      H.done("Libreria sincronizzata: " + user.email + ".");
+      const n = H.books().length;
+      // Account senza libri nel cloud e dispositivo vuoto: probabilmente i libri sono su un altro account.
+      if (!n && !live) H.notice(`Collegato come ${user.email}, ma in questo account non ci sono libri. Se li avevi sincronizzati con un altro account (Google o link via email), esci e accedi con quello.`);
+      else H.done(`Libreria sincronizzata: ${n} ${n === 1 ? "libro" : "libri"} · ${user.email}.`);
     } catch (e) {
       listen();
       H.error("Sincronizzazione non riuscita (" + why(e) + "). Riprovo quando torna la connessione.");
@@ -206,11 +209,17 @@
   window.libreriaCloud = {
     connected: false,
     changed, removed,
+    // Popup anche nell'app installata: da iOS 16.1 il redirect torna indietro senza accesso, perché Safari blocca
+    // i dati tra siti diversi (firebaseapp.com e github.io). Il redirect resta solo se il popup è bloccato.
     signInGoogle() {
       const p = new firebase.auth.GoogleAuthProvider();
-      const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-      if (standalone) { sessionStorage.setItem("libreria-auth-pending", "1"); return auth.signInWithRedirect(p); }
-      return auth.signInWithPopup(p);
+      p.setCustomParameters({ prompt: "select_account" }); // fa scegliere l'account: evita di entrare con quello sbagliato
+      return auth.signInWithPopup(p).catch(e => {
+        const c = e && e.code;
+        if (c !== "auth/popup-blocked" && c !== "auth/operation-not-supported-in-this-environment") throw e;
+        sessionStorage.setItem("libreria-auth-pending", "1");
+        return auth.signInWithRedirect(p);
+      });
     },
     sendLink(email) {
       return auth.sendSignInLinkToEmail(email, { url: location.origin + location.pathname, handleCodeInApp: true });
@@ -246,5 +255,10 @@
     ck.email = ""; saveCk();
     H.connected("");
   });
-  auth.getRedirectResult().catch(() => {}).finally(() => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} });
+  // Ritorno da un accesso con redirect: se non ha funzionato lo dico, invece di lasciare l'app scollegata e vuota.
+  const fromRedirect = (() => { try { return !!sessionStorage.getItem("libreria-auth-pending"); } catch { return false; } })();
+  auth.getRedirectResult()
+    .then(r => { if (fromRedirect && !(r && r.user) && !auth.currentUser) H.notice("L'accesso con Google non si è completato. Riprova da Altro → Accedi e sincronizza, oppure usa il link via email."); })
+    .catch(e => { if (fromRedirect) H.notice("Accesso con Google non riuscito (" + why(e) + "). Riprova, oppure usa il link via email."); })
+    .finally(() => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} });
 })();

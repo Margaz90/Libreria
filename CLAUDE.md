@@ -9,6 +9,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Nome sull'iPhone: "MyLibrary". Icona (v41): fondo petrolio lucido, scaffale con quattro dorsi color crema ("MyLibrary" sul più alto, uno inclinato) e segnalibro corallo con cuciture e ramo di foglie appeso in alto a destra. Sorgente in `design/icona.html` (aprendola con `#render-512` o `#render-512-m` disegna solo l'icona, normale o con margine per Android); PNG generati con Playwright, quelli da 512 ridotti a 256 colori. Intestazione: "Libreria di Margaira Diego".
 
 ## Dati
+- Attenzione: su iPhone l'app installata ha una memoria sua, separata da Safari. Rimuoverla dalla Home cancella i libri del dispositivo: si recuperano solo dal cloud (accesso) o da un backup.
 - Tutto in `localStorage` del dispositivo, chiave `libreria-diego-v1` (array di libri). Le foto dei dorsi stanno in chiavi separate `libreria-spine-<id>`. Impostazioni (obiettivo annuale, data ultimo backup) in `libreria-settings`.
 - Campi di un libro: title, author, year, pages, genre, status (`da-leggere` | `in-lettura` | `letto`), rating 0-5, started, finished (YYYY-MM-DD), page, notes, quote, callNo (segnatura Dewey + 3 lettere cognome), synopsis, isbn, cover (URL), noCover, coverManual, spine, spineRatio, added.
 - `seed.json`: i 108 libri importati da Goodreads con i titoli italiani (pulsante "Carica i libri Goodreads" a libreria vuota).
@@ -16,7 +17,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Sincronizzazione tra dispositivi con Firebase, opzionale: vedi la sezione dedicata più sotto.
 
 ## Funzioni presenti
-- Sezione Libreria con vista Dorsi (foto vera > striscia della copertina > dorso disegnato) o Copertine (solo immagine scaricata), filtri a pillole per stato (senza numeri sotto 700 px), sezione Statistiche (sempre su tutta la libreria). Menu Altro: obiettivo, backup/import/copertine, posto per la sincronizzazione.
+- Sezione Libreria con vista Dorsi (foto vera > striscia della copertina > dorso disegnato) o Copertine (solo immagine scaricata), filtri a pillole per stato (senza numeri sotto 700 px), sezione Statistiche (sempre su tutta la libreria). Menu Altro, in quest'ordine: Accedi e sincronizza, Obiettivo, Backup/import/copertine.
 - Libri in lettura in primo piano, sopra obiettivo e filtri (sezione `#hero`, in entrambe le viste, con Aggiorna e Dettagli); negli scaffali non compaiono. Sul telefono: obiettivo su una riga (ring + "2 di 5 libri nel 2026") con il selettore scaffale/copertina alla stessa altezza, poi filtri e ricerca. Sul computer il selettore sta nella barra.
 - Barra in alto (ricerca, ordina, filtri, vista): piena e sempre fissa in cima; sotto 1024 px i filtri sono un controllo segmentato a larghezza piena, la vista scaffale/copertina sta sotto, a destra; la barra in basso invece si nasconde scorrendo.
 - Paginazione: ogni scaffale e le copertine mostrano 15 libri, poi "Mostra altri 15" e "Nascondi" (pulsanti in `.pager`). Le ricerche mettono prima le edizioni italiane (`ita`). Le letture in corso sono sempre tutte visibili.
@@ -37,7 +38,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v41), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v42), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -51,7 +52,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - In `app.js`: `libreriaHost` è il ponte con `cloud.js`; `cloudHook("changed"|"removed", id)` dopo ogni modifica; `libreria-tombs` tiene le eliminazioni fatte da disconnesso.
 - Obiettivo di lettura sincronizzato (`users/{uid}/meta/goals`, vince la data più recente). La scheda Sincronizzazione mostra le modifiche non ancora inviate e ha il pulsante Riconnetti.
 - SDK Firebase 10.14.1 (compat) da cdn.jsdelivr.net, messo in cache dal service worker.
-- Accesso: Google (popup, o redirect nell'app installata) oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
+- Accesso: Google sempre con popup, anche nell'app installata (da iOS 16.1 il redirect torna senza accesso perché Safari blocca i dati tra `firebaseapp.com` e `github.io`); il redirect resta solo se il popup è bloccato, e al ritorno senza accesso compare un avviso. Il selettore chiede sempre l'account (`prompt: select_account`). Dopo l'accesso il messaggio dice quanti libri sono arrivati; se account e dispositivo sono vuoti avvisa che i libri potrebbero essere su un altro account. Oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
 
 ## Storia del lavoro (versioni principali)
 - **Menu e layout** (c931d51 → eb9688c, v24-v28): barra a icone in basso sotto 1024 px, colonna laterale con conteggi, filtri a pillole, barra in alto fissa, selettore scaffale/copertina, libri in lettura in primo piano, sezione in alto come da mockup.
@@ -65,6 +66,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **Accesso con Google su iPhone** (v42): popup al posto del redirect nell'app installata, avvisi chiari se l'accesso non si completa o se l'account non ha libri; «Accedi e sincronizza» in cima al menu Altro.
 - **Nuova icona** (v41): scelta tra varie proposte (scaffale + segnalibro, fondo petrolio, colori crema e corallo); aggiunta `icon-maskable-512.png` per Android.
 - **Avviso di aggiornamento** (469700e, v39): l'avviso "Nuova versione disponibile" è fisso in alto e non viene coperto da "Libreria sincronizzata"; "Aggiorna" ricarica la pagina.
 - Il 503 e il 403 di Google sono due casi diversi: 403 = chiave o referer non ammessi (sistemare da Google Cloud); 503 = servizio momentaneamente giù (si risolve da solo).

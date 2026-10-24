@@ -1231,9 +1231,9 @@
     const missing = state.books.filter(b => !b.cover && !b.noCover).length;
     const sheet = openSheet(`<h2>Altro</h2>
       <div class="menu-list">
+        <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
         <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
-        <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
       </div>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
     $("[data-m=goal]", sheet).onclick = openGoal;
@@ -1281,6 +1281,7 @@
     status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
     error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg); },
     done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
+    notice(msg) { if ($("#sy-status")) closeSheet(); toast(msg, { label: "OK", run: () => {} }); }, // messaggio lungo: resta 10 secondi
     connected(email) { cloud.email = email || ""; },
     goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
     setGoals(goals, updated) { try { localStorage.setItem(SET_KEY, JSON.stringify({ ...getSet(), goals, goalsAt: updated })); } catch {} },
@@ -1307,7 +1308,12 @@
     // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
     $("#sy-google", sheet).onclick = () => {
       st("Apro l'accesso con Google…");
-      window.libreriaCloud.signInGoogle().catch(e => st("Accesso non riuscito (" + ((e && e.code) || "errore") + ")."));
+      window.libreriaCloud.signInGoogle().catch(e => {
+        const c = (e && e.code) || "errore";
+        st(/popup-closed-by-user|cancelled-popup-request/.test(c) ? "Accesso annullato."
+          : /network-request-failed/.test(c) ? "Nessuna connessione: riprova quando sei online."
+          : "Accesso non riuscito (" + c + "). Puoi usare il link via email qui sotto.");
+      });
     };
     $("#sy-link", sheet).onclick = () => {
       const email = $("#sy-email", sheet).value.trim();
