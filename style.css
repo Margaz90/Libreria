@@ -156,10 +156,27 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 }
 @media (min-width: 560px) and (max-width: 1023px) { .dock { padding-inline: calc(50% - 280px); } }
 
+/* Telefono: sezione in lettura, obiettivo su una riga e filtri come nel mockup */
+@media (max-width: 1023px) {
+  .toolbar { display: flex; flex-direction: column; }
+  .filters { order: 1; }
+  #searchbar { order: 2; }
+  .tally .goal { border: 0; background: none; padding: 0; border-radius: 0; gap: 8px; }
+  .goal svg { width: 30px; height: 30px; }
+  .goal-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 14px; }
+  .goal-txt b { font-size: 14px; }
+  .goal-txt em { font-size: 13px; }
+  .goal-txt em::before { content: "· "; }
+  .hero .rlabel { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .hero .rbody { gap: 8px; }
+  .hero .ractions { display: flex; gap: 8px; margin-top: 4px; }
+  .hero .ractions .btn { padding: 9px 16px; font-size: 14px; }
+  .hero .callno { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+}
+.ractions { display: flex; gap: 8px; flex-wrap: wrap; }
 /* Obiettivo compatto sotto la lettura, sul telefono */
 @media (max-width: 1023px) {
   .tally { margin-top: -6px; }
-  .goal { padding: 4px 14px 4px 4px; }
   .goal svg { width: 40px; height: 40px; }
   .goal-txt em { display: none; }
 }

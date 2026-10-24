@@ -464,10 +464,12 @@
     const reading = sorted(state.books.filter(b => b.status === "in-lettura"));
     const show = reading.length && (state.filter === "tutti" || state.filter === "in-lettura") && state.view === "libreria";
     hero.hidden = !show;
+    if (hero.contains(document.activeElement)) document.activeElement.blur(); // niente cursore su un elemento che sto sostituendo
     if (!show) { hero.innerHTML = ""; return; }
-    hero.innerHTML = `<h2 class="hero-h">In lettura <span>${reading.length} ${reading.length === 1 ? "libro" : "libri"}</span></h2>${readingCards(reading)}`;
+    hero.innerHTML = readingCards(reading);
     wireMain(hero);
   }
+  // Libro in lettura in primo piano: etichetta, pagina modificabile, pulsanti Aggiorna e Dettagli.
   function readingCards(books) {
     if (!books.length) return "";
     return `<div class="reading">${books.map(b => {
@@ -475,11 +477,16 @@
       return `<article class="rcard">
         <button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b)}</button>
         <div class="rbody">
-          <h3>${esc(b.title)}</h3><p class="hint">${esc(b.author || "")}</p>
+          <span class="rlabel">In lettura adesso</span>
+          <h3>${esc(b.title)}</h3><p class="hint">${esc(b.author || "")}${b.callNo ? ` · <span class="callno">${esc(b.callNo)}</span>` : ""}</p>
           <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
           <div class="prow">
             <label class="pin">pag. <input type="number" inputmode="numeric" min="0" ${tot ? `max="${tot}"` : ""} value="${pg || ""}" placeholder="0" data-page="${esc(b.id)}" aria-label="Pagina attuale di ${esc(b.title)}"></label>
             <span class="hint">${tot ? `di ${tot} · ${pct}%` : "pagine totali non note"}</span>
+          </div>
+          <div class="ractions">
+            <button class="btn primary" type="button" data-save="${esc(b.id)}">Aggiorna</button>
+            <button class="btn" type="button" data-id="${esc(b.id)}">Dettagli</button>
           </div>
           ${tot && pg >= tot ? `<button class="btn primary" data-finish="${esc(b.id)}">Finito! Segna come letto</button>` : ""}
         </div></article>`;
@@ -597,6 +604,10 @@
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
       const v = Math.max(0, parseInt(inp.value, 10) || 0);
       upsert({ ...b, page: b.pages ? Math.min(v, b.pages) : v });
+    });
+    root.querySelectorAll("[data-save]").forEach(btn => btn.onclick = () => {
+      const inp = root.querySelector(`[data-page="${CSS.escape(btn.dataset.save)}"]`);
+      if (inp) inp.dispatchEvent(new Event("change")); // stesso salvataggio della pagina attuale
     });
     root.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
   }
