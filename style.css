@@ -119,7 +119,7 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 
 /* Barra in alto: ricerca, ordine, filtri a pillole, vista dorsi/copertine. Resta in cima mentre scorri. */
 .toolbar { position: sticky; top: 0; z-index: 4; margin: -12px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) -10px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-left, 0px)) 8px;
-  background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 8px; transition: transform .25s ease; }
+  background: var(--bg); box-shadow: 0 8px 10px -10px var(--shadow); display: flex; flex-direction: column; gap: 8px; }
 .filters { display: flex; gap: 8px; align-items: center; }
 .pills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
 .pills::-webkit-scrollbar { display: none; }
@@ -147,7 +147,6 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .dock .shelves, .dock .kbd { display: none; }
 @media (max-width: 1023px) {
   body.bars-off .dock { transform: translateY(calc(100% + 24px)); } /* 24px: anche il cerchio di Aggiungi che sporge */
-  body.bars-off .toolbar { transform: translateY(calc(-100% - 2px)); }
 }
 @media (min-width: 560px) and (max-width: 1023px) { .dock { padding-inline: calc(50% - 280px); } }
 
