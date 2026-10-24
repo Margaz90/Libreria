@@ -960,6 +960,7 @@
     })), Promise.resolve()).then(() => window.libreriaCloud, e => { cloudLoading = null; throw e; });
     return cloudLoading;
   }
+  const errText = e => (e && (e.message || e.code)) || String(e);
   // Ponte con cloud.js: lo strato di sincronizzazione legge e scrive i libri solo tramite queste funzioni.
   window.libreriaHost = {
     books: () => state.books,
@@ -978,7 +979,7 @@
     },
     refresh() { schedulePersist(); render(); },
     status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
-    error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; else toast(msg); },
+    error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg); },
     done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
     connected(email) { cloud.email = email || ""; },
     goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
@@ -1034,9 +1035,9 @@
       <div class="status-line" id="sy-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
     $("#sy-close", sheet).onclick = closeSheet;
-    loadCloud().then(c => c.refreshInfo()).catch(() => {});
-    $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(() => { $("#sy-status", sheet).textContent = "Sincronizzazione non riuscita: controlla la connessione."; });
-    $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(() => { $("#sy-info", sheet).textContent = "Non riesco a riconnettermi."; });
+    loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
+    $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
+    $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
     $("#sy-out", sheet).onclick = () => { if (window.libreriaCloud) window.libreriaCloud.signOut(); closeSheet(); toast("Sei uscito: i libri restano su questo dispositivo."); };
   }
   // Primo accesso con libri da entrambe le parti: decide l'utente. Annullare = non sincronizzare.
