@@ -27,7 +27,13 @@
   </header>
   <div id="notice"></div>
   <section class="hero" id="hero" aria-label="Libri in lettura" hidden></section>
-  <div class="tally" id="tally"></div>
+  <div class="sumrow">
+    <div class="tally" id="tally"></div>
+    <div class="viewsw viewsw-m" role="radiogroup" aria-label="Vista">
+        <button type="button" role="radio" data-mode="dorsi" aria-checked="true" aria-label="Dorsi sullo scaffale" title="Dorsi"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3.5 4h3v12h-3zM8.5 2.5h3V16h-3zM13.2 5.2l2.8-.8 2.6 10.8-2.8.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+        <button type="button" role="radio" data-mode="copertine" aria-checked="false" aria-label="Copertine" title="Copertine"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 3h5.5v7H3zM11.5 3H17v7h-5.5zM3 12.5h5.5V17H3zM11.5 12.5H17V17h-5.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
   <div class="toolbar" id="toolbar">
     <div class="search" id="searchbar">
       <input id="q" type="search" placeholder="Cerca titolo, autore o genere" aria-label="Cerca nella libreria" autocomplete="off">

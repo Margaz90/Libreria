@@ -164,7 +164,12 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
   .tally .goal { border: 0; background: none; padding: 0; border-radius: 0; gap: 8px; }
   .pace-extra { display: none; }
   .filters { display: flex; flex-direction: column; align-items: stretch; }
-  .viewsw { align-self: flex-end; order: -1; }
+  .toolbar .viewsw { display: none; } /* sul telefono il selettore sta nella riga dell'obiettivo */
+  .sumrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
+  .sumrow .tally { flex: 1; min-width: 0; margin-top: 0; }
+  .sumrow .tally .goal { width: auto; }
+  .sumrow .viewsw-m { display: flex; flex: none; }
+  .tally .goal-txt em { display: none; } /* sul telefono niente "ne mancano": resta il conteggio */
   .goal svg { width: 30px; height: 30px; }
   .tally .goal { width: 100%; justify-content: flex-start; }
   .tally .goal-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 13px; white-space: nowrap; }
@@ -180,7 +185,6 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 .ractions { display: flex; gap: 8px; flex-wrap: wrap; }
 /* Obiettivo compatto sotto la lettura, sul telefono */
 @media (max-width: 1023px) {
-  .tally { margin-top: -6px; }
   .goal svg { width: 40px; height: 40px; }
 }
 
@@ -340,6 +344,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 
 /* ---------- Schermi grandi (computer, iPad in orizzontale) ---------- */
 @media (min-width: 1024px) {
+  .viewsw-m { display: none; }
   body { padding-left: 272px; padding-right: 32px; padding-block: env(safe-area-inset-top, 0px) 48px; }
   .wrap { max-width: 1200px; }
   /* la barra in basso diventa una colonna laterale con conteggi */
