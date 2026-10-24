@@ -166,16 +166,38 @@
     ids.forEach(id => cloudHook("changed", id));
     return { added, moved, newIds };
   }
-  // Ricerca per ISBN: Google Books e Open Library (Apple Books non risponde bene agli ISBN). Si ferma appena trova l'autore.
-  async function lookupIsbn(isbn) {
-    const jobs = [() => googleSearch("isbn:" + isbn), () => openLibrarySearch("isbn:" + isbn, "")];
-    const errors = [], out = [];
-    for (const t of jobs) {
-      try { out.push(...await t()); } catch (e) { errors.push(e && e.code); }
-      if (out.some(x => x.author)) break;
-    }
-    if (!out.length && errors.length === jobs.length) throw { code: errors.join(", ") };
-    return out;
+  // Tutte le informazioni su un libro: prima per ISBN (Google Books, Open Library), poi per titolo e autore
+  // (Apple Books Italia, Google Books, Open Library), così basta che una fonte risponda.
+  async function fetchInfo(b, errors = {}) {
+    const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
+    const byIsbn = isbn ? await settle([
+      () => googleSearch("isbn:" + isbn, { italian: false, max: 3 }).then(tag("Google Books")),
+      () => openLibrarySearch("isbn:" + isbn, "", 3).then(tag("Open Library"))
+    ], errors) : [];
+    const idHit = byIsbn.find(x => x.author) || byIsbn[0];
+    const author = b.author || (idHit && idHit.author) || "";
+    const last = author.split(",")[0].trim().split(/\s+/).pop() || ""; // cognome del primo autore
+    const t = String(b.title || "").split(/[.:]/)[0].trim(); // "Joe Country. Le indagini…" → "Joe Country"
+    const byTitle = t ? await settle([
+      () => appleSearch(`${t} ${last}`.trim(), 8).then(tag("Apple Books")),
+      () => googleSearch(`intitle:"${t}"` + (last ? ` inauthor:${last}` : ""), { max: 6 }).then(tag("Google Books")),
+      () => openLibrarySearch(t, last).then(tag("Open Library"))
+    ], errors) : [];
+    // Senza autore accetto solo titoli uguali, per non prendere un libro diverso con un titolo simile.
+    const ref = { ...b, title: t, author };
+    const ranked = byTitle.filter(x => author ? sameAuthor(author, x.author) : baseTitle(x.title) === baseTitle(t))
+      .map(x => ({ ...x, score: itScore(ref, x) })).filter(x => x.score >= 2)
+      .sort((p, q) => q.score - p.score);
+    const pool = [...byIsbn, ...ranked];
+    if (!pool.length) return null;
+    const pick = k => (pool.find(x => x[k]) || {})[k];
+    const guess = c => /covers\.openlibrary\.org\/b\/isbn\//.test(c); // copertina "a tentativo" per ISBN: solo se non c'è altro
+    const cover = (byIsbn.find(x => x.cover && !guess(x.cover)) || ranked.find(x => x.cover) || pool.find(x => x.cover) || {}).cover || "";
+    return {
+      author: (idHit && idHit.author) || (ranked[0] && ranked[0].author) || "",
+      edYear: pick("edYear"), pages: pick("pages"), genre: pick("genre"), synopsis: pick("synopsis"),
+      isbn: isbn || pick("isbn") || "", cover
+    };
   }
   // Completa autore, anno, pagine, genere e copertina per ISBN, in sottofondo: l'app resta usabile.
   const enrich = { busy: false };
@@ -185,24 +207,26 @@
     const line = $("#enrich");
     const errors = {}; let fixed = 0, missed = 0;
     for (let k = 0; k < ids.length; k++) {
-      if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri importati: ${k + 1} di ${ids.length}`; }
+      if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri: ${k + 1} di ${ids.length}`; }
       const b = state.books.find(x => x.id === ids[k]);
-      if (b && b.isbn && (!b.author || (!b.cover && !b.noCover))) {
-        try {
-          const res = await lookupIsbn(String(b.isbn));
-          const hit = res.find(x => String(x.isbn) === String(b.isbn)) || res.find(x => x.author) || res[0];
-          if (hit) {
-            if (!b.author && hit.author) b.author = hit.author;
-            if (!b.year && hit.edYear) b.year = hit.edYear;
-            if (!b.pages && hit.pages) b.pages = hit.pages;
-            if (!b.genre && hit.genre) b.genre = hit.genre;
-            if (!b.cover && hit.cover) { b.cover = hit.cover; delete b.noCover; }
-            b.updated = Date.now(); fixed++;
-            cloudHook("changed", b.id);
-            patchBook(b.id); // il dorso o la copertina compaiono subito
-          } else missed++;
-        } catch (e) {
-          const c = (e && e.code) || "errore"; errors[c] = (errors[c] || 0) + 1; missed++;
+      if (b && (!b.author || (!b.cover && !b.noCover))) {
+        const errs = {};
+        const hit = await fetchInfo(b, errs).catch(() => null);
+        if (hit && (hit.author || hit.cover)) {
+          if (!b.author && hit.author) b.author = hit.author;
+          if (!b.year && hit.edYear) b.year = hit.edYear;
+          if (!b.pages && hit.pages) b.pages = hit.pages;
+          if (!b.genre && hit.genre) b.genre = hit.genre;
+          if (!b.synopsis && hit.synopsis) b.synopsis = hit.synopsis;
+          if (!b.isbn && hit.isbn) b.isbn = hit.isbn;
+          if (!b.callNo && b.author) b.callNo = surname3(b.author);
+          if (!b.cover && !b.noCover && hit.cover) b.cover = hit.cover;
+          b.updated = Date.now(); fixed++;
+          cloudHook("changed", b.id);
+          patchBook(b.id); // il dorso o la copertina compaiono subito
+        } else {
+          missed++;
+          Object.entries(errs).forEach(([c, n]) => { errors[c] = (errors[c] || 0) + n; });
         }
       }
       await sleep(250);
@@ -243,16 +267,20 @@
   // Il messaggio con cui Google spiega l'errore (per capire la causa).
   async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
   async function googleSearch(q, { italian = true, max = 12 } = {}) {
-    if (state.googleDown) throw { code: "google-" + state.googleDown };
+    if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
-    if (r.status === 503) { // servizio momentaneamente giù: un nuovo tentativo dopo una pausa
-      await new Promise(res => setTimeout(res, 1500));
-      try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    if (r.status === 503) { // servizio giù per le richieste con chiave: riprovo senza chiave dopo una pausa
+      await sleep(1200);
+      try { r = await fetch(url.replace("key=" + GBOOKS_KEY + "&", "")); } catch { throw { code: "google-rete" }; }
     }
-    if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status, msg: await googleMsg(r) }; }
+    // Quota finita, chiave rifiutata o servizio giù: non insisto (5 minuti se è giù, altrimenti fino alla prossima apertura).
+    if (r.status === 429 || r.status === 403 || r.status === 503) {
+      state.googleDown = { code: r.status, until: Date.now() + (r.status === 503 ? 5 * 60e3 : 864e5) };
+      throw { code: "google-" + r.status, msg: await googleMsg(r) };
+    }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     const j = await r.json();
     return (j.items || []).map(normVolume).filter(x => x.title);
@@ -1009,7 +1037,8 @@
         <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
         ${b.finished ? `<p class="hint">Finito il ${fmtDate(b.finished)}</p>` : ""}
       </div></div>
-      ${b.synopsis ? `<p class="synopsis">${esc(b.synopsis)}</p>` : ""}
+      <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
+      <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
       ${b.status === "desiderato" ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>` : readingFields(b)}
       <div class="cover-edit">
         <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
@@ -1074,6 +1103,44 @@
       if (b.cover && !cands.some(c => c.cover === b.cover)) cands.unshift({ cover: b.cover, src: "attuale" });
       cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica dati.";
       drawPicks(); cvMore.disabled = false; cvMore.textContent = "Cerca di nuovo";
+    };
+    // Aggiorna informazioni: cerca il libro su tutte le fonti e riempie la scheda; si conferma con Salva.
+    const refBtn = $("#s-refresh", sheet), refSt = $("#s-ref-status", sheet);
+    refBtn.onclick = async () => {
+      if (!navigator.onLine) { refSt.textContent = "Serve una connessione per aggiornare le informazioni."; return; }
+      const cur = { ...b }; readData(sheet, cur); // usa titolo e autore come sono ora nei campi
+      refBtn.disabled = true; refSt.textContent = "Cerco le informazioni…";
+      const errors = {};
+      const info = await fetchInfo(cur, errors).catch(() => null);
+      refBtn.disabled = false;
+      if (!info) {
+        const err = Object.keys(errors).join(", ");
+        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.`;
+        return;
+      }
+      const got = [];
+      const put = (id, v, label, onlyEmpty) => {
+        const el = $(id, sheet);
+        if (!v || String(el.value) === String(v) || (onlyEmpty && el.value.trim())) return;
+        el.value = v; got.push(label);
+      };
+      put("#d-author", info.author, "autore");
+      put("#d-year", info.edYear, "anno", true); // l'anno può essere quello della prima edizione: non lo sovrascrivo
+      put("#d-pages", info.pages, "pagine");
+      put("#d-genre", info.genre, "genere", true);
+      put("#d-call", info.author && surname3(info.author), "segnatura", true);
+      if (info.isbn && !b.isbn) { b.isbn = info.isbn; got.push("ISBN"); }
+      if (info.synopsis && !(b.synopsis || "").includes(info.synopsis)) {
+        const head = (b.synopsis || "").split("\n")[0];
+        b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", info.synopsis].filter(Boolean).join("\n");
+        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; syn.hidden = false; got.push("trama");
+      }
+      if (info.cover && info.cover !== b.cover && !b.coverManual) { b.cover = info.cover; delete b.noCover; cvc.disabled = false; got.push("copertina"); }
+      const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML({ ...b, author: $("#d-author", sheet).value });
+      $(".sheet-top .sub", sheet).textContent = $("#d-author", sheet).value || "Autore sconosciuto";
+      spSync();
+      if (got.some(g => ["autore", "anno", "pagine", "genere", "segnatura"].includes(g))) $("details.edit", sheet).open = true;
+      refSt.textContent = got.length ? `Aggiornati: ${got.join(", ")}. Tocca Salva per tenerli.` : "Le informazioni sono già aggiornate.";
     };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
@@ -1345,7 +1412,7 @@
     const last = getSet().lastBackup;
     const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
     const missing = state.books.filter(b => !b.cover && !b.noCover).length;
-    const noAuthor = state.books.filter(b => !b.author && b.isbn).length;
+    const noAuthor = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).length;
     const sheet = openSheet(`
       <h2>Backup e copertine</h2>
       <section class="arch">
@@ -1359,7 +1426,7 @@
         <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
         <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button></div>
         <div class="status-line" id="v-status" aria-live="polite"></div>
-        ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore: li cerco per ISBN (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
+        ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore o copertina: li cerco per ISBN, titolo e autore (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
         <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
       </section>
       <section class="arch">
@@ -1394,7 +1461,7 @@
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
     const iv = $("#i-verify", sheet), vs = $("#v-status", sheet);
     if (iv) iv.onclick = async () => {
-      vs.textContent = "Verifico le ricerche…";
+      vs.textContent = "Verifico le ricerche…"; state.googleDown = null; // la verifica prova sempre Google, anche se prima era giù
       const out = [];
       try { const g = await googleSearch("isbn:9788804731481", { max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
       catch (e) { out.push(`Google Books: ${e.code || "errore"}${e.msg ? " — " + e.msg : ""}`); }
@@ -1405,7 +1472,7 @@
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
       if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
-      const ids = state.books.filter(b => b.isbn && (!b.author || (!b.cover && !b.noCover))).map(b => b.id);
+      const ids = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).map(b => b.id);
       closeSheet(); enrichBooks(ids); // in sottofondo: la scheda si chiude e l'app resta usabile
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
