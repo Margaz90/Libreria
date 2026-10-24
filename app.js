@@ -401,7 +401,8 @@
     const expected = Math.round(goal * (now - start) / (end - start));
     const left = goal - done, weeks = Math.max(1, Math.round((end - now) / 6048e5));
     const perMonth = Math.max(1, Math.round(left / weeks * 4.3));
-    return done >= expected ? `In linea · ne mancano ${left}` : `Ne mancano ${left} · circa ${perMonth} al mese`;
+    // Sul telefono si vede solo "ne mancano N": il ritmo mensile resta sul computer.
+    return done >= expected ? `In linea · ne mancano ${left}` : `Ne mancano ${left}<span class="pace-extra"> · circa ${perMonth} al mese</span>`;
   }
   function openGoal() {
     const y = new Date().getFullYear();

@@ -162,11 +162,15 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
   .filters { order: 1; }
   #searchbar { order: 2; }
   .tally .goal { border: 0; background: none; padding: 0; border-radius: 0; gap: 8px; }
+  .pace-extra { display: none; }
+  .filters { display: flex; flex-direction: column; align-items: stretch; }
+  .viewsw { align-self: flex-end; order: -1; }
   .goal svg { width: 30px; height: 30px; }
-  .goal-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 14px; }
-  .goal-txt b { font-size: 14px; }
-  .goal-txt em { font-size: 13px; }
-  .goal-txt em::before { content: "· "; }
+  .tally .goal { width: 100%; justify-content: flex-start; }
+  .tally .goal-txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 13px; white-space: nowrap; }
+  .tally .goal-txt b { font-size: 14px; }
+  .tally .goal-txt em { font-size: 12.5px; font-style: normal; }
+  .tally .goal-txt em::before { content: "· "; }
   .hero .rlabel { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
   .hero .rbody { gap: 8px; }
   .hero .ractions { display: flex; gap: 8px; margin-top: 4px; }
@@ -178,7 +182,6 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
 @media (max-width: 1023px) {
   .tally { margin-top: -6px; }
   .goal svg { width: 40px; height: 40px; }
-  .goal-txt em { display: none; }
 }
 
 /* Sezione in lettura in primo piano (in alto) */
