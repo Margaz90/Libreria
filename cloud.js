@@ -148,27 +148,32 @@
     H.info(`Modifiche non ancora inviate: ${info.pending ? "sì" : "no"} · libri nel cloud: ${info.count} · aggiornato alle ${t}${info.fromCache ? " (copia locale: nessuna rete)" : ""}`);
   }
 
+  const MOVES = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages"];
+  const nz = v => (v === undefined || v === null || v === "" ? null : v);
   function listen() {
     if (unsub) unsub();
     unsub = books().onSnapshot({ includeMetadataChanges: true }, snap => {
       info = { pending: !!snap.metadata.hasPendingWrites, fromCache: !!snap.metadata.fromCache, at: Date.now(), count: snap.docs.filter(d => !d.data().deleted).length };
       showInfo();
-      let n = 0; const jobs = [];
+      const list = [], jobs = [];
       snap.docChanges().forEach(ch => {
         if (ch.type === "removed") return;
         const id = ch.doc.id, r = ch.doc.data(), lb = H.books().find(x => x.id === id);
         if (lb && (lb.updated || 0) >= (r.updated || 0)) return;   // è già la versione più recente (anche le mie scritture)
         if ((H.tombs()[id] || 0) >= (r.updated || 0)) return;      // ho un'eliminazione più recente in coda
-        n++;
-        if (r.deleted) { if (lb) H.setLocal(id, null); } else jobs.push(adopt(id, r));
+        if (r.deleted) { if (lb) { H.setLocal(id, null); list.push({ id, removed: true }); } return; }
+        // Cosa è cambiato: se cambia qualcosa che sposta il libro (stato, ordine, filtro) ridisegno lo scaffale, altrimenti aggiorno solo quel libro.
+        const moved = !lb || MOVES.some(k => nz(lb[k]) !== nz(r[k]));
+        list.push({ id, from: lb ? lb.status : null, to: r.status, moved, added: !lb });
+        jobs.push(adopt(id, r));
       });
-      Promise.all(jobs).then(() => { if (n) H.refresh(); }).catch(e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
+      Promise.all(jobs).then(() => { if (list.length) H.refreshChanged(list); }).catch(e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
     }, e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
     if (goalsUnsub) goalsUnsub();
     goalsUnsub = goalsDoc().onSnapshot(d => {
       if (!d.exists) return;
       const r = d.data(), l = H.goals();
-      if (r.updated > l.updated) { H.setGoals(r.goals || {}, r.updated); H.refresh(); }
+      if (r.updated > l.updated) { H.setGoals(r.goals || {}, r.updated); H.tally(); }
     });
   }
   let goalsUnsub = null;

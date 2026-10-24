@@ -476,13 +476,14 @@
     const order = (state.filter === "tutti" ? shelfOrder() : [state.filter]).filter(st => st !== "in-lettura");
     if (list.some(b => b.status === "in-lettura") || state.filter === "in-lettura" || (state.filter === "tutti" && !SHELF_ORDER[state.sort])) order.unshift("in-lettura");
     else if (state.filter === "tutti") order.push("in-lettura");
-    return order.map(st => {
-      const books = sorted(list.filter(b => b.status === st));
-      const spines = books.map(b => spineHTML(b)).join("");
-      return `<section class="shelf-block"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
-        ${st === "in-lettura" ? readingCards(books) : ""}
-        ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}</section>`;
-    }).join("");
+    return order.map(st => shelfHTML(st, list)).join("");
+  }
+  function shelfHTML(st, list) {
+    const books = sorted(list.filter(b => b.status === st));
+    const spines = books.map(b => spineHTML(b)).join("");
+    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
+      ${st === "in-lettura" ? readingCards(books) : ""}
+      ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}</section>`;
   }
   function setStatus(b, st) {
     const nb = { ...b, status: st };
@@ -547,13 +548,46 @@
       else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
     }
     $("#toolbar").hidden = state.view === "stats";
-    main.querySelectorAll("[data-id]").forEach(wireItem);
-    main.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
+    wireMain(main);
+  }
+  function wireMain(root) {
+    root.querySelectorAll("[data-id]").forEach(wireItem);
+    root.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
       const v = Math.max(0, parseInt(inp.value, 10) || 0);
       upsert({ ...b, page: b.pages ? Math.min(v, b.pages) : v });
     });
-    main.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
+    root.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
+  }
+  // Modifiche arrivate dal cloud: aggiorno solo le parti che cambiano, senza ridisegnare tutta la pagina (niente sfarfallio).
+  // list = [{ id, from, to, moved, added }]: from/to sono lo stato prima e dopo, moved se cambia qualcosa che sposta il libro.
+  function refreshChanged(list) {
+    if (!list.length) return;
+    schedulePersist(); // i dati ricevuti vanno salvati sul dispositivo in ogni caso
+    const main = $("#main");
+    const visibleNow = () => visible().filter(b => state.filter === "tutti" || b.status === state.filter);
+    const focused = document.activeElement;
+    if (state.view === "stats" || list.some(x => x.added || x.removed) || (state.mode !== "dorsi" && list.some(x => x.moved))) { render(); return; }
+    if (state.mode !== "dorsi") { // copertine: solo le copertine cambiate
+      list.forEach(x => patchBookSafe(x.id, focused)); renderTally(); renderNav(); return;
+    }
+    const shelves = new Set();
+    for (const x of list) {
+      if (x.moved || x.from !== x.to) { if (x.from) shelves.add(x.from); if (x.to) shelves.add(x.to); }
+      else if (x.to === "in-lettura") shelves.add("in-lettura"); // pagina o pagine lette: aggiorno anche la scheda di lettura
+      else patchBookSafe(x.id, focused);
+    }
+    for (const st of shelves) {
+      const old = main.querySelector(`[data-shelf="${st}"]`);
+      if (!old || old.contains(focused)) continue; // non tocco lo scaffale mentre stai scrivendo dentro
+      const t = document.createElement("template"); t.innerHTML = shelfHTML(st, visibleNow()).trim();
+      const n = t.content.firstElementChild; old.replaceWith(n); wireMain(n);
+    }
+    renderTally(); renderNav();
+  }
+  function patchBookSafe(id, focused) {
+    if (focused && focused.dataset && focused.dataset.page === id) return; // non cambio la pagina che stai scrivendo
+    patchBook(id);
   }
 
   function wireItem(el) {
@@ -914,7 +948,10 @@
       fillData(sheet, hit, b);
     });
     const sb = $("#s-scan", sheet);
-    if (scan && sb && !sb.hidden) sb.click(); else setTimeout(() => $("#s-q", sheet).focus(), 50);
+    // La fotocamera può partire solo da un tocco dell'utente: la pressione prolungata apre la scheda con il pulsante ISBN in evidenza.
+    if (sb && !sb.hidden) loadZXing().catch(() => {}); // libreria del lettore pronta prima del tocco
+    if (scan && sb && !sb.hidden) toast("Tocca ▥ ISBN per inquadrare il codice");
+    if (!scan) setTimeout(() => $("#s-q", sheet).focus(), 50);
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
       readData(sheet, b);
@@ -978,6 +1015,8 @@
       state.books = state.books.filter(x => x.id !== from); state.books.push({ ...b, id: to });
     },
     refresh() { schedulePersist(); render(); },
+    refreshChanged,
+    tally: () => renderTally(),
     status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
     error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg); },
     done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
