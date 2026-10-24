@@ -10,7 +10,9 @@
   const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
-  const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null };
+  const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
+  const PAGE = 15; // libri mostrati per volta in ogni scaffale e nelle copertine: il resto si apre con "Mostra altri"
+  const resetLimits = () => { state.limit = {}; };
   const FILTERS = [["tutti", "Tutti"], ["in-lettura", "In lettura"], ["letto", "Letti"], ["da-leggere", "Da leggere"]];
 
   /* ---------- utilità ---------- */
@@ -479,11 +481,15 @@
     return order.map(st => shelfHTML(st, list)).join("");
   }
   function shelfHTML(st, list) {
-    const books = sorted(list.filter(b => b.status === st));
+    const all = sorted(list.filter(b => b.status === st));
+    const books = st === "in-lettura" ? all : all.slice(0, state.limit[st] || PAGE); // le letture in corso sono poche: le mostro tutte
     const spines = books.map(b => spineHTML(b)).join("");
-    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${books.length} ${books.length === 1 ? "volume" : "volumi"}</span></div>
+    const more = all.length - books.length;
+    const moreBtn = more > 0 ? `<button class="btn more-btn" type="button" data-more="${st}">Mostra altri ${Math.min(PAGE, more)} · ${more} da vedere</button>` : "";
+    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
       ${st === "in-lettura" ? readingCards(books) : ""}
-      ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}</section>`;
+      ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}
+      ${moreBtn}</section>`;
   }
   function setStatus(b, st) {
     const nb = { ...b, status: st };
@@ -499,7 +505,8 @@
       <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
   }
   function renderCovers(list) {
-    return `<div class="covers">${sorted(list).map(cardHTML).join("")}</div>`;
+    const all = sorted(list), shown = all.slice(0, state.limit.covers || PAGE), more = all.length - shown.length;
+    return `<div class="covers">${shown.map(cardHTML).join("")}</div>${more > 0 ? `<button class="btn more-btn" type="button" data-more="covers">Mostra altri ${Math.min(PAGE, more)} · ${more} da vedere</button>` : ""}`;
   }
 
   function renderStats(list) {
@@ -552,6 +559,12 @@
   }
   function wireMain(root) {
     root.querySelectorAll("[data-id]").forEach(wireItem);
+    root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
+      const key = btn.dataset.more, lim = (state.limit[key] || PAGE) + PAGE;
+      state.limit[key] = lim;
+      if (key === "covers") { swapIn(); render(); return; }
+      replaceShelf(key);
+    });
     root.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
       const v = Math.max(0, parseInt(inp.value, 10) || 0);
@@ -580,10 +593,16 @@
     for (const st of shelves) {
       const old = main.querySelector(`[data-shelf="${st}"]`);
       if (!old || old.contains(focused)) continue; // non tocco lo scaffale mentre stai scrivendo dentro
-      const t = document.createElement("template"); t.innerHTML = shelfHTML(st, visibleNow()).trim();
-      const n = t.content.firstElementChild; old.replaceWith(n); wireMain(n);
+      replaceShelf(st);
     }
     renderTally(); renderNav();
+  }
+  function replaceShelf(st) {
+    const main = $("#main"), old = main.querySelector(`[data-shelf="${st}"]`);
+    if (!old) return;
+    const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
+    const t = document.createElement("template"); t.innerHTML = shelfHTML(st, list).trim();
+    const n = t.content.firstElementChild; old.replaceWith(n); wireMain(n);
   }
   function patchBookSafe(id, focused) {
     if (focused && focused.dataset && focused.dataset.page === id) return; // non cambio la pagina che stai scrivendo
@@ -795,22 +814,35 @@
       scanBtn.onclick = async () => {
         const box2 = $("#s-scanner", sheet), video = $("#s-video", sheet);
         status.textContent = "Avvio la fotocamera…"; scanBtn.disabled = true;
+        let stream = null, timer = null;
+        const stop = () => { clearInterval(timer); stream && stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; box2.hidden = true; scanBtn.disabled = false; stopScan = null; };
         try {
           const ZX = await loadZXing();
           const hints = new Map(); hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13]);
-          const reader = new ZX.BrowserMultiFormatReader(hints, 300);
+          const core = new ZX.MultiFormatReader(); core.setHints(hints);
+          // Apro la fotocamera io e faccio partire il video: così l'anteprima compare subito anche su iPhone.
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+          video.setAttribute("playsinline", ""); video.muted = true; video.srcObject = stream;
           box2.hidden = false;
-          stopScan = () => { try { reader.reset(); } catch {} box2.hidden = true; scanBtn.disabled = false; stopScan = null; };
+          await video.play();
+          stopScan = stop;
           $("#s-scan-stop", sheet).onclick = () => { stopScan && stopScan(); status.textContent = ""; };
-          await reader.decodeFromConstraints({ video: { facingMode: "environment" } }, video, res => {
-            if (!res) return;
+          status.textContent = "Inquadra il codice a barre sul retro del libro.";
+          // Ogni 300 ms prendo un'immagine dal video e cerco il codice: funziona anche quando il video parte dopo il tocco.
+          const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+          timer = setInterval(() => {
+            if (!video.videoWidth) return;
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            let res = null;
+            try { res = core.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(new ZX.HTMLCanvasElementLuminanceSource(canvas)))); }
+            catch { return; } // nessun codice in questa immagine: riprovo
             const code = res.getText();
             if (!/^97[89]\d{10}$/.test(code)) { status.textContent = "Questo non è un ISBN: inquadra il codice sul retro, quello che inizia con 978 o 979."; return; }
-            stopScan && stopScan(); input.value = code; go();
-          });
-          status.textContent = "Inquadra il codice a barre sul retro del libro.";
+            stop(); input.value = code; go();
+          }, 300);
         } catch (e) {
-          stopScan && stopScan(); scanBtn.disabled = false;
+          stop();
           status.textContent = e && e.name === "NotAllowedError"
             ? "Non ho il permesso di usare la fotocamera: consentilo quando te lo chiede, oppure scrivi l'ISBN a mano."
             : "Non riesco ad avviare la fotocamera. Scrivi l'ISBN a mano: lo trovi sopra il codice a barre.";
@@ -1212,7 +1244,7 @@
 
   /* ---------- avvio ---------- */
   function swapIn() { const main = $("#main"); main.classList.remove("swap"); void main.offsetWidth; main.classList.add("swap"); }
-  function setView(v) { state.view = v; document.body.classList.remove("bars-off"); swapIn(); render(); window.scrollTo({ top: 0 }); }
+  function setView(v) { state.view = v; resetLimits(); document.body.classList.remove("bars-off"); swapIn(); render(); window.scrollTo({ top: 0 }); }
   function goSearch() {
     if (state.view !== "libreria") setView("libreria");
     document.body.classList.remove("bars-off");
@@ -1227,9 +1259,9 @@
   });
   document.addEventListener("click", e => {
     const f = e.target.closest && e.target.closest("[data-filter]");
-    if (f) { state.filter = f.dataset.filter; if (state.view !== "libreria") setView("libreria"); else { swapIn(); render(); } return; }
+    if (f) { state.filter = f.dataset.filter; resetLimits(); if (state.view !== "libreria") setView("libreria"); else { swapIn(); render(); } return; }
     const m = e.target.closest && e.target.closest(".viewsw [data-mode]");
-    if (m && m.dataset.mode !== state.mode) { state.mode = m.dataset.mode; setSet({ mode: state.mode }); swapIn(); render(); }
+    if (m && m.dataset.mode !== state.mode) { state.mode = m.dataset.mode; resetLimits(); setSet({ mode: state.mode }); swapIn(); render(); }
   });
   // Pressione prolungata su Aggiungi: apre subito la fotocamera per l'ISBN.
   (() => {
@@ -1247,7 +1279,7 @@
     document.body.classList.toggle("bars-off", d > 0 && y > 160 && !busy);
     lastY = y;
   }, { passive: true });
-  let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; render(); }, 220); };
+  let qt; $("#q").oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; resetLimits(); render(); }, 220); };
   // Menu "Ordina" personalizzato
   (() => {
     const dd = $("#sort-dd"), btn = $("#sort-btn"), menu = $("#sort-menu");
@@ -1257,7 +1289,7 @@
       if (v) (items.find(i => i.getAttribute("aria-selected") === "true") || items[0]).focus();
     };
     const show = it => { state.sort = it.dataset.v; $("#sort-label").textContent = it.dataset.short || it.textContent.trim(); items.forEach(i => i.setAttribute("aria-selected", String(i === it))); };
-    const pick = it => { show(it); setSet({ sort: state.sort }); open(false); btn.focus(); render(); };
+    const pick = it => { show(it); setSet({ sort: state.sort }); open(false); btn.focus(); resetLimits(); render(); };
     const saved = items.find(i => i.dataset.v === getSet().sort); if (saved) show(saved); // ordine ricordato sul dispositivo
     btn.onclick = () => open(menu.hidden);
     items.forEach((it, i) => {
