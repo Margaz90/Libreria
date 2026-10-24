@@ -188,6 +188,9 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 
   .goal svg { width: 40px; height: 40px; }
 }
 
+/* Aggiornamento informazioni in sottofondo */
+.enrich { font-size: 13px; color: var(--muted); background: var(--surface); border: 1px dashed var(--rule); border-radius: 12px; padding: 8px 12px; }
+
 /* Sezione in lettura in primo piano (in alto) */
 .hero { display: flex; flex-direction: column; gap: 12px; }
 .hero-h { font: 400 21px var(--display); margin: 0; display: flex; justify-content: space-between; align-items: baseline; }

@@ -164,15 +164,30 @@
     ids.forEach(id => cloudHook("changed", id));
     return { added, moved, newIds };
   }
-  // Dopo l'importazione cerco per ISBN autore, anno, pagine e copertina dei libri nuovi (serve la connessione).
-  async function enrichPurchases(ids, st) {
-    let fixed = 0;
+  // Ricerca per ISBN: Google Books e Open Library (Apple Books non risponde bene agli ISBN). Si ferma appena trova l'autore.
+  async function lookupIsbn(isbn) {
+    const jobs = [() => googleSearch("isbn:" + isbn), () => openLibrarySearch("isbn:" + isbn, "")];
+    const errors = [], out = [];
+    for (const t of jobs) {
+      try { out.push(...await t()); } catch (e) { errors.push(e && e.code); }
+      if (out.some(x => x.author)) break;
+    }
+    if (!out.length && errors.length === jobs.length) throw { code: errors.join(", ") };
+    return out;
+  }
+  // Completa autore, anno, pagine, genere e copertina per ISBN, in sottofondo: l'app resta usabile.
+  const enrich = { busy: false };
+  async function enrichBooks(ids) {
+    if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
+    enrich.busy = true;
+    const line = $("#enrich");
+    const errors = {}; let fixed = 0, missed = 0;
     for (let k = 0; k < ids.length; k++) {
-      st.textContent = `Cerco autore e copertina: ${k + 1} di ${ids.length}…`;
+      if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri importati: ${k + 1} di ${ids.length}`; }
       const b = state.books.find(x => x.id === ids[k]);
-      if (b && b.isbn) {
+      if (b && b.isbn && (!b.author || (!b.cover && !b.noCover))) {
         try {
-          const res = await searchBooks(String(b.isbn));
+          const res = await lookupIsbn(String(b.isbn));
           const hit = res.find(x => String(x.isbn) === String(b.isbn)) || res.find(x => x.author) || res[0];
           if (hit) {
             if (!b.author && hit.author) b.author = hit.author;
@@ -182,14 +197,21 @@
             if (!b.cover && hit.cover) { b.cover = hit.cover; delete b.noCover; }
             b.updated = Date.now(); fixed++;
             cloudHook("changed", b.id);
-          }
-        } catch { /* nessun risultato per questo ISBN: resta com'è */ }
+            patchBook(b.id); // il dorso o la copertina compaiono subito
+          } else missed++;
+        } catch (e) {
+          const c = (e && e.code) || "errore"; errors[c] = (errors[c] || 0) + 1; missed++;
+        }
       }
       await sleep(250);
     }
-    schedulePersist(); render();
-    st.textContent = `Dati completati per ${fixed} libri su ${ids.length}.` + (fixed < ids.length ? " Gli altri puoi completarli dalla scheda del libro." : "");
+    enrich.busy = false;
+    if (line) line.hidden = true;
+    schedulePersist(); renderTally();
+    const err = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
+    toast(`Informazioni aggiornate per ${fixed} libri su ${ids.length}.` + (missed ? ` Non trovati: ${missed}${err ? " (" + err + ")" : ""}.` : ""));
   }
+
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
@@ -1363,8 +1385,8 @@
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
       if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
-      const ids = state.books.filter(b => !b.author && b.isbn).map(b => b.id);
-      enrichPurchases(ids, st);
+      const ids = state.books.filter(b => b.isbn && (!b.author || (!b.cover && !b.noCover))).map(b => b.id);
+      closeSheet(); enrichBooks(ids); // in sottofondo: la scheda si chiude e l'app resta usabile
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
@@ -1388,9 +1410,10 @@
     go.onclick = () => {
       if (purchases) {
         const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
-        st.textContent = `Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`;
-        if (r.newIds.length && navigator.onLine) enrichPurchases(r.newIds, st);
-        else if (r.newIds.length) st.textContent += " Connettiti per completare autori e copertine.";
+        closeSheet();
+        toast(`Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`);
+        if (r.newIds.length && navigator.onLine) enrichBooks(r.newIds);
+        else if (r.newIds.length) toast("Connettiti per completare autori e copertine: lo trovi in Backup.");
         return;
       }
       const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
