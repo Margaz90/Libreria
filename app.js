@@ -990,6 +990,11 @@
       <h2>Nuovo libro</h2>
       ${searchBlock("", true)}
       <div class="sheet-top" hidden id="a-prev"></div>
+      <div class="cover-edit" id="a-cov">
+        <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="a-cv-more" type="button">Scegli un'altra copertina</button></div>
+        <div class="status-line" id="a-cv-status" aria-live="polite"></div>
+        <div class="cover-picks" id="a-cv-picks" hidden></div>
+      </div>
       ${dataFields(b)}
       ${readingFields(b)}
       <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
@@ -999,6 +1004,30 @@
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;
       fillData(sheet, hit, b);
     });
+    // Copertine alternative già nella scheda di inserimento (stesso criterio della scheda di modifica).
+    const cvMore = $("#a-cv-more", sheet), cvPicks = $("#a-cv-picks", sheet), cvStatus = $("#a-cv-status", sheet);
+    const showCover = () => { const prev = $("#a-prev", sheet); prev.hidden = false; prev.innerHTML = `${coverHTML({ ...b })}<div><p class="synopsis">${esc(b.synopsis || "")}</p></div>`; };
+    cvMore.onclick = async () => {
+      readData(sheet, b);
+      if (!b.title) { cvStatus.textContent = "Scrivi prima il titolo, poi cerco le copertine."; return; }
+      if (!navigator.onLine) { cvStatus.textContent = "Serve una connessione per cercare le copertine."; return; }
+      cvMore.disabled = true; cvStatus.textContent = "Cerco le copertine…";
+      const cands = await coverCandidates(b);
+      if (b.cover && !cands.some(c => c.cover === b.cover)) cands.unshift({ cover: b.cover, src: "attuale" });
+      cvStatus.textContent = cands.length ? "Tocca quella che preferisci." : "Non ho trovato copertine: prova a correggere titolo o autore.";
+      cvPicks.hidden = !cands.length;
+      cvPicks.innerHTML = cands.map((c, i) => `<button type="button" class="pick${c.cover === b.cover ? " on" : ""}" data-i="${i}" aria-label="Copertina ${i + 1}${c.src ? " da " + c.src : ""}">
+          <img src="${esc(c.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"><span>${c.it ? "🇮🇹 " : ""}${esc(c.src || "")}</span></button>`).join("") +
+        `<button type="button" class="pick none${!b.cover ? " on" : ""}" data-i="-1">${coverHTML({ ...b, cover: "" })}<span>Disegnata</span></button>`;
+      cvPicks.querySelectorAll(".pick").forEach(el => el.onclick = () => {
+        const i = Number(el.dataset.i);
+        if (i < 0) { delete b.cover; b.noCover = true; } else { b.cover = cands[i].cover; delete b.noCover; }
+        b.coverManual = true;
+        cvPicks.querySelectorAll(".pick").forEach(x => x.classList.toggle("on", x === el));
+        showCover(); cvStatus.textContent = "Tocca Aggiungi per tenere questa copertina.";
+      });
+      cvMore.disabled = false; cvMore.textContent = "Cerca di nuovo";
+    };
     const sb = $("#s-scan", sheet);
     // La fotocamera può partire solo da un tocco dell'utente: la pressione prolungata apre la scheda con il pulsante ISBN in evidenza.
     if (sb && !sb.hidden) loadZXing().catch(() => {}); // libreria del lettore pronta prima del tocco
