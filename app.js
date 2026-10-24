@@ -1559,7 +1559,20 @@
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("sw.js").then(reg => {
-        const offer = w => toast("Nuova versione disponibile.", { label: "Aggiorna", run: () => w.postMessage("skip-waiting") });
+        // Avviso fisso in alto: resta finché non si aggiorna o si sceglie "Più tardi", così nessun altro messaggio lo copre.
+        const offer = w => {
+          if ($("#upd-bar")) return;
+          const b = document.createElement("div"); b.id = "upd-bar"; b.className = "update-bar"; b.setAttribute("role", "alert");
+          b.innerHTML = `<span>Nuova versione disponibile.</span><button type="button" data-u="go">Aggiorna</button><button type="button" data-u="later">Più tardi</button>`;
+          b.onclick = e => {
+            const u = e.target.dataset && e.target.dataset.u;
+            if (u === "go") {
+              navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+              w.postMessage("skip-waiting");
+            } else if (u === "later") b.remove();
+          };
+          document.body.append(b);
+        };
         if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
         reg.addEventListener("updatefound", () => {
           const w = reg.installing;
