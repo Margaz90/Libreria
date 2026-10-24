@@ -1290,10 +1290,14 @@
   };
   function openSync() {
     if (cloud.email) return openSyncDone();
+    // Nell'app installata su iPhone l'accesso con Google non torna all'app (né con popup né con redirect): lì si usa il link via email.
+    const iosApp = navigator.standalone === true;
     const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
       <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
-      <div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>
-      <div class="field"><label for="sy-email">Oppure con un link via email (senza password)</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
+      ${iosApp
+        ? `<p class="hint">Nell'app installata su iPhone, iOS non lascia completare l'accesso con Google: usa il link via email, con lo stesso indirizzo del tuo account Google. Se l'account non ha libri, l'app te lo dice.</p>`
+        : `<div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>`}
+      <div class="field"><label for="sy-email">${iosApp ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
       <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
       <div class="field"><label for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
       <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
@@ -1302,11 +1306,11 @@
     const st = msg => { $("#sy-status", sheet).textContent = msg; };
     $("#sy-close", sheet).onclick = closeSheet;
     loadCloud().then(() => {
-      ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { $(sel, sheet).disabled = false; });
+      ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { const b = $(sel, sheet); if (b) b.disabled = false; });
       st("");
     }).catch(() => st("Non riesco a caricare il servizio. Controlla la connessione e riprova."));
     // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
-    $("#sy-google", sheet).onclick = () => {
+    if (!iosApp) $("#sy-google", sheet).onclick = () => {
       st("Apro l'accesso con Google…");
       window.libreriaCloud.signInGoogle().catch(e => {
         const c = (e && e.code) || "errore";
