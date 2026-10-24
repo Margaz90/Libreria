@@ -165,7 +165,7 @@
       pages: i.pageCount || undefined,
       genre: GENRES_EN[cat] || (cat && !/fiction|general/i.test(cat) ? cat : ""),
       synopsis: desc.length > 420 ? desc.slice(0, 400).replace(/\s\S*$/, "") + "…" : desc,
-      isbn, cover, lang: i.language || ""
+      isbn, cover, lang: i.language || "", ita: i.language === "it"
     };
   }
   // --- fonte 1: Google Books ---
@@ -202,7 +202,7 @@
       edYear: yearOf(r.releaseDate || ""), pages: undefined,
       genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
       synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
-      isbn: "", lang: "",
+      isbn: "", lang: "", ita: true,
       cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
     })).filter(x => x.title);
   }
@@ -219,7 +219,7 @@
     return (j.docs || []).map(d => ({
       title: d.title || "", author: (d.author_name || []).join(", "),
       edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
-      isbn: (d.isbn || [])[0] || "", lang: "",
+      isbn: (d.isbn || [])[0] || "", lang: "", ita: (d.language || []).includes("ita"),
       cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : ""
     })).filter(x => x.title);
   }
@@ -244,7 +244,9 @@
       if (out.filter(x => x.cover).length >= 6) break;
     }
     if (!out.length && errors.length === tries.length) throw { code: errors.join(", ") };
-    return out.slice(0, 15);
+    // Prima le edizioni italiane (l'ordine tra le altre resta quello delle fonti).
+    const isIt = x => x.lang === "it" || !!x.ita;
+    return out.sort((a, b) => (isIt(b) ? 1 : 0) - (isIt(a) ? 1 : 0)).slice(0, 15);
   }
 
   function originalTitle(b) {
@@ -485,7 +487,7 @@
     const books = st === "in-lettura" ? all : all.slice(0, state.limit[st] || PAGE); // le letture in corso sono poche: le mostro tutte
     const spines = books.map(b => spineHTML(b)).join("");
     const more = all.length - books.length;
-    const moreBtn = more > 0 ? `<button class="btn more-btn" type="button" data-more="${st}">Mostra altri ${Math.min(PAGE, more)} · ${more} da vedere</button>` : "";
+    const moreBtn = st === "in-lettura" ? "" : pagerHTML(st, books.length, all.length);
     return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
       ${st === "in-lettura" ? readingCards(books) : ""}
       ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : "Scaffale vuoto."}</div>`}</div>`}
@@ -505,8 +507,17 @@
       <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
   }
   function renderCovers(list) {
-    const all = sorted(list), shown = all.slice(0, state.limit.covers || PAGE), more = all.length - shown.length;
-    return `<div class="covers">${shown.map(cardHTML).join("")}</div>${more > 0 ? `<button class="btn more-btn" type="button" data-more="covers">Mostra altri ${Math.min(PAGE, more)} · ${more} da vedere</button>` : ""}`;
+    const all = sorted(list), shown = all.slice(0, state.limit.covers || PAGE);
+    return `<div class="covers">${shown.map(cardHTML).join("")}</div>${pagerHTML("covers", shown.length, all.length)}`;
+  }
+  // Pulsanti sotto uno scaffale o alle copertine: mostra altri, nascondi, con il conteggio.
+  function pagerHTML(key, shown, total) {
+    if (total <= PAGE) return "";
+    const next = Math.min(PAGE, total - shown);
+    return `<div class="pager" role="group" aria-label="Mostra più o meno libri">
+      <span class="pager-count">${shown} di ${total}</span>
+      <span class="pager-actions">${shown < total ? `<button class="pager-btn primary" type="button" data-more="${key}">Mostra altri ${next}</button>` : ""}${shown > PAGE ? `<button class="pager-btn" type="button" data-less="${key}">Nascondi</button>` : ""}</span>
+    </div>`;
   }
 
   function renderStats(list) {
@@ -560,10 +571,19 @@
   function wireMain(root) {
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
-      const key = btn.dataset.more, lim = (state.limit[key] || PAGE) + PAGE;
-      state.limit[key] = lim;
-      if (key === "covers") { swapIn(); render(); return; }
+      const key = btn.dataset.more;
+      state.limit[key] = (state.limit[key] || PAGE) + PAGE;
+      if (key === "covers") { swapIn(); render(); } else replaceShelf(key);
+    });
+    root.querySelectorAll("[data-less]").forEach(btn => btn.onclick = () => {
+      const key = btn.dataset.less;
+      state.limit[key] = PAGE;
+      if (key === "covers") { render(); $("#toolbar").scrollIntoView({ block: "start" }); return; }
+      const sh = document.querySelector(`[data-shelf="${key}"]`);
       replaceShelf(key);
+      // Chiudendo la lista torno all'inizio dello scaffale, senza restare in fondo a una lista corta.
+      const now = document.querySelector(`[data-shelf="${key}"]`);
+      if (now && now.getBoundingClientRect().top < 0) now.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
     root.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
