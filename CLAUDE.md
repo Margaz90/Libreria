@@ -13,7 +13,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Campi di un libro: title, author, year, pages, genre, status (`da-leggere` | `in-lettura` | `letto`), rating 0-5, started, finished (YYYY-MM-DD), page, notes, quote, callNo (segnatura Dewey + 3 lettere cognome), synopsis, isbn, cover (URL), noCover, coverManual, spine, spineRatio, added.
 - `seed.json`: i 108 libri importati da Goodreads con i titoli italiani (pulsante "Carica i libri Goodreads" a libreria vuota).
 - Backup/import: JSON esportato dall'app o CSV Goodreads, dalla scheda "Backup" in basso.
-- **Non esiste sincronizzazione tra dispositivi.** È il prossimo passo previsto (vedi sotto).
+- Sincronizzazione tra dispositivi con Firebase, opzionale: vedi la sezione dedicata più sotto.
 
 ## Funzioni presenti
 - Sezione Libreria con vista Dorsi (foto vera > striscia della copertina > dorso disegnato) o Copertine (solo immagine scaricata), filtri a pillole per stato (senza numeri sotto 700 px), sezione Statistiche (sempre su tutta la libreria). Menu Altro: obiettivo, backup/import/copertine, posto per la sincronizzazione.
@@ -36,7 +36,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v36), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v38), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -51,6 +51,19 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Obiettivo di lettura sincronizzato (`users/{uid}/meta/goals`, vince la data più recente). La scheda Sincronizzazione mostra le modifiche non ancora inviate e ha il pulsante Riconnetti.
 - SDK Firebase 10.14.1 (compat) da cdn.jsdelivr.net, messo in cache dal service worker.
 - Accesso: Google (popup, o redirect nell'app installata) oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
+
+## Storia del lavoro (versioni principali)
+- **Menu e layout** (c931d51 → eb9688c, v24-v28): barra a icone in basso sotto 1024 px, colonna laterale con conteggi, filtri a pillole, barra in alto fissa, selettore scaffale/copertina, libri in lettura in primo piano, sezione in alto come da mockup.
+- **Obiettivo e filtri** (fa53371, 4f56e26, v29-v30): obiettivo su una riga con anello, selettore vista alla stessa altezza, niente numeri sui filtri sotto 700 px, obiettivo senza mancanti.
+- **Desideri e copertine** (c813fc4, cacf429, v22-v23): lista dei desideri con "Ho acquistato", scelta della copertina in Nuovo libro.
+- **Scanner ISBN e pagine** (10867b3, 3952d5a, 7a435a8, v19-v21): scanner funzionante su iPhone (scheda con `flex: none`, avvio solo da tocco), paginazione a 15 elementi, ricerca con edizioni italiane prima.
+- **Sincronizzazione Firebase** (7091ba0, 0a82b9e, bd2fe18, 76f16ba, v16-v18): accesso Google o link via email, tombstone per le eliminazioni, obiettivo sincronizzato, errori di sincronizzazione visibili nella scheda.
+- **Acquisti da Gmail** (cfb1184, 3b27253, 017a89a, v31-v34): import JSON con `"acquisti": true`, nuovi libri in Da leggere, desideri spostati, autore e copertina recuperati per ISBN in sottofondo con i motivi degli errori.
+- **Eliminazione rapida** (c303ea7, v33): "Elimina" nel menu rapido con conferma in due tocchi.
+- **Chiave Google Books** (de640d7, v35): chiave propria in `GBOOKS_KEY`, limitata al sito e alla Books API. Nota: la chiave è pubblica nel codice, quindi la restrizione per sito è quella che la protegge.
+- **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
+- **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
+- Il 503 e il 403 di Google sono due casi diversi: 403 = chiave o referer non ammessi (sistemare da Google Cloud); 503 = servizio momentaneamente giù (si risolve da solo).
 
 ## Altre idee in sospeso
 - Ricerca acquisti su Gmail "su richiesta" (funziona bene con le email Feltrinelli; Amazon poco utile). Eventuale attività pianificata settimanale in futuro.
