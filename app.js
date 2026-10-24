@@ -240,14 +240,16 @@
     };
   }
   // --- fonte 1: Google Books ---
+  // Il messaggio con cui Google spiega l'errore (per capire la causa).
+  async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
   async function googleSearch(q, { italian = true, max = 12 } = {}) {
     if (state.googleDown) throw { code: "google-" + state.googleDown };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
-    if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status }; }
-    if (!r.ok) throw { code: "google-" + r.status };
+    if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status, msg: await googleMsg(r) }; }
+    if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     const j = await r.json();
     return (j.items || []).map(normVolume).filter(x => x.title);
   }
@@ -1351,6 +1353,7 @@
         <span class="label">Copertine</span>
         <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
         <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
+        <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button></div>
         ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore: li cerco per ISBN (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
         <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
       </section>
@@ -1384,6 +1387,16 @@
     $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
+    const iv = $("#i-verify", sheet);
+    if (iv) iv.onclick = async () => {
+      st.textContent = "Verifico le ricerche…";
+      const out = [];
+      try { const g = await googleSearch("isbn:9788804731481", { max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
+      catch (e) { out.push(`Google Books: ${e.code || "errore"}${e.msg ? " — " + e.msg : ""}`); }
+      try { const o = await openLibrarySearch("isbn:9788804731481", "", 1); out.push(`Open Library: OK (${o.length} risultati)`); }
+      catch (e) { out.push(`Open Library: ${e.code || "errore"}`); }
+      st.textContent = out.join(" · ");
+    };
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
       if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
