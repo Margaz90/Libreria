@@ -6,6 +6,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - PWA statica, nessun build: `index.html`, `style.css`, `app.js`, `sw.js`, `manifest.webmanifest`.
 - Pubblicata con GitHub Pages dal branch `main`, cartella root: https://margaz90.github.io/Libreria/ (la L maiuscola conta: il repository si chiama `Libreria`).
 - Usata soprattutto come app installata sulla Home dell'iPhone (Safari), ma anche da computer e iPad: il layout è responsive (sotto 1024 px barra a icone in basso Libreria · Cerca · Aggiungi · Statistiche · Altro, che si nasconde scorrendo; sopra colonna laterale con scaffali e conteggi, scheda libro a lato).
+- Caratteri e colori (v44): titoli in Fraunces (unico font scaricato, ~65 KB), testo e numeri con i font di sistema (SF su Apple). Token in `style.css`: `--title` petrolio #2F5457 (crema #F4EAD8 in scuro), `--accent` corallo profondo #B03A30 (#F06A5C in scuro) per testi e pulsanti, `--coral` #F06A5C solo per dettagli (anello dell'obiettivo, barra di lettura, linea sotto i nomi degli scaffali): su fondo chiaro ha contrasto troppo basso per i testi. `--dw` è il peso dei titoli.
 - Nome sull'iPhone: "MyLibrary". Icona (v41): fondo petrolio lucido, scaffale con quattro dorsi color crema ("MyLibrary" sul più alto, uno inclinato) e segnalibro corallo con cuciture e ramo di foglie appeso in alto a destra. Sorgente in `design/icona.html` (aprendola con `#render-512` o `#render-512-m` disegna solo l'icona, normale o con margine per Android); PNG generati con Playwright, quelli da 512 ridotti a 256 colori. Intestazione: "Libreria di Margaira Diego".
 
 ## Dati
@@ -38,7 +39,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v43), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v44), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -66,6 +67,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **Nuovi caratteri e colori** (v44): Fraunces per i titoli al posto di Young Serif, font di sistema al posto di Libre Franklin e IBM Plex Mono (da 152 a 65 KB di font), titoli petrolio e dettagli corallo come l'icona.
 - **Link via email nell'app su iPhone** (v43): il popup di Google restava bloccato su «Apro l'accesso con Google…»; nell'app installata su iPhone si accede con il link via email.
 - **Accesso con Google su iPhone** (v42): popup al posto del redirect nell'app installata, avvisi chiari se l'accesso non si completa o se l'account non ha libri; «Accedi e sincronizza» in cima al menu Altro.
 - **Nuova icona** (v41): scelta tra varie proposte (scaffale + segnalibro, fondo petrolio, colori crema e corallo); aggiunta `icon-maskable-512.png` per Android.
