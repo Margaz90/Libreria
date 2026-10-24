@@ -248,6 +248,10 @@
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    if (r.status === 503) { // servizio momentaneamente giù: un nuovo tentativo dopo una pausa
+      await new Promise(res => setTimeout(res, 1500));
+      try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    }
     if (r.status === 429 || r.status === 403) { state.googleDown = r.status; throw { code: "google-" + r.status, msg: await googleMsg(r) }; }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     const j = await r.json();
