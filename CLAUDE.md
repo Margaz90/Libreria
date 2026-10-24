@@ -26,30 +26,20 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v15), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v16), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
 - Commit in italiano, poi push su `main` (la pubblicazione su Pages è automatica).
 
-## Prossimo passo: sincronizzazione con Firebase
-Scelta fatta: Firebase (Auth Google + link email come ripiego per l'app installata su iPhone, Firestore con cache offline). Diego deve ancora:
-1. Creare il progetto su console.firebase.google.com (nome `mylibrary`, senza Analytics, piano Spark).
-2. Authentication: attivare Google e Email (solo link senza password); aggiungere `margaz90.github.io` ai domini autorizzati.
-3. Firestore: edizione Standard, località europea (eur3 o europe-west8), modalità produzione, regole:
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /users/{uid}/{document=**} {
-         allow read, write: if request.auth != null && request.auth.uid == uid;
-       }
-     }
-   }
-   ```
-4. Registrare un'app Web (senza Firebase Hosting) e passare l'oggetto `firebaseConfig`.
-
-Poi da implementare: pulsante Accedi nella scheda Backup, primo caricamento dei libri dal dispositivo che accede per primo (l'iPhone), sincronizzazione bidirezionale con funzionamento offline, foto dei dorsi come documenti separati (limite 1 MB per documento), backup manuale mantenuto.
+## Sincronizzazione con Firebase (in `cloud.js`, caricata solo al bisogno)
+- Progetto `mylibrary-2ea05`: Authentication (Google + link email), Firestore in eur3, regole per utente (`users/{uid}`).
+- Struttura: `users/{uid}/books/{id}` = libro senza foto (`deleted: true` = eliminato, segnaposto); `users/{uid}/spines/{id}` = foto del dorso (`data`, `at`).
+- Conflitti: vince la modifica più recente (`updated`, ms). Foto: `spineAt` dice quale versione è nel cloud.
+- Primo accesso con libri su entrambi i lati: chiede se unire (consigliato), usare solo il cloud o solo il dispositivo.
+- In `app.js`: `libreriaHost` è il ponte con `cloud.js`; `cloudHook("changed"|"removed", id)` dopo ogni modifica; `libreria-tombs` tiene le eliminazioni fatte da disconnesso.
+- SDK Firebase 10.14.1 (compat) da cdn.jsdelivr.net, messo in cache dal service worker.
+- Accesso: Google (popup, o redirect nell'app installata) oppure link via email. Sull'iPhone il link va copiato e incollato nell'app, senza aprirlo in Safari (il link vale una volta).
 
 ## Altre idee in sospeso
 - Ricerca acquisti su Gmail "su richiesta" (funziona bene con le email Feltrinelli; Amazon poco utile). Eventuale attività pianificata settimanale in futuro.

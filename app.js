@@ -7,7 +7,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null };
@@ -41,6 +41,15 @@
   function setSet(patch) { const v = { ...getSet(), ...patch }; try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch {} return v; }
   // Data di oggi nel fuso del dispositivo (toISOString darebbe quella di Greenwich: dopo mezzanotte risulterebbe ieri).
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
+  const CLOUD_KEY = "libreria-cloud";
+  const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
+  const setCloudInfo = patch => { try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ ...cloudInfo(), ...patch })); } catch {} };
+  // Libri eliminati da comunicare al cloud (subito se sei connesso, altrimenti al prossimo accesso).
+  const TOMB_KEY = "libreria-tombs";
+  const getTombs = () => { try { return JSON.parse(localStorage.getItem(TOMB_KEY) || "{}") || {}; } catch { return {}; } };
+  const setTombs = t => { try { localStorage.setItem(TOMB_KEY, JSON.stringify(t)); } catch {} };
+  function cloudHook(name, id) { const c = window.libreriaCloud; if (c && c.connected) c[name](id); }
 
   /* ---------- archivio sul dispositivo ---------- */
   // Le foto dei dorsi stanno in chiavi separate: così l'elenco principale resta leggero da salvare.
@@ -50,6 +59,8 @@
     let v = [];
     try { v = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); if (!Array.isArray(v)) v = []; } catch { v = []; }
     for (const b of v) {
+      if (!b.updated) b.updated = b.added || 1;
+      if (b.spine && !b.spineAt) b.spineAt = b.updated;
       if (b.spine && b.spine !== 1) { spineWritten.set(b.id, null); continue; } // dati vecchi: verranno spostati al prossimo salvataggio
       if (b.spine === 1) { try { const d = localStorage.getItem(SPINE_KEY(b.id)); if (d) { b.spine = d; spineWritten.set(b.id, d); } else delete b.spine; } catch { delete b.spine; } }
     }
@@ -89,33 +100,45 @@
   }
   function upsert(b) {
     const data = clean(b);
-    let prev = null, id = b.id;
-    if (id) {
-      const i = state.books.findIndex(x => x.id === id);
-      if (i >= 0) { prev = state.books[i]; state.books[i] = { ...data, id }; } else state.books.push({ ...data, id });
-    } else { id = newId(); state.books.push({ ...data, id }); }
+    let id = b.id, i = id ? state.books.findIndex(x => x.id === id) : -1;
+    const prev = i >= 0 ? state.books[i] : null;
+    data.updated = Date.now();
+    if (data.spine && (!prev || prev.spine !== data.spine)) data.spineAt = data.updated;
+    if (!id) id = newId();
+    if (i >= 0) state.books[i] = { ...data, id }; else state.books.push({ ...data, id });
     schedulePersist();
     // Se cambiano solo dati che non spostano il libro, aggiorno solo il suo dorso/copertina.
     const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages"];
     if (prev && state.view !== "stats" && data.status !== "in-lettura" && keep.every(k => prev[k] === state.books.find(x => x.id === id)[k])) {
       patchBook(id); renderTally();
     } else render();
+    cloudHook("changed", id);
   }
-  // update: i libri già presenti prendono i dati del file (quelli che il file non ha restano com'erano).
   function addMany(list, { update = false } = {}) {
     const known = new Map(state.books.map(b => [keyOf(b), b]));
-    let added = 0, updated = 0, skipped = 0;
+    let added = 0, updated = 0, skipped = 0; const ids = [];
     for (const raw of list) {
       if (!raw || !raw.title) continue;
-      const cur = known.get(keyOf(raw));
+      const cur = known.get(keyOf(raw)), now = Date.now();
       if (cur && !update) { skipped++; continue; }
-      if (cur) { const i = state.books.indexOf(cur); state.books[i] = { ...cur, ...clean(raw), id: cur.id, added: cur.added || Date.now() }; known.set(keyOf(raw), state.books[i]); updated++; continue; }
-      const b = { ...clean(raw), id: newId() }; state.books.push(b); known.set(keyOf(b), b); added++;
+      if (cur) {
+        const nb = { ...cur, ...clean(raw), id: cur.id, added: cur.added || now, updated: now };
+        if (nb.spine && nb.spine !== cur.spine) nb.spineAt = now;
+        state.books[state.books.indexOf(cur)] = nb; known.set(keyOf(nb), nb); ids.push(nb.id); updated++;
+      } else {
+        const b = { ...clean(raw), id: newId(), updated: now };
+        if (b.spine) b.spineAt = now;
+        state.books.push(b); known.set(keyOf(b), b); ids.push(b.id); added++;
+      }
     }
     schedulePersist(); render();
+    ids.forEach(id => cloudHook("changed", id));
     return { added, updated, skipped };
   }
-  function removeBook(id) { state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); }
+  function removeBook(id) {
+    const t = getTombs(); t[id] = Date.now(); setTombs(t);
+    state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
+  }
 
   /* ---------- Google Books / Open Library ---------- */
   function normVolume(v) {
@@ -291,6 +314,7 @@
         const cur = state.books.find(x => x.id === b.id);
         if (cur && hit && cur.cover !== hit.cover) {
           cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages;
+          cur.updated = Date.now(); cloudHook("changed", cur.id);
           state.coverJob.found++;
           patchBook(cur.id);
         } else if (cur && hit) state.coverJob.found++;
@@ -567,7 +591,7 @@
   }
 
   /* ---------- schede ---------- */
-  let lastFocus = null, sheetGuard = null;
+  let lastFocus = null, sheetGuard = null, sheetCancel = null;
   function openSheet(html) {
     lastFocus = document.activeElement; sheetGuard = null;
     document.querySelectorAll(".toast").forEach(t => t.remove());
@@ -603,6 +627,7 @@
     bar.querySelector("button").focus();
   }
   function closeSheet() {
+    const cancel = sheetCancel; sheetCancel = null; if (cancel) cancel();
     sheetGuard = null;
     if (stopScan) stopScan();
     document.removeEventListener("keydown", escClose); document.body.style.overflow = "";
@@ -904,12 +929,118 @@
       <div class="menu-list">
         <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
-        <div class="soon"><b>Accedi e sincronizza</b><span>In arrivo: la stessa libreria su iPhone, iPad e computer</span></div>
+        <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
       </div>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
     $("[data-m=goal]", sheet).onclick = openGoal;
     $("[data-m=backup]", sheet).onclick = openImport;
+    $("[data-m=sync]", sheet).onclick = openSync;
     $("#m-close", sheet).onclick = closeSheet;
+  }
+
+  /* ---------- accesso e sincronizzazione (Firebase, caricata solo quando serve) ---------- */
+  const cloud = { email: cloudInfo().email || "" };
+  const CLOUD_SCRIPTS = [
+    "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-app-compat.js",
+    "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.js",
+    "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-firestore-compat.js",
+    "cloud.js"
+  ];
+  let cloudLoading = null;
+  function loadCloud() {
+    if (window.libreriaCloud) return Promise.resolve(window.libreriaCloud);
+    if (!cloudLoading) cloudLoading = CLOUD_SCRIPTS.reduce((p, src) => p.then(() => new Promise((ok, ko) => {
+      const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => ko({ code: "rete" }); document.head.append(s);
+    })), Promise.resolve()).then(() => window.libreriaCloud, e => { cloudLoading = null; throw e; });
+    return cloudLoading;
+  }
+  // Ponte con cloud.js: lo strato di sincronizzazione legge e scrive i libri solo tramite queste funzioni.
+  window.libreriaHost = {
+    books: () => state.books,
+    keyOf,
+    tombs: getTombs,
+    clearTomb(id) { const t = getTombs(); delete t[id]; setTombs(t); },
+    setLocal(id, book) {
+      const i = state.books.findIndex(x => x.id === id);
+      if (!book) { if (i >= 0) state.books.splice(i, 1); return; }
+      const nb = { ...clean(book), id };
+      if (i >= 0) state.books[i] = nb; else state.books.push(nb);
+    },
+    renameLocal(from, to) {
+      const b = state.books.find(x => x.id === from); if (!b) return;
+      state.books = state.books.filter(x => x.id !== from); state.books.push({ ...b, id: to });
+    },
+    refresh() { schedulePersist(); render(); },
+    status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
+    error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; else toast(msg); },
+    done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
+    connected(email) { cloud.email = email || ""; },
+    askMerge
+  };
+  function openSync() {
+    if (cloud.email) return openSyncDone();
+    const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
+      <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
+      <div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>
+      <div class="field"><label for="sy-email">Oppure con un link via email (senza password)</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
+      <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
+      <div class="field"><label for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
+      <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
+      <div class="status-line" id="sy-status" aria-live="polite">Preparo l'accesso…</div>
+      <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
+    const st = msg => { $("#sy-status", sheet).textContent = msg; };
+    $("#sy-close", sheet).onclick = closeSheet;
+    loadCloud().then(() => {
+      ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { $(sel, sheet).disabled = false; });
+      st("");
+    }).catch(() => st("Non riesco a caricare il servizio. Controlla la connessione e riprova."));
+    // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
+    $("#sy-google", sheet).onclick = () => {
+      st("Apro l'accesso con Google…");
+      window.libreriaCloud.signInGoogle().catch(e => st("Accesso non riuscito (" + ((e && e.code) || "errore") + ")."));
+    };
+    $("#sy-link", sheet).onclick = () => {
+      const email = $("#sy-email", sheet).value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)) { st("Scrivi un indirizzo email valido."); return; }
+      st("Invio il link…");
+      window.libreriaCloud.sendLink(email)
+        .then(() => { setCloudInfo({ lastEmail: email }); st("Link inviato a " + email + ". Copialo dall'email e incollalo qui sopra, senza aprirlo."); })
+        .catch(e => st("Non riesco a inviare il link (" + ((e && e.code) || "errore") + ")."));
+    };
+    $("#sy-paste-go", sheet).onclick = () => {
+      const link = $("#sy-paste", sheet).value.trim(), email = $("#sy-email", sheet).value.trim() || cloudInfo().lastEmail || "";
+      if (!link) { st("Incolla il link."); return; }
+      if (!email) { st("Scrivi l'email a cui hai ricevuto il link."); return; }
+      st("Accedo…");
+      window.libreriaCloud.finishLink(email, link).catch(() => st("Link non valido o scaduto: chiedine uno nuovo."));
+    };
+  }
+  function openSyncDone() {
+    const sheet = openSheet(`<h2>Sincronizzazione</h2>
+      <p class="hint">Collegato come <b>${esc(cloud.email)}</b>. Ogni modifica va nel cloud e arriva anche sugli altri dispositivi.</p>
+      <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
+      <p class="hint">Uscendo i libri restano su questo dispositivo, ma smettono di aggiornarsi dal cloud.</p>
+      <div class="status-line" id="sy-status" aria-live="polite"></div>
+      <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
+    $("#sy-close", sheet).onclick = closeSheet;
+    $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(() => { $("#sy-status", sheet).textContent = "Sincronizzazione non riuscita: controlla la connessione."; });
+    $("#sy-out", sheet).onclick = () => { if (window.libreriaCloud) window.libreriaCloud.signOut(); closeSheet(); toast("Sei uscito: i libri restano su questo dispositivo."); };
+  }
+  // Primo accesso con libri da entrambe le parti: decide l'utente. Annullare = non sincronizzare.
+  function askMerge(cloudCount) {
+    return new Promise(resolve => {
+      const sheet = openSheet(`<h2>Unisco i libri?</h2>
+        <p class="hint">Su questo dispositivo ci sono ${state.books.length} libri, nel cloud ${cloudCount}. Come procedo?</p>
+        <div class="menu-list">
+          <button type="button" data-c="merge"><b>Unisci (consigliato)</b><span>Per ogni libro vince la modifica più recente: non si perde nulla.</span></button>
+          <button type="button" data-c="cloud"><b>Usa solo il cloud</b><span>I libri che ci sono solo su questo dispositivo vengono tolti.</span></button>
+          <button type="button" data-c="device"><b>Usa solo questo dispositivo</b><span>Il cloud viene sostituito con i libri di questo dispositivo.</span></button>
+        </div>
+        <div class="actions"><button class="btn ghost" id="mc-no" type="button">Annulla</button></div>`);
+      sheetCancel = () => resolve(null);
+      sheet.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { sheetCancel = null; closeSheet(); resolve(b.dataset.c); });
+      $("#mc-no", sheet).onclick = closeSheet;
+    });
   }
 
   /* ---------- importa / esporta ---------- */
@@ -1137,6 +1268,8 @@
     }
   } catch {}
   render();
+  // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
+  try { if (cloudInfo().uid || /oobCode=/.test(location.search) || sessionStorage.getItem("libreria-auth-pending")) loadCloud().catch(() => {}); } catch {}
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
   if ("serviceWorker" in navigator) {

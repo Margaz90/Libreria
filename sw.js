@@ -2,7 +2,7 @@
    - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v15";
+const VERSION = "v16";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
@@ -69,7 +69,7 @@ self.addEventListener("fetch", e => {
   if (url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") ||
       url.hostname.endsWith("books.google.com") || url.hostname.endsWith("books.googleusercontent.com") ||
       url.hostname.endsWith("covers.openlibrary.org") || url.hostname.endsWith("archive.org") ||
-      url.hostname.endsWith("mzstatic.com")) {
+      url.hostname.endsWith("mzstatic.com") || url.hostname === "cdn.jsdelivr.net") { // SDK di Firebase: caricato solo all'accesso, poi in cache
     e.respondWith(cacheFirst(req));
   }
 });
