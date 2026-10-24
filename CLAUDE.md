@@ -20,6 +20,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Libri in lettura in primo piano, sopra obiettivo e filtri (sezione `#hero`, in entrambe le viste, con Aggiorna e Dettagli); negli scaffali non compaiono. Sul telefono: obiettivo su una riga (ring + "2 di 5 libri nel 2026") con il selettore scaffale/copertina alla stessa altezza, poi filtri e ricerca. Sul computer il selettore sta nella barra.
 - Barra in alto (ricerca, ordina, filtri, vista): piena e sempre fissa in cima; sotto 1024 px i filtri sono un controllo segmentato a larghezza piena, la vista scaffale/copertina sta sotto, a destra; la barra in basso invece si nasconde scorrendo.
 - Paginazione: ogni scaffale e le copertine mostrano 15 libri, poi "Mostra altri 15" e "Nascondi" (pulsanti in `.pager`). Le ricerche mettono prima le edizioni italiane (`ita`). Le letture in corso sono sempre tutte visibili.
+- Acquisti (su richiesta, da Gmail): si importa un file JSON con `"acquisti": true` da Altro → Backup. Libro nuovo → Da leggere; libro in lista dei desideri → Da leggere (stessa scheda); gli altri invariati. Il confronto è per ISBN, poi titolo e autore, o solo titolo principale se il file non ha l'autore.
 - Lista dei desideri: stato `desiderato` (scaffale "Lista dei desideri", filtro "Desideri"). Dalla scheda o dalla scheda rapida, "Ho acquistato" lo porta a `da-leggere`. Si aggiunge da Nuovo libro con il pulsante "Lista dei desideri".
 - Nuovo libro: si possono scegliere altre copertine (stesso criterio della scheda di modifica) prima di salvare.
 - Scanner ISBN: la fotocamera si apre dal tocco su ▥ ISBN; il riquadro ha `flex: none` (altrimenti lo schiaccia la scheda). Il codice viene cercato su fotogrammi con ZXing (`MultiFormatReader`).
@@ -33,7 +34,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v30), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v31), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.

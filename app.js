@@ -143,6 +143,27 @@
     ids.forEach(id => cloudHook("changed", id));
     return { added, updated, skipped };
   }
+  // Stesso libro? Per ISBN; altrimenti titolo e autore; se il file non ha l'autore, basta il titolo.
+  const baseTitle = t => norm(String(t || "").split(/[.:]/)[0]); // "Joe Country. Le indagini…" = "Joe Country"
+  const samePurchase = (x, raw) => (raw.isbn && x.isbn && String(x.isbn) === String(raw.isbn)) || keyOf(x) === keyOf(raw) || (!raw.author && baseTitle(x.title) === baseTitle(raw.title));
+  // Acquisti: un libro nuovo va in Da leggere; uno già nella lista dei desideri passa in Da leggere; gli altri non si toccano.
+  function addPurchases(list) {
+    const now = Date.now(), ids = [];
+    let added = 0, moved = 0;
+    for (const raw of list) {
+      if (!raw || !raw.title) continue;
+      const i = state.books.findIndex(x => samePurchase(x, raw));
+      if (i < 0) {
+        const b = { ...clean({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
+        state.books.push(b); ids.push(b.id); added++;
+      } else if (state.books[i].status === "desiderato") {
+        state.books[i] = { ...state.books[i], status: "da-leggere", updated: now }; ids.push(state.books[i].id); moved++;
+      }
+    }
+    schedulePersist(); render();
+    ids.forEach(id => cloudHook("changed", id));
+    return { added, moved };
+  }
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
@@ -1284,9 +1305,16 @@
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
-    let pending = [], counts = { fresh: 0, dup: 0 };
+    let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false;
     const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet);
     const showCounts = () => {
+      if (purchases) { // file di acquisti: nuovi in Da leggere, desideri spostati, il resto invariato
+        const valid = pending.filter(b => b && b.title), found = b => state.books.find(x => samePurchase(x, b));
+        const fresh = valid.filter(b => !found(b)).length, wish = valid.filter(b => found(b) && found(b).status === "desiderato").length;
+        st.textContent = !valid.length ? "" : `Acquisti: ${fresh} nuovi in Da leggere, ${wish} spostati dalla lista dei desideri, ${valid.length - fresh - wish} già presenti (invariati).`;
+        go.disabled = !(fresh || wish);
+        return;
+      }
       const { fresh, dup } = counts, u = upd.checked;
       st.textContent = !pending.length ? "" : (fresh || (u && dup))
         ? `Pronti: ${fresh} libri nuovi` + (dup ? (u ? `, ${dup} da aggiornare` : ` (${dup} già presenti, saltati)`) : "") + "."
@@ -1305,8 +1333,10 @@
       rd.onload = () => {
         try {
           const txt = String(rd.result);
-          if (/\.json$/i.test(f.name) || txt.trim().startsWith("{") || txt.trim().startsWith("[")) { const j = JSON.parse(txt); pending = Array.isArray(j) ? j : (j.books || []); }
+          purchases = false;
+          if (/\.json$/i.test(f.name) || txt.trim().startsWith("{") || txt.trim().startsWith("[")) { const j = JSON.parse(txt); pending = Array.isArray(j) ? j : (j.books || []); purchases = !!(j && j.acquisti); }
           else pending = fromGoodreads(txt);
+          if (purchases) { showCounts(); return; }
           const known = new Set(state.books.map(keyOf));
           const valid = pending.filter(b => b && b.title);
           counts = { fresh: valid.filter(b => !known.has(keyOf(b))).length, dup: valid.filter(b => known.has(keyOf(b))).length };
@@ -1316,6 +1346,11 @@
       rd.readAsText(f);
     };
     go.onclick = () => {
+      if (purchases) {
+        const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
+        st.textContent = `Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`;
+        return;
+      }
       const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
       st.textContent = `Importati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".";
     };
