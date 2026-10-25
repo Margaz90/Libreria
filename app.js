@@ -9,7 +9,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -103,6 +103,8 @@
     out.status = STATUS_ONE[out.status] ? out.status : "da-leggere";
     if (out.year) out.year = Number(out.year) || undefined;
     if (out.pages) out.pages = Number(out.pages) || undefined;
+    // Solo l'anno di lettura, per i libri letti senza data di fine: vale solo un anno plausibile e mai insieme alla data.
+    if (out.finishedYear !== undefined) { const y = Number(out.finishedYear); if (out.finished || !Number.isInteger(y) || y < 1900 || y > new Date().getFullYear()) delete out.finishedYear; else out.finishedYear = y; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
@@ -616,7 +618,8 @@
   }
   function setStatus(b, st) {
     const nb = { ...b, status: st };
-    if (st === "letto" && !nb.finished) nb.finished = today();
+    // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
+    if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) nb.finished = today();
     if (st === "in-lettura" && !nb.started) nb.started = today();
     if (st === "letto" && nb.pages) nb.page = nb.pages;
     upsert(nb);
@@ -860,6 +863,7 @@
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
         <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"></div>
       </div>
+      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019"></div>
       <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
@@ -882,10 +886,13 @@
     if (seg) {
       const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
         if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
+      // «oppure solo l'anno» solo per un libro letto senza data di fine
+      const yearRow = () => { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); };
       seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
         seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
-        $("#f-status", sheet).value = btn.dataset.v; sync();
+        $("#f-status", sheet).value = btn.dataset.v; sync(); yearRow();
       });
+      const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", yearRow);
       requestAnimationFrame(sync);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
@@ -895,11 +902,13 @@
   }
   function readReading(sheet, b) {
     if (!$("#f-status", sheet)) return; // un libro nella lista dei desideri non ha campi di lettura
+    const was = b.status;
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
+    const y = $("#f-year", sheet); b.finishedYear = y && b.status === "letto" && !b.finished ? y.value.trim() : undefined;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
     const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
-    if (b.status === "letto" && !b.finished) b.finished = today();
+    if (b.status === "letto" && was !== "letto" && !b.finished && !b.finishedYear) b.finished = today();
   }
   function readData(sheet, b) {
     b.title = $("#d-title", sheet).value.trim() || b.title;
