@@ -58,7 +58,8 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
   - `promemoria-verifica.mjs`: a ogni richiesta controlla `.claude/verifica-hook.json`; se sono passati 30 giorni dall'ultima verifica, Claude esegue la skill `verifica-hook` nella stessa risposta (dopo aver fatto ciò che Diego ha chiesto), propone eventuali nuovi hook con pro e contro senza crearli, e pubblica la nuova data.
 - **Verifica mensile degli hook**: automatica (vedi `promemoria-verifica.mjs`), oppure a richiesta con `/verifica-hook`. Ultima verifica: data in `.claude/verifica-hook.json`.
 - **Skill**: `/pubblica` (versione, test, storia in questo file, commit e unione su `main`); `/acquisti` (conferme d'ordine Feltrinelli da Gmail → JSON degli acquisti arricchito, da importare da Altro → Backup).
-- **Subagent** `revisore-accessibilita`: contrasto dei colori, bersagli al tocco, etichette, movimento ridotto; solo resoconto.
+- **Subagent** `revisore-accessibilita`: contrasto dei colori, bersagli al tocco, etichette, movimento ridotto; solo resoconto. `esecutore-test` (Haiku): lancia `node test/run.mjs` e restituisce solo totale e controlli falliti.
+- **Modelli più leggeri** (per non consumare i limiti del piano): affida a un subagent su Haiku i lavori lunghi e meccanici che non richiedono di ragionare sul progetto: giri di test (`esecutore-test`), ricerche ampie nel codice (`Explore` con `model: haiku`), controlli ripetitivi. Le richieste brevi (un colore, un testo) si fanno direttamente: un subagent parte da zero e per poche righe costa di più. Progetti, revisioni finali e decisioni di design restano sul modello principale (o su Opus, se la sessione gira su un modello più leggero).
 - **MCP** in `.mcp.json`: context7, per la documentazione aggiornata di Firebase e ZXing (va approvato al primo uso).
 
 ## Sincronizzazione con Firebase (in `cloud.js`, caricata solo al bisogno)
