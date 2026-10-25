@@ -26,7 +26,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Lista dei desideri: stato `desiderato` (scaffale "Lista dei desideri", filtro "Desideri"). Dalla scheda o dalla scheda rapida, "Ho acquistato" lo porta a `da-leggere`. Si aggiunge da Nuovo libro con il pulsante "Lista dei desideri".
 - Nuovo libro: si possono scegliere altre copertine (stesso criterio della scheda di modifica) prima di salvare.
 - Scanner ISBN: la fotocamera si apre dal tocco su ▥ ISBN; il riquadro ha `flex: none` (altrimenti lo schiaccia la scheda). Il codice viene cercato su fotogrammi con ZXing (`MultiFormatReader`).
-- Scorciatoie su computer: `/` cerca, `N` nuovo libro, `1`/`2` sezioni. Pressione prolungata su Aggiungi = scansione ISBN diretta.
+- Scorciatoie su computer: `/` cerca, `N` nuovo libro, `1`/`2` sezioni. Pressione prolungata su Aggiungi = apre Nuovo libro con il suggerimento di toccare ▥ ISBN (la fotocamera parte solo da un tocco).
 - Chiudendo una scheda con modifiche compare "Salva / Scarta / Continua". Import con opzione "aggiorna i libri già presenti".
 - Libri in lettura come schede con pagina attuale e barra di avanzamento; obiettivo annuale con anello.
 - Modifiche dal cloud: `refreshChanged` aggiorna solo lo scaffale o il libro cambiato (niente sfarfallio). Lo scanner ISBN parte solo da un tocco (iOS blocca la fotocamera senza gesto); la pressione prolungata su Aggiungi mostra solo un suggerimento.
@@ -41,9 +41,21 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 ## Regole di lavoro
 - Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v44), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
-- Prova sempre con Playwright (Chromium già installato) a 390x844 e 1366x860 prima di pubblicare; nessun errore in console, niente scorrimento orizzontale.
+- Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
 - Commit in italiano, poi push su `main` (la pubblicazione su Pages è automatica).
+
+## Strumenti per Claude Code
+- **Test** in `test/` (non fanno parte dell'app e il service worker non li scarica): `node test/run.mjs` li lancia tutti (circa 1 minuto, 58 controlli), `node test/run.mjs ricerche accesso` solo alcuni. Gruppi: `interfaccia` (108 libri, 2 dimensioni, chiaro/scuro), `ricerche` (Google giù, Apple Books, nuovo tentativo senza chiave, Verifica ricerche), `accesso` (link su iPhone, Google su computer, popup bloccato/chiuso, account vuoto), `sincronizzazione` (tre dispositivi), `aggiornamento` (avviso di nuova versione). `test/lib.mjs` avvia da solo il server dell'app (8765) e un finto Firestore (8766); `test/firebase-stub.js` sostituisce l'SDK di Firebase. Le ricerche esterne sono simulate: i test non dipendono dalla rete.
+- **Hook** in `.claude/settings.json` (script in `.claude/hooks/`, provabili a mano passando il JSON su stdin):
+  - `controlla-js.mjs`: dopo ogni modifica a un `.js` controlla la sintassi con `node --check` (errore → Claude lo corregge).
+  - `contrasto.mjs`: quando cambia `style.css` ricalcola il contrasto di `--ink`, `--muted`, `--title`, `--accent` su `--bg`/`--surface` e di `--accent-ink` su `--accent`, in chiaro e in scuro; sotto 4,5:1 segnala il problema (`--coral` è decorativo e non viene controllato). A mano: `node .claude/hooks/contrasto.mjs style.css`.
+  - `proteggi-file.mjs`: blocca le modifiche a `zxing.min.js` (libreria esterna) e `seed.json` (i 108 libri originali); si cambiano solo se Diego lo chiede.
+  - `test-prima-del-push.mjs`: prima di un `git push` verso `main` lancia `node test/run.mjs` e blocca la pubblicazione se un test fallisce (circa un minuto); i push di altri branch passano subito.
+  - `controlla-versione.mjs`: prima di chiudere il lavoro avvisa se sono cambiati file dell'app rispetto a `origin/main` ma non `VERSION` in `sw.js`.
+- **Skill**: `/pubblica` (versione, test, storia in questo file, commit e unione su `main`); `/acquisti` (conferme d'ordine Feltrinelli da Gmail → JSON degli acquisti arricchito, da importare da Altro → Backup).
+- **Subagent** `revisore-accessibilita`: contrasto dei colori, bersagli al tocco, etichette, movimento ridotto; solo resoconto.
+- **MCP** in `.mcp.json`: context7, per la documentazione aggiornata di Firebase e ZXing (va approvato al primo uso).
 
 ## Sincronizzazione con Firebase (in `cloud.js`, caricata solo al bisogno)
 - Progetto `mylibrary-2ea05`: Authentication (Google + link email), Firestore in eur3, regole per utente (`users/{uid}`).
@@ -67,6 +79,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **Strumenti di lavoro** (nessuna modifica all'app): test nel repository (`test/`), hook per sintassi, contrasto, file protetti, test prima di pubblicare e versione, skill `/pubblica` e `/acquisti`, revisore di accessibilità, context7.
 - **Nuovi caratteri e colori** (v44): Fraunces per i titoli al posto di Young Serif, font di sistema al posto di Libre Franklin e IBM Plex Mono (da 152 a 65 KB di font), titoli petrolio e dettagli corallo come l'icona.
 - **Link via email nell'app su iPhone** (v43): il popup di Google restava bloccato su «Apro l'accesso con Google…»; nell'app installata su iPhone si accede con il link via email.
 - **Accesso con Google su iPhone** (v42): popup al posto del redirect nell'app installata, avvisi chiari se l'accesso non si completa o se l'account non ha libri; «Accedi e sincronizza» in cima al menu Altro.
@@ -75,5 +88,5 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Il 503 e il 403 di Google sono due casi diversi: 403 = chiave o referer non ammessi (sistemare da Google Cloud); 503 = servizio momentaneamente giù (si risolve da solo).
 
 ## Altre idee in sospeso
-- Ricerca acquisti su Gmail "su richiesta" (funziona bene con le email Feltrinelli; Amazon poco utile). Eventuale attività pianificata settimanale in futuro.
+- Eventuale attività pianificata settimanale per `/acquisti` (oggi è su richiesta; Amazon poco utile perché le email non hanno ISBN).
 - Futura app iOS nativa (SwiftUI) partendo da questo modello dati.
