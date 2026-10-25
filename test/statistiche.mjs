@@ -129,7 +129,8 @@ async function statsPage(browser, books, day = '2026-10-25T12:00:00', opts = {})
   await p.waitForSelector('#main .stats');
   return p;
 }
-const noHScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+// Confronto con la larghezza impostata: sul telefono simulato Chromium allarga innerWidth quando la pagina deborda.
+const noHScroll = p => p.evaluate(w => document.documentElement.scrollWidth <= w && innerWidth <= w, p.viewportSize().width);
 
 async function pagina(browser) {
   let p = await statsPage(browser, FIXTURE);
@@ -201,6 +202,19 @@ async function racconto(browser) {
   const esc2 = !(await p.locator('#story').count()) && (await p.evaluate(() => document.activeElement?.dataset?.story)) === '2024';
   ok('Esc e ✕ chiudono e il focus torna alla scheda', esc1 && esc2, `${esc1} ${esc2}`);
   ok('racconto: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+
+  // Il focus resta nel racconto anche quando il pulsante che lo aveva si disattiva o sparisce (computer, frecce visibili)
+  p = await statsPage(browser, FIXTURE, undefined, { width: 1366, height: 860 });
+  await p.locator('button.story-card[data-story="2025"]').click(); await p.waitForSelector('#story');
+  await p.locator('#story .story-next').focus();
+  for (let i = 0; i < 10; i++) await p.keyboard.press('Enter');
+  const atLast = await p.$eval('#story .slide:not([hidden])', e => e.dataset.s);
+  await p.keyboard.press('Tab');
+  const in1 = await p.evaluate(() => !!document.activeElement.closest('#story'));
+  await p.locator('#story .story-done').focus(); await p.keyboard.press('ArrowLeft'); await p.keyboard.press('Tab');
+  const in2 = await p.evaluate(() => !!document.activeElement.closest('#story'));
+  ok('il focus non esce dal racconto', atLast === 'chiusura' && in1 && in2, `${atLast} ${in1} ${in2}`);
   await p.close2();
 
   p = await statsPage(browser, [...FIXTURE, { id: 'V', title: 'Ventisei', author: 'X', status: 'letto', finished: '2026-11-02', added: 1, rating: 0 }], '2027-01-05T10:00:00');

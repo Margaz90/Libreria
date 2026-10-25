@@ -168,6 +168,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .best > div:last-child { min-width: 0; }
 .best b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats-noyear { padding: 0 2px; }
+.panel .hint, .slide .sm, .slide .mid { overflow-wrap: anywhere; } /* titoli lunghi senza spazi: vanno a capo */
 
 /* Barra in alto: ricerca, ordine, filtri a pillole, vista dorsi/copertine. Resta in cima mentre scorri. */
 .toolbar { position: sticky; top: 0; z-index: 4; margin: -12px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) -10px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-left, 0px)) 8px;

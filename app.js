@@ -781,6 +781,8 @@
       slides.forEach((x, k) => x.hidden = k !== i);
       bars.forEach((x, k) => x.classList.toggle("on", k <= i));
       $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
+      const a = document.activeElement; // un pulsante disattivato o nascosto perderebbe il focus: lo riporto sul racconto
+      if (a && a !== el && el.contains(a) && (a.disabled || !a.offsetParent)) el.focus();
     };
     const close = () => {
       document.removeEventListener("keydown", keys, true); el.remove(); document.body.style.overflow = "";
@@ -795,7 +797,8 @@
         const f = [...el.querySelectorAll("button:not([disabled])")].filter(b => b.offsetParent);
         if (!f.length) return;
         const at = f.indexOf(document.activeElement);
-        if (e.shiftKey && at <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        if (at < 0) { e.preventDefault(); (e.shiftKey ? f[f.length - 1] : f[0]).focus(); }
+        else if (e.shiftKey && at === 0) { e.preventDefault(); f[f.length - 1].focus(); }
         else if (!e.shiftKey && at === f.length - 1) { e.preventDefault(); f[0].focus(); }
       }
     }
