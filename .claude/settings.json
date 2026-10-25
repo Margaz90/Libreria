@@ -16,7 +16,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git push*)",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-prima-del-push.mjs\"",
             "timeout": 300,
             "statusMessage": "Lancio i test prima di pubblicare…"
