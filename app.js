@@ -683,7 +683,7 @@
     const byYear = new Map(); read.forEach(x => { if (x.year) { if (!byYear.has(x.year)) byYear.set(x.year, []); byYear.get(x.year).push(x); } });
     const anni = [...byYear].sort((a, b) => b[0] - a[0]).map(([year, xs]) => {
       const best = xs.filter(x => x.rating).sort((a, b) => b.rating - a.rating || recent(a, b))[0];
-      return { year, count: xs.length, pages: sum(xs), avgRating: avg(xs), months: months(xs), topAuthor: top(xs, "author"), topGenre: top(xs, "genre"), best: best ? best.b : null };
+      return { year, count: xs.length, pages: sum(xs), avgRating: avg(xs), months: months(xs), topAuthor: top(xs, "author"), topGenre: top(xs, "genre"), best: best ? best.b : null, books: xs.sort(recent).map(x => x.b) };
     });
     return { sempre, anni, noYear: read.filter(x => !x.year).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
   }
@@ -748,6 +748,71 @@
     </div>`;
   }
 
+  // Racconto a schermo intero di un anno appena concluso: schermate da sfogliare, senza avanzamento automatico.
+  function openStory(year) {
+    const now = new Date(), a = computeStats(state.books, now).anni.find(x => x.year === year);
+    if (!a) return;
+    const Y = computeStats(a.books, now).sempre, opener = document.activeElement;
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    const slide = (key, body) => `<section class="slide" data-s="${key}">${body}</section>`;
+    const list = [slide("copertina", `<p class="kick">Il tuo anno da lettore</p><p class="big">${year}</p><p class="mid">Ecco com'è andata.</p><p class="sm">Tocca a destra per continuare</p>`),
+      slide("numeri", `<p class="kick">I numeri</p><p class="big">${num(a.count)}</p><p class="mid">${a.count === 1 ? "libro letto" : "libri letti"}</p>${a.pages ? `<p class="big small">${num(a.pages)}</p><p class="mid">pagine</p><p class="sm">In media ${num(Math.max(1, Math.round(a.pages / (leap ? 366 : 365))))} pagine al giorno, tutti i giorni.</p>` : ""}`)];
+    if (a.count >= 3) {
+      const D = Y.days, topM = a.months.indexOf(Math.max(...a.months));
+      if (Y.monthsCount) list.push(slide("mese", `<p class="kick">Il mese più letto</p><p class="big small">${MONTHS[topM][0].toUpperCase() + MONTHS[topM].slice(1)}</p><p class="mid">${plural(a.months[topM], "libro finito", "libri finiti")}</p>${monthsHTML(a.months)}`));
+      if (D) list.push(slide("tempo", `<p class="kick">Tempo di lettura</p><p class="big">${D.avg}</p><p class="mid">${D.avg === 1 ? "giorno" : "giorni"} in media per libro</p><p class="sm">Il più veloce: ${esc(D.fastest.book.title)}, in ${plural(D.fastest.days, "giorno", "giorni")}.</p>`));
+      if (a.topAuthor) list.push(slide("autore", `<p class="kick">L'autore dell'anno</p><p class="mid name">${esc(a.topAuthor.name)}</p><p class="sm">${plural(a.topAuthor.count, "libro letto", "libri letti")}</p>`));
+      if (a.topGenre) list.push(slide("genere", `<p class="kick">Il genere dell'anno</p><p class="mid name">${esc(a.topGenre.name)}</p><p class="sm">${plural(a.topGenre.count, "libro", "libri")} su ${num(a.count)}</p>`));
+      if (a.best) list.push(slide("preferito", `<p class="kick">Il tuo preferito</p><div class="fav">${coverHTML(a.best, 300)}<div><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars">${starStr(a.best.rating)}</p></div></div>`));
+      if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
+    }
+    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><div class="story-covers">${a.books.slice(0, 12).map(b => coverHTML(b, 160)).join("")}</div><button class="story-done" type="button">Chiudi</button>`));
+    const el = document.createElement("div");
+    el.id = "story"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Il tuo ${year}`); el.tabIndex = -1;
+    el.innerHTML = `<div class="story-bars" aria-hidden="true">${list.map(() => "<i></i>").join("")}</div>
+      <button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button>
+      <div class="story-body">${list.join("")}</div>
+      <button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><button class="story-next" type="button" aria-label="Schermata successiva">›</button>`;
+    document.body.append(el); document.body.style.overflow = "hidden";
+    const slides = [...el.querySelectorAll(".slide")], bars = [...el.querySelectorAll(".story-bars i")];
+    let i = 0;
+    const show = n => {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach((x, k) => x.hidden = k !== i);
+      bars.forEach((x, k) => x.classList.toggle("on", k <= i));
+      $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
+    };
+    const close = () => {
+      document.removeEventListener("keydown", keys, true); el.remove(); document.body.style.overflow = "";
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+      else { const c = document.querySelector(`.story-card[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
+    };
+    function keys(e) {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); show(i + 1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1); }
+      else if (e.key === "Tab") { // il focus resta nel racconto
+        const f = [...el.querySelectorAll("button:not([disabled])")].filter(b => b.offsetParent);
+        if (!f.length) return;
+        const at = f.indexOf(document.activeElement);
+        if (e.shiftKey && at <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && at === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    }
+    document.addEventListener("keydown", keys, true);
+    el.addEventListener("click", e => {
+      if (e.target.closest(".story-close, .story-done")) return close();
+      if (e.target.closest(".story-prev")) return show(i - 1);
+      if (e.target.closest(".story-next")) return show(i + 1);
+      const r = el.getBoundingClientRect();
+      show(e.clientX < r.left + r.width / 3 ? i - 1 : i + 1); // tocco: terzo sinistro indietro, il resto avanti
+    });
+    let x0 = null; // scorrimento orizzontale
+    el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; }, { passive: true });
+    el.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) { e.preventDefault(); show(i + (dx < 0 ? 1 : -1)); } });
+    show(0); el.focus();
+  }
+
   // Menu: filtri a pillole (telefono), scaffali nella colonna laterale (computer), sezione attiva, vista dorsi/copertine.
   function renderNav() {
     const n = { tutti: state.books.length }; for (const b of state.books) n[b.status] = (n[b.status] || 0) + 1;
@@ -773,6 +838,7 @@
     wireMain(main);
   }
   function wireMain(root) {
+    root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;
@@ -1670,7 +1736,7 @@
 
   // Scorciatoie da tastiera (su computer): / cerca, N nuovo libro, 1 e 2 per le sezioni
   document.addEventListener("keydown", e => {
-    if ($("#scrim") || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if ($("#scrim") || $("#story") || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
     if (e.key === "/") { e.preventDefault(); goSearch(); }
     else if (e.key === "n" || e.key === "N") { e.preventDefault(); openAdd(); }
     else if (e.key === "1") setView("libreria");

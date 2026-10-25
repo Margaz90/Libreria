@@ -167,8 +167,50 @@ async function pagina(browser) {
   }
 }
 
+async function racconto(browser) {
+  let p = await statsPage(browser, FIXTURE);
+  const cur = () => p.$eval('#story .slide:not([hidden])', e => e.dataset.s).catch(() => '');
+  const open = async y => { await p.locator(`button.story-card[data-story="${y}"]`).click(); await p.waitForSelector('#story[role="dialog"][aria-modal="true"]', { timeout: 3000 }); };
+  await open(2025);
+  const ids = await p.$$eval('#story .slide', els => els.map(e => e.dataset.s).join());
+  ok('2025: 9 schermate', ids === 'copertina,numeri,mese,tempo,autore,genere,preferito,voti,chiusura', ids);
+  ok('una schermata visibile alla volta', (await p.locator('#story .slide:not([hidden])').count()) === 1);
+  const c0 = await cur();
+  await p.keyboard.press('ArrowRight'); const c1 = await cur();
+  await p.locator('#story .story-next').dispatchEvent('click'); const c2 = await cur(); // sul telefono le frecce sono nascoste
+  await p.keyboard.press('ArrowLeft'); const c3 = await cur();
+  ok('avanti con → e con la freccia, indietro con ←', c0 === 'copertina' && c1 === 'numeri' && c2 === 'mese' && c3 === 'numeri', [c0, c1, c2, c3].join());
+  ok('trattini accesi fino alla schermata corrente', (await p.locator('#story .story-bars i.on').count()) === 2);
+  await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowLeft'); const first = await cur();
+  for (let i = 0; i < 12; i++) await p.keyboard.press('ArrowRight');
+  const last = await cur();
+  ok('oltre l\'ultima resta su chiusura, prima della prima resta su copertina', first === 'copertina' && last === 'chiusura', first + ' ' + last);
+  const box = await p.locator('#story').boundingBox();
+  await p.mouse.click(box.x + 20, box.y + box.height / 2); const tl = await cur();
+  await p.mouse.click(box.x + box.width - 20, box.y + box.height / 2); const tr = await cur();
+  ok('tocco a sinistra indietro, a destra avanti', tl === 'voti' && tr === 'chiusura', tl + ' ' + tr);
+  ok('racconto: niente scorrimento a 390 px', await noHScroll(p));
+  await p.waitForTimeout(300); await p.screenshot({ path: '/tmp/racconto-chiusura.png' });
+  await p.keyboard.press('Escape');
+  const esc1 = !(await p.locator('#story').count()) && (await p.evaluate(() => document.activeElement?.dataset?.story)) === '2025';
+  await open(2024);
+  const ids24 = await p.$$eval('#story .slide', els => els.map(e => e.dataset.s).join());
+  ok('2024: versione ridotta, 3 schermate', ids24 === 'copertina,numeri,chiusura', ids24);
+  await p.waitForTimeout(300); await p.screenshot({ path: '/tmp/racconto-copertina.png' });
+  await p.locator('#story .story-close').click();
+  const esc2 = !(await p.locator('#story').count()) && (await p.evaluate(() => document.activeElement?.dataset?.story)) === '2024';
+  ok('Esc e ✕ chiudono e il focus torna alla scheda', esc1 && esc2, `${esc1} ${esc2}`);
+  ok('racconto: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+
+  p = await statsPage(browser, [...FIXTURE, { id: 'V', title: 'Ventisei', author: 'X', status: 'letto', finished: '2026-11-02', added: 1, rating: 0 }], '2027-01-05T10:00:00');
+  ok('racconti rolling al 2027-01-05: 2026 e 2025', (await p.$$eval('button.story-card', els => els.map(e => e.dataset.story).join())) === '2026,2025');
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await scheda(browser);
   await calcoli(browser);
   await pagina(browser);
+  await racconto(browser);
 }

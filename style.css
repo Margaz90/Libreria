@@ -518,3 +518,44 @@ html { scroll-behavior: smooth; }
   .dock, .toolbar { transition: none; }
   .peek, .seg-ink { transition: none; }
 }
+
+/* Racconto dell'anno: sempre petrolio scuro con testo crema, anche nel tema chiaro */
+#story { position: fixed; inset: 0; z-index: 60; color: #F4EAD8; background: radial-gradient(120% 90% at 30% 10%, #35504F, #0F1818 70%); display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 40px) 24px calc(env(safe-area-inset-bottom) + 28px); overflow: hidden; outline: none; user-select: none; -webkit-user-select: none; }
+#story::after { content: ""; position: absolute; right: 64px; top: 0; width: 18px; height: 60px; background: linear-gradient(90deg, #F58475, #F06A5C 45%, #C4473B); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); pointer-events: none; opacity: .9; }
+.story-bars { position: absolute; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 96px; display: flex; gap: 4px; }
+.story-bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(244, 234, 216, .3); }
+.story-bars i.on { background: #F4EAD8; }
+.story-close { position: absolute; top: calc(env(safe-area-inset-top) + 2px); right: 8px; width: 44px; height: 44px; border: 0; background: none; color: #F4EAD8; font-size: 20px; cursor: pointer; z-index: 2; }
+.story-body { flex: 1; display: flex; min-height: 0; width: 100%; max-width: 520px; margin: 0 auto; }
+.slide { flex: 1; display: flex; flex-direction: column; min-width: 0; animation: storyIn .28s ease; }
+.slide[hidden] { display: none; }
+@keyframes storyIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .slide { animation: none; } }
+.slide p { margin: 0; }
+.slide .kick { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #F7A194; margin-top: 18px; }
+.slide .big { font-family: var(--display); font-weight: 600; font-size: 72px; line-height: 1; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
+.slide .big.small { font-size: 48px; margin-top: 22px; }
+.slide .mid { font-family: var(--display); font-weight: 500; font-size: 26px; line-height: 1.2; }
+.slide .name { margin-top: 16px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.slide .sm { font-size: 15px; opacity: .85; margin-top: 10px; }
+.slide .stars { color: #F06A5C; margin-top: 8px; }
+.slide .months { height: 140px; margin-top: auto; border-color: rgba(244, 234, 216, .25); }
+.slide .months i { background: rgba(240, 106, 92, .55); } .slide .months i.top { background: #F06A5C; }
+.slide .mlab { color: rgba(244, 234, 216, .7); margin-bottom: 30px; }
+.slide .fav { display: flex; gap: 16px; align-items: center; margin-top: 24px; min-width: 0; }
+.slide .fav .cover { width: 110px; flex: none; }
+.slide .fav > div { min-width: 0; }
+.story-votes { margin-top: auto; margin-bottom: 30px; display: flex; flex-direction: column; gap: 10px; }
+.story-votes .hbar { grid-template-columns: 80px 1fr 30px; font-size: 14px; }
+.story-votes .ht { background: rgba(244, 234, 216, .18); }
+.story-votes i, .story-votes i.top { background: #F06A5C; }
+.story-votes em { color: #F4EAD8; }
+.story-covers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 18px; }
+.story-covers .cover { padding: 6px; }
+.story-covers .cover .ct { font-size: 10px; } .story-covers .cover .ca, .story-covers .cover::after { display: none; }
+.story-done { margin-top: auto; align-self: center; border: 0; background: #F06A5C; color: #1A0E0C; font: 600 15px var(--ui, inherit); padding: 12px 30px; border-radius: 12px; cursor: pointer; }
+.story-prev, .story-next { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: 12px; background: rgba(244, 234, 216, .1); color: #F4EAD8; font-size: 28px; cursor: pointer; display: none; }
+.story-prev { left: 16px; } .story-next { right: 16px; }
+.story-prev:disabled, .story-next:disabled { opacity: .3; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .story-prev, .story-next { display: block; } }
+#story button:focus-visible { outline: 3px solid #F06A5C; outline-offset: 2px; }
