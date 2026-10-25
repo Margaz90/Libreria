@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/controlla-js.mjs\"",
+            "timeout": 20,
+            "statusMessage": "Controllo la sintassi…"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/controlla-versione.mjs\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
