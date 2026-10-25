@@ -48,7 +48,10 @@ button { cursor: pointer; }
 
 header.top { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; }
 .exlibris { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-h1 { font-family: var(--display); font-weight: var(--dw); font-size: clamp(30px, 7vw, 44px); line-height: 1.05; letter-spacing: -.01em; margin: 0; text-wrap: balance; color: var(--title); }
+h1 { font-family: var(--display); font-weight: var(--dw); font-size: clamp(30px, 7vw, 44px); line-height: 1.05; letter-spacing: -.01em; margin: 0; white-space: nowrap; color: var(--title); }
+/* Segnalibro tra «My» e «Library»: scende sotto la riga, con la tacca a V; misure in em, segue la grandezza del titolo */
+h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 .07em; vertical-align: -.28em;
+  background: linear-gradient(90deg, #F58475, var(--coral) 45%, #C4473B); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
 .tally { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .tally b { color: var(--ink); font-weight: 600; }
 
