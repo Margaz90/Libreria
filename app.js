@@ -621,6 +621,7 @@
     // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
     if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) nb.finished = today();
     if (st === "in-lettura" && !nb.started) nb.started = today();
+    if (st === "in-lettura") delete nb.finishedYear; // si rilegge: l'anno vecchio non vale più, come nella scheda
     if (st === "letto" && nb.pages) nb.page = nb.pages;
     upsert(nb);
     toast(`Spostato in ${STATUS[st]}`);
@@ -685,7 +686,7 @@
       const best = xs.filter(x => x.rating).sort((a, b) => b.rating - a.rating || recent(a, b))[0];
       return { year, count: xs.length, pages: sum(xs), avgRating: avg(xs), months: months(xs), topAuthor: top(xs, "author"), topGenre: top(xs, "genre"), best: best ? best.b : null, books: xs.sort(recent).map(x => x.b) };
     });
-    return { sempre, anni, noYear: read.filter(x => !x.year).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
+    return { sempre, anni, noYear: read.filter(x => !x.year && !(x.b.finished > iso)).length, future: read.filter(x => !x.year && x.b.finished > iso).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
   }
   window.libreriaStats = Object.freeze({ compute: computeStats });
 
@@ -707,7 +708,7 @@
     const panel = (key, title, body) => `<section class="panel" data-panel="${key}"><h3>${title}</h3>${body}</section>`;
     const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
     const maxR = Math.max(...Object.values(S.ratings));
-    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
+    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
       `<p class="hint">${S.unrated ? plural(S.unrated, "libro senza voto", "libri senza voto") + "." : ""}${S.fiveStars.length ? ` 5 stelle: ${S.fiveStars.slice(0, 4).map(b => esc(b.title)).join(", ")}${S.fiveStars.length > 4 ? ` e altri ${S.fiveStars.length - 4}` : ""}.` : ""}</p>`;
     const D = S.days;
     const tempo = D ? `<div class="trio"><div><b>${D.avg}</b><span>giorni in media</span></div>
@@ -744,6 +745,7 @@
         ${panel("generi", "Generi", generi)}
       </div>
       ${years ? `<h2 class="stats-group">Anno per anno</h2><div class="years">${years}</div>` : ""}
+      ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
       ${st.noYear ? `<p class="hint stats-noyear">${st.noYear === 1 ? "1 libro letto non ha un anno" : `${num(st.noYear)} libri letti non hanno un anno`}: aggiungilo dalla scheda del libro («Finito il» oppure solo l'anno).</p>` : ""}
     </div>`;
   }
@@ -764,14 +766,14 @@
       if (a.topAuthor) list.push(slide("autore", `<p class="kick">L'autore dell'anno</p><p class="mid name">${esc(a.topAuthor.name)}</p><p class="sm">${plural(a.topAuthor.count, "libro letto", "libri letti")}</p>`));
       if (a.topGenre) list.push(slide("genere", `<p class="kick">Il genere dell'anno</p><p class="mid name">${esc(a.topGenre.name)}</p><p class="sm">${plural(a.topGenre.count, "libro", "libri")} su ${num(a.count)}</p>`));
       if (a.best) list.push(slide("preferito", `<p class="kick">Il tuo preferito</p><div class="fav">${coverHTML(a.best, 300)}<div><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars">${starStr(a.best.rating)}</p></div></div>`));
-      if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
+      if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
     }
     list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><div class="story-covers">${a.books.slice(0, 12).map(b => coverHTML(b, 160)).join("")}</div><button class="story-done" type="button">Chiudi</button>`));
     const el = document.createElement("div");
     el.id = "story"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Il tuo ${year}`); el.tabIndex = -1;
     el.innerHTML = `<div class="story-bars" aria-hidden="true">${list.map(() => "<i></i>").join("")}</div>
       <button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button>
-      <div class="story-body">${list.join("")}</div>
+      <div class="story-body">${list.join("")}</div><p class="sr story-live" aria-live="polite"></p>
       <button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><button class="story-next" type="button" aria-label="Schermata successiva">›</button>`;
     document.body.append(el); document.body.style.overflow = "hidden";
     const slides = [...el.querySelectorAll(".slide")], bars = [...el.querySelectorAll(".story-bars i")];
@@ -780,6 +782,8 @@
       i = Math.max(0, Math.min(slides.length - 1, n));
       slides.forEach((x, k) => x.hidden = k !== i);
       bars.forEach((x, k) => x.classList.toggle("on", k <= i));
+      const k = slides[i].querySelector(".kick"), body = slides[i].textContent.replace(/\s+/g, " ").trim();
+      $(".story-live", el).textContent = `Schermata ${i + 1} di ${slides.length}: ${k ? k.textContent + ". " + body.slice(k.textContent.length).trim() : body}`.slice(0, 240);
       $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
       const a = document.activeElement; // un pulsante disattivato o nascosto perderebbe il focus: lo riporto sul racconto
       if (a && a !== el && el.contains(a) && (a.disabled || !a.offsetParent)) el.focus();
@@ -1012,7 +1016,7 @@
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
         <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"></div>
       </div>
-      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019"></div>
+      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
       <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
@@ -1048,6 +1052,16 @@
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
     });
+  }
+  // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
+  function badYear(sheet) {
+    const row = $("#f-year-row", sheet), inp = $("#f-year", sheet), err = $("#f-year-err", sheet);
+    if (!row || !inp) return false;
+    const v = inp.value.trim(), y = Number(v), max = new Date().getFullYear();
+    const bad = !row.hidden && v !== "" && !(Number.isInteger(y) && y >= 1900 && y <= max);
+    err.hidden = !bad; err.textContent = bad ? `Scrivi un anno tra 1900 e ${max}, oppure lascia vuoto.` : "";
+    if (bad) { inp.setAttribute("aria-invalid", "true"); inp.focus(); } else inp.removeAttribute("aria-invalid");
+    return bad;
   }
   function readReading(sheet, b) {
     if (!$("#f-status", sheet)) return; // un libro nella lista dei desideri non ha campi di lettura
@@ -1304,7 +1318,7 @@
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
     $("#s-close", sheet).onclick = dismissSheet;
-    $("#s-save", sheet).onclick = () => { readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
+    $("#s-save", sheet).onclick = () => { if (badYear(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
     const del = $("#s-del", sheet);
@@ -1366,6 +1380,7 @@
     if (!scan) setTimeout(() => $("#s-q", sheet).focus(), 50);
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
+      if (badYear(sheet)) return;
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       readReading(sheet, b);
