@@ -689,27 +689,62 @@
   }
   window.libreriaStats = Object.freeze({ compute: computeStats });
 
-  function renderStats(list) {
-    const read = list.filter(b => b.status === "letto");
-    const pages = read.reduce((s, b) => s + (Number(b.pages) || 0), 0);
-    const rated = read.filter(b => b.rating > 0);
-    const avg = rated.length ? rated.reduce((s, b) => s + b.rating, 0) / rated.length : 0;
-    const years = {}; read.forEach(b => { const y = yearOf(b.finished); if (y) years[y] = (years[y] || 0) + 1; });
-    const ys = Object.keys(years).map(Number).sort((a, b) => a - b).slice(-8);
-    const max = Math.max(1, ...ys.map(y => years[y]));
-    const count = key => { const m = {}; read.forEach(b => { if (b[key]) m[b[key]] = (m[b[key]] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6); };
-    const undated = read.filter(b => !b.finished).length;
-    const bars = ys.length ? `<div class="bars">${ys.map(y => `<div class="bar"><em>${years[y]}</em><i style="height:${Math.round(years[y] / max * 100)}%"></i></div>`).join("")}</div>
-      <div class="bar-labels">${ys.map(y => `<span>${y}</span>`).join("")}</div>` : "";
-    const li = rows => rows.map(([a, n]) => `<li><span>${esc(a)}</span><span>${n}</span></li>`).join("") || `<li><span class="hint">Ancora nessun dato</span></li>`;
+  const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+  const num = n => Number(n).toLocaleString("it-IT");
+  const dec = n => n == null ? "–" : n.toFixed(1).replace(".", ",");
+  const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
+  // Barra orizzontale con il numero accanto; il valore più alto in --accent.
+  const hbar = (label, n, max, title = "") => `<div class="hbar"><span class="hl"${title ? ` title="${esc(title)}"` : ""}>${label}</span><span class="ht"><i class="${n === max ? "top" : ""}" style="width:${max ? Math.round(n / max * 100) : 0}%"></i></span><em>${num(n)}</em></div>`;
+  function monthsHTML(m) {
+    const max = Math.max(...m);
+    return `<div class="months" aria-hidden="true">${m.map(n => `<i class="${n && n === max ? "top" : ""}" style="height:${max ? Math.round(n / max * 100) : 0}%"></i>`).join("")}</div>
+      <div class="mlab" aria-hidden="true">${MONTHS.map(x => `<span>${x[0].toUpperCase()}</span>`).join("")}</div>
+      <p class="sr">${m.map((n, i) => n ? `${MONTHS[i]} ${n}` : "").filter(Boolean).join(", ")}</p>`;
+  }
+  function renderStats(st) {
+    const S = st.sempre;
+    if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
+    const panel = (key, title, body) => `<section class="panel" data-panel="${key}"><h3>${title}</h3>${body}</section>`;
+    const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
+    const maxR = Math.max(...Object.values(S.ratings));
+    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
+      `<p class="hint">${S.unrated ? plural(S.unrated, "libro senza voto", "libri senza voto") + "." : ""}${S.fiveStars.length ? ` 5 stelle: ${S.fiveStars.slice(0, 4).map(b => esc(b.title)).join(", ")}${S.fiveStars.length > 4 ? ` e altri ${S.fiveStars.length - 4}` : ""}.` : ""}</p>`;
+    const D = S.days;
+    const tempo = D ? `<div class="trio"><div><b>${D.avg}</b><span>giorni in media</span></div>
+        <div><b>${D.fastest.days}</b><span>il più veloce · ${esc(D.fastest.book.title)}</span></div>
+        <div><b>${D.slowest.days}</b><span>il più lento · ${esc(D.slowest.book.title)}</span></div></div>
+        <p class="hint">Su ${plural(D.count, "libro", "libri")} con data di inizio e di fine.</p>`
+      : `<p class="hint">Aggiungi «Iniziato il» e «Finito il» nella scheda dei libri per sapere quanto tempo ti serve per finirne uno.</p>`;
+    const topM = S.months.indexOf(Math.max(...S.months));
+    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">Leggi di più a ${MONTHS[topM]}. Su ${plural(S.monthsCount, "libro", "libri")} con data di fine.</p>`
+      : `<p class="hint">Aggiungi «Finito il» nella scheda dei libri per vedere in quali mesi leggi di più.</p>`;
+    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><span title="${esc(a.name)}">${esc(a.name)}</span><span>${plural(a.count, "libro", "libri")}${a.pages ? ` · ${num(a.pages)} pp` : ""}${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></li>`).join("")}</ul>`
+      : `<p class="hint">Aggiungi l'autore nella scheda dei libri.</p>`;
+    const maxG = S.genres.length ? S.genres[0].count : 0;
+    const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
+    const years = st.anni.map((a, i) => `<details class="year" data-year="${a.year}"${i ? "" : " open"}>
+        <summary><b>${a.year}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></summary>
+        <div class="in">${a.months.some(Boolean) ? monthsHTML(a.months) : ""}
+          ${a.topAuthor || a.topGenre ? `<div class="pair">${a.topAuthor ? `<div><span class="label">Autore dell'anno</span><b>${esc(a.topAuthor.name)}</b><span>${plural(a.topAuthor.count, "libro", "libri")}</span></div>` : ""}${a.topGenre ? `<div><span class="label">Genere dell'anno</span><b>${esc(a.topGenre.name)}</b><span>${plural(a.topGenre.count, "libro", "libri")}</span></div>` : ""}</div>` : ""}
+          ${a.best ? `<div class="best">${coverHTML(a.best, 120)}<div><span class="label">Il preferito</span><b>${esc(a.best.title)}</b><span class="stars">${starStr(a.best.rating)}</span></div></div>` : ""}
+        </div></details>`).join("");
     return `<div class="stats">
-      <section class="panel"><h3>In sintesi</h3><div class="figures">
-        <div class="fig"><b>${read.length}</b><span>libri letti</span></div>
-        <div class="fig"><b>${pages >= 10000 ? Math.round(pages / 1000) + "k" : pages.toLocaleString("it-IT")}</b><span>pagine</span></div>
-        <div class="fig"><b>${avg ? avg.toFixed(1).replace(".", ",") : "–"}</b><span>voto medio</span></div></div></section>
-      <section class="panel"><h3>Libri finiti per anno</h3>${bars}${undated ? `<p class="hint">${undated} libri letti non hanno una data di fine: aggiungila dalla scheda del libro per vederli qui.</p>` : ""}</section>
-      <section class="panel"><h3>Autori più letti</h3><ul class="list">${li(count("author"))}</ul></section>
-      <section class="panel"><h3>Generi</h3><ul class="list">${li(count("genre"))}</ul></section>
+      ${stories ? `<div class="stories">${stories}</div>` : ""}
+      <h2 class="stats-group">Sempre</h2>
+      <div class="stats-grid">
+        ${panel("sintesi", "In sintesi", `<div class="figures">
+          <div class="fig"><b>${num(S.read)}</b><span>${S.read === 1 ? "libro letto" : "libri letti"}</span></div>
+          <div class="fig"><b>${S.pages >= 10000 ? Math.round(S.pages / 1000) + "k" : num(S.pages)}</b><span>pagine</span></div>
+          <div class="fig"><b>${dec(S.avgRating)}</b><span>voto medio</span></div>
+          <div class="fig"><b>${D ? D.avg : "–"}</b><span>giorni per libro</span></div></div>`)}
+        ${panel("voti", "Voti", voti)}
+        ${panel("tempo", "Tempo di lettura", tempo)}
+        ${panel("mesi", "Mesi", mesi)}
+        ${panel("autori", "Autori", autori)}
+        ${panel("generi", "Generi", generi)}
+      </div>
+      ${years ? `<h2 class="stats-group">Anno per anno</h2><div class="years">${years}</div>` : ""}
+      ${st.noYear ? `<p class="hint stats-noyear">${st.noYear === 1 ? "1 libro letto non ha un anno" : `${num(st.noYear)} libri letti non hanno un anno`}: aggiungilo dalla scheda del libro («Finito il» oppure solo l'anno).</p>` : ""}
     </div>`;
   }
 
@@ -728,7 +763,7 @@
   function render() {
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
-    if (state.view === "stats") main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
+    if (state.view === "stats") main.innerHTML = renderStats(computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves

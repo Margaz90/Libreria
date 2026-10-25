@@ -120,7 +120,55 @@ async function calcoli(browser) {
   await p.close2();
 }
 
+// Apre la sezione Statistiche con i libri dati e l'orologio fermo al giorno indicato.
+async function statsPage(browser, books, day = '2026-10-25T12:00:00', opts = {}) {
+  const p = await newPage(browser, opts);
+  await p.clock.setFixedTime(new Date(day));
+  await load(p, books);
+  await p.locator('[data-view="stats"]:visible').first().click();
+  await p.waitForSelector('#main .stats');
+  return p;
+}
+const noHScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+
+async function pagina(browser) {
+  let p = await statsPage(browser, FIXTURE);
+  const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
+  ok('due schede racconto 2025 e 2024', (await p.$$eval('button.story-card', els => els.map(e => e.dataset.story).join())) === '2025,2024');
+  const panels = await p.$$eval('[data-panel]', els => els.map(e => e.dataset.panel).join());
+  ok('pannelli di Sempre presenti', panels === 'sintesi,voti,tempo,mesi,autori,generi', panels);
+  const sint = await txt('[data-panel="sintesi"]');
+  ok('sintesi mostra 8 libri e 40 giorni', /\b8\b[\s\S]*libri letti/.test(sint) && /\b40\b[\s\S]*giorni/.test(sint), sint.replace(/\n/g, ' '));
+  ok('anni 2025, 2024, 2019, il primo aperto', (await p.$$eval('details.year', els => els.map(e => e.dataset.year + (e.open ? '*' : '')).join())) === '2025*,2024,2019');
+  ok('nota libri senza anno: 2', /2 libri letti non hanno un anno/.test(await txt('.stats-noyear')));
+  ok('barre con il numero accanto (Generi: Thriller 3)', /Thriller\s*3/.test(await txt('[data-panel="generi"]')));
+  await p.close2();
+
+  p = await statsPage(browser, FIXTURE.filter(b => b.status !== 'letto'));
+  ok('libreria senza letti: messaggio', (await p.locator('.stats-empty').innerText().catch(() => '')).trim() === 'Quando segnerai un libro come Letto, qui compariranno le tue statistiche' && !(await p.locator('[data-panel]').count()));
+  await p.close2();
+
+  p = await statsPage(browser, FIXTURE.filter(b => b.status === 'letto').map(({ started, finished, finishedYear, ...b }) => b));
+  ok('senza date: Mesi e Tempo spiegano cosa serve', !!(await p.locator('[data-panel="mesi"] .hint').count()) && !!(await p.locator('[data-panel="tempo"] .hint').count()) && !(await p.locator('[data-panel="mesi"] .months').count()) && !(await p.locator('details.year').count()));
+  await p.close2();
+
+  p = await statsPage(browser, [...FIXTURE, { id: 'Lungo', title: 'T'.repeat(150), author: 'Autore '.repeat(18), genre: 'Genere'.repeat(20), pages: 100, rating: 5, status: 'letto', finished: '2025-09-01', added: 1 }]);
+  ok('titoli lunghi: niente scorrimento orizzontale', await noHScroll(p));
+  await p.close2();
+
+  for (const [width, height] of [[390, 844], [1366, 860]]) for (const dark of [false, true]) {
+    const tag = `pagina ${width}px ${dark ? 'scuro' : 'chiaro'}`;
+    p = await statsPage(browser, FIXTURE, undefined, { width, height, dark });
+    await p.waitForTimeout(600);
+    await p.screenshot({ path: `/tmp/statistiche-${width}-${dark ? 'scuro' : 'chiaro'}.png`, fullPage: true });
+    ok(`${tag}: niente scorrimento orizzontale`, await noHScroll(p));
+    ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
+    await p.close2();
+  }
+}
+
 export default async function ({ browser }) {
   await scheda(browser);
   await calcoli(browser);
+  await pagina(browser);
 }
