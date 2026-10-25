@@ -13,7 +13,42 @@ const save = async p => { await p.locator('#s-save').click(); await p.waitForTim
 const val = (p, sel) => p.inputValue(sel);
 const errText = p => p.locator('#f-date-err').innerText({ timeout: 800 }).catch(() => '');
 
+// Segnale (pallino rosso con «!») sui libri letti con il periodo di lettura da aggiornare.
+async function segnale(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, rating: 0 };
+  await load(p, [
+    { ...base, id: 'g1', title: 'Senza date', author: 'A', status: 'letto', pages: 200 },
+    { ...base, id: 'g2', title: 'Con fine', author: 'B', status: 'letto', pages: 200, finished: '2025-03-10' },
+    { ...base, id: 'g3', title: 'Solo anno', author: 'C', status: 'letto', pages: 200, finishedYear: 2019 },
+    { ...base, id: 'g4', title: 'In lettura', author: 'D', status: 'in-lettura', pages: 200, started: iso() },
+    { ...base, id: 'g5', title: 'Da leggere', author: 'E', status: 'da-leggere', pages: 200 },
+    { ...base, id: 'g6', title: 'Date storte', author: 'F', status: 'letto', pages: 200, started: '2025-05-10', finished: '2025-05-01' },
+    { ...base, id: 'g7', title: 'Senza pagine', author: 'G', status: 'letto' },
+  ]);
+  const has = id => p.locator(`#main [data-id="${id}"] .badge`).count().then(n => n > 0);
+  const flags = async () => (await Promise.all(['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'].map(has))).map(Number).join('');
+  ok('segnale sui dorsi: letti senza data di fine/anno o con date storte', (await flags()) === '1000011', await flags());
+  const bb = await p.locator('#main [data-id="g1"] .badge').boundingBox(), sb = await p.locator('#main [data-id="g1"]').boundingBox();
+  ok('segnale sul dorso: sporge di circa 2 mm sopra il bordo del libro', sb.y - bb.y >= 6 && sb.y - bb.y <= 10 && bb.height >= 16, `${sb.y - bb.y} px`);
+  ok('segnale letto da VoiceOver nel nome del libro', /periodo di lettura da aggiornare/.test(await p.getAttribute('#main [data-id="g1"]', 'aria-label')) && !/aggiornare/.test(await p.getAttribute('#main [data-id="g2"]', 'aria-label')));
+  await p.locator('.viewsw [data-mode="copertine"]:visible').first().click(); await p.waitForTimeout(300);
+  ok('segnale anche sulle copertine', (await flags()) === '1000011', await flags());
+  await p.locator('.viewsw [data-mode="dorsi"]:visible').first().click(); await p.waitForTimeout(300);
+  await openBook(p, 'g1');
+  ok('scheda: avviso con il motivo', /da aggiornare/.test(await p.locator('#s-stale').innerText().catch(() => '')));
+  await p.fill('#f-finished', '2025-06-01'); await save(p);
+  ok('aggiornata la data di fine: il segnale scompare', !(await has('g1')));
+  await openBook(p, 'g6'); await p.fill('#f-started', '2025-04-20'); await save(p);
+  ok('date storte corrette: il segnale scompare', !(await has('g6')));
+  await openBook(p, 'g7'); await p.fill('#f-year', '2018'); await save(p);
+  ok('solo l\'anno: il segnale scompare', !(await has('g7')));
+  ok('segnale: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w && innerWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
+  await segnale(browser);
   const p = await newPage(browser);
   const base = { added: 1, rating: 0 };
   await load(p, [
