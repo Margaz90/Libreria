@@ -29,6 +29,8 @@ async function segnale(browser) {
   const has = id => p.locator(`#main [data-id="${id}"] .badge`).count().then(n => n > 0);
   const flags = async () => (await Promise.all(['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'].map(has))).map(Number).join('');
   ok('segnale sui dorsi: letti senza data di fine/anno o con date storte', (await flags()) === '1000011', await flags());
+  const bb = await p.locator('#main [data-id="g1"] .badge').boundingBox(), sb = await p.locator('#main [data-id="g1"]').boundingBox();
+  ok('segnale sul dorso: sporge di circa 2 mm sopra il bordo del libro', sb.y - bb.y >= 6 && sb.y - bb.y <= 10 && bb.height >= 16, `${sb.y - bb.y} px`);
   ok('segnale letto da VoiceOver nel nome del libro', /periodo di lettura da aggiornare/.test(await p.getAttribute('#main [data-id="g1"]', 'aria-label')) && !/aggiornare/.test(await p.getAttribute('#main [data-id="g2"]', 'aria-label')));
   await p.locator('.viewsw [data-mode="copertine"]:visible').first().click(); await p.waitForTimeout(300);
   ok('segnale anche sulle copertine', (await flags()) === '1000011', await flags());

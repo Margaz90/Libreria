@@ -12,9 +12,10 @@
   --accent-ink: #FFF8F2;
   --wood: #7A5134;
   --wood-hi: #9A6B47;
-  --shelf: #C4473B; /* asse degli scaffali: corallo un po' più scuro */
-  --shelf-hi: #DC6252;
-  --shelf-lo: #9C362D;
+  --shelf: #B1603F; /* asse degli scaffali: ciliegio */
+  --shelf-hi: #D68F66;
+  --shelf-lo: #8A4429;
+  --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23D68F66'/%3E%3Cstop offset='.25' stop-color='%23B1603F'/%3E%3Cstop offset='1' stop-color='%238A4429'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.24'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E"); /* asse in legno con venature (SVG), tessera da 600x230 px */
   --shadow: rgba(28, 42, 43, .16);
   --scrim: rgba(10, 14, 14, .45);
   --spine-ink: #FBF6EC;
@@ -27,7 +28,8 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
-    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --wood: #4B3222; --wood-hi: #654532; --shelf: #A9402F; --shelf-hi: #C24F3E; --shelf-lo: #7E2B22;
+    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --wood: #4B3222; --wood-hi: #654532; --shelf: #92472D; --shelf-hi: #B66C4A; --shelf-lo: #6B311E;
+    --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23B66C4A'/%3E%3Cstop offset='.25' stop-color='%2392472D'/%3E%3Cstop offset='1' stop-color='%236B311E'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.5'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
     --shadow: rgba(0,0,0,.45); --scrim: rgba(0,0,0,.6); color-scheme: dark;
   }
 }
@@ -69,11 +71,10 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .shelf-head h2 { font-family: var(--display); font-weight: var(--dw); font-size: 21px; margin: 0; color: var(--title); }
 .shelf-head span { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 /* Scaffale: ogni fila è alta 204 px (i dorsi più bassi hanno spazio sopra), così l'asse si ripete sotto ogni fila.
-   Passo di una fila = 204 px di libri + 12 di asse + 14 di aria; l'ultima asse è sempre in fondo (anche a scaffale vuoto). */
-.row { --board: linear-gradient(var(--shelf-hi) 0 2px, var(--shelf) 2px 9px, var(--shelf-lo) 9px 12px);
-  display: flex; align-items: flex-end; column-gap: 3px; row-gap: 26px; flex-wrap: wrap; width: 100%; padding: 14px 8px 12px;
-  background: var(--board) left bottom / 100% 12px no-repeat,
-    repeating-linear-gradient(transparent 0 204px, var(--shelf-hi) 204px 206px, var(--shelf) 206px 213px, var(--shelf-lo) 213px 216px, transparent 216px 230px) 0 14px / 100% 230px;
+   Passo di una fila = 204 px di libri + 16 di asse + 10 di aria; l'ultima asse è sempre in fondo (anche a scaffale vuoto). */
+.row { display: flex; align-items: flex-end; column-gap: 3px; row-gap: 26px; flex-wrap: wrap; width: 100%; padding: 14px 8px 16px;
+  /* due livelli: l'ultima asse in fondo (16 px) e quelle che si ripetono sotto ogni fila (passo 230 px) */
+  background: var(--board-img) left bottom -10px / 600px 230px repeat-x, var(--board-img) 0 14px / 600px 230px repeat-x;
   border-radius: 2px; }
 .row .spine { margin-top: calc(204px - var(--h)); }
 .spine { border: 0; padding: 12px 0 8px; border-radius: 3px 3px 1px 1px; color: var(--spine-ink); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; background-size: 100% 100%; background-position: center; box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18); transition: transform .18s ease; }
@@ -565,8 +566,9 @@ html { scroll-behavior: smooth; }
 
 /* Segnale «da aggiornare»: pallino rosso con «!», come le notifiche sulle app dell'iPhone */
 .badge { position: absolute; z-index: 3; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--badge); color: #fff; font: 700 12px/18px -apple-system, "Segoe UI", sans-serif; font-style: normal; text-align: center; box-shadow: 0 1px 2px rgba(0, 0, 0, .35); pointer-events: none; }
-.spine.stale { padding-top: 26px; }
-.spine .badge { top: 5px; left: 50%; transform: translateX(-50%); }
+.spine.stale { padding-top: 20px; overflow: visible; } /* il pallino sporge di circa 2 mm sopra il dorso */
+.spine.stale img, .spine.stale .shade, .spine.stale .gloss { border-radius: inherit; }
+.spine .badge { top: -8px; left: 50%; transform: translateX(-50%); }
 .card { position: relative; }
 .card .badge { top: 6px; right: 6px; }
 .badge.inline { position: static; flex: none; display: inline-block; margin-top: 1px; }
