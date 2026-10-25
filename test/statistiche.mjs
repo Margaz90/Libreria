@@ -74,6 +74,53 @@ async function scheda(browser) {
   await p.close2();
 }
 
+// Libri di prova con risultati noti (vedi il piano): tutti letti salvo Otto e Nove.
+export const FIXTURE = [
+  { id: 'Uno', title: 'Uno', author: 'Don Winslow', genre: 'Thriller', pages: 400, rating: 5, started: '2025-07-01', finished: '2025-08-10' },
+  { id: 'Due', title: 'Due', author: 'Don Winslow', genre: 'Thriller', pages: 300, rating: 4, started: '2025-08-20', finished: '2025-08-22' },
+  { id: 'Tre', title: 'Tre', author: 'Mick Herron', genre: 'Thriller', pages: 350, rating: 5, started: '2024-01-01', finished: '2024-03-15' },
+  { id: 'Quattro', title: 'Quattro', author: 'Mick Herron', genre: 'Narrativa', pages: 200, rating: 3, finished: '2024-08-05' },
+  { id: 'Cinque', title: 'Cinque', author: 'Stephen King', genre: 'Narrativa', pages: 900, rating: 0, finishedYear: 2019 },
+  { id: 'Sei', title: 'Sei', author: 'Stephen King', genre: 'Horror', pages: 500, rating: 4 },
+  { id: 'Sette', title: 'Sette', author: 'Bad Dates', genre: 'Saggi', pages: 100, rating: 2, started: '2025-05-10', finished: '2025-05-01' },
+  { id: 'Dieci', title: 'Dieci', author: 'Futuro', genre: 'Saggi', pages: 100, rating: 1, started: '2027-01-01', finished: '2027-01-10' },
+].map(b => ({ ...b, status: 'letto', added: 1 })).concat([
+  { id: 'Otto', title: 'Otto', status: 'in-lettura', added: 1, rating: 0 },
+  { id: 'Nove', title: 'Nove', status: 'da-leggere', added: 1, rating: 0 },
+]);
+
+async function calcoli(browser) {
+  const p = await newPage(browser);
+  await p.goto(APP + '/'); await p.waitForTimeout(200);
+  const compute = (books, day) => p.evaluate(([b, d]) => window.libreriaStats.compute(b, new Date(d)), [books, day]);
+  const s = await compute(FIXTURE, '2026-10-25T12:00:00');
+  const S = s.sempre, J = JSON.stringify;
+  ok('sempre: 8 letti, 2850 pagine', S.read === 8 && S.pages === 2850, `${S.read} ${S.pages}`);
+  ok('sempre: voto medio 3,43 e 1 senza voto', Math.abs(S.avgRating - 24 / 7) < 1e-3 && S.unrated === 1, `${S.avgRating} ${S.unrated}`);
+  ok('voti per stelle', J(S.ratings) === J({ 1: 1, 2: 1, 3: 1, 4: 2, 5: 2 }), J(S.ratings));
+  ok('5 stelle dal più recente: Uno, Tre', S.fiveStars.map(b => b.id).join() === 'Uno,Tre');
+  ok('giorni: 3 libri, media 40, più veloce Due (3), più lento Tre (75)',
+    S.days && S.days.count === 3 && S.days.avg === 40 && S.days.fastest.book.id === 'Due' && S.days.fastest.days === 3 && S.days.slowest.book.id === 'Tre' && S.days.slowest.days === 75, J(S.days && { ...S.days, fastest: S.days.fastest.days, slowest: S.days.slowest.days }));
+  ok('mesi: marzo 1, maggio 1, agosto 3', J(S.months) === J([0, 0, 1, 0, 1, 0, 0, 3, 0, 0, 0, 0]) && S.monthsCount === 5, J(S.months));
+  ok('autori in ordine: King, Winslow, Herron, Bad Dates, Futuro', S.authors.map(a => a.name).join() === 'Stephen King,Don Winslow,Mick Herron,Bad Dates,Futuro', S.authors.map(a => a.name).join());
+  ok('autori: libri, pagine e voto medio', J(S.authors.slice(0, 3).map(a => [a.count, a.pages, a.avgRating])) === J([[2, 1400, 4], [2, 700, 4.5], [2, 550, 4]]), J(S.authors.slice(0, 3)));
+  ok('generi: Thriller 3, Narrativa 2, Saggi 2, Horror 1', S.genres.map(g => g.name + g.count).join() === 'Thriller3,Narrativa2,Saggi2,Horror1', S.genres.map(g => g.name + g.count).join());
+  const [a25, a24, a19] = s.anni;
+  ok('anni: 2025, 2024, 2019', s.anni.map(a => a.year).join() === '2025,2024,2019', s.anni.map(a => a.year).join());
+  ok('2025: 3 libri, 800 pp, voto 3,67, maggio 1 e agosto 2', a25.count === 3 && a25.pages === 800 && Math.abs(a25.avgRating - 11 / 3) < 1e-3 && a25.months[4] === 1 && a25.months[7] === 2, J(a25));
+  ok('2025: autore Don Winslow (2), genere Thriller (2), preferito Uno', a25.topAuthor.name === 'Don Winslow' && a25.topAuthor.count === 2 && a25.topGenre.name === 'Thriller' && a25.topGenre.count === 2 && a25.best.id === 'Uno');
+  ok('2024: 2 libri, 550 pp, voto 4, genere Narrativa (più recente a parità), preferito Tre', a24.count === 2 && a24.pages === 550 && a24.avgRating === 4 && a24.topGenre.name === 'Narrativa' && a24.best.id === 'Tre', J(a24));
+  ok('2019 (solo anno): 1 libro, 900 pp, senza voto né preferito', a19.count === 1 && a19.pages === 900 && a19.avgRating === null && a19.best === null && J(a19.months) === J(Array(12).fill(0)), J(a19));
+  ok('2 libri letti senza anno', s.noYear === 2, s.noYear);
+  ok('racconti: 2025 e 2024', J(s.racconti) === J([2025, 2024]), J(s.racconti));
+  ok('racconti con oggi 1/6/2025: solo 2024', J((await compute(FIXTURE, '2025-06-01T12:00:00')).racconti) === J([2024]));
+  const m = await compute([{ status: 'letto', title: 'X' }], '2026-10-25T12:00:00');
+  ok('libro senza dati: nessun NaN né voce vuota', m.sempre.read === 1 && m.sempre.pages === 0 && m.sempre.avgRating === null && m.sempre.days === null && !m.sempre.authors.length && !m.sempre.genres.length && m.noYear === 1, J(m.sempre));
+  ok('calcoli: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await scheda(browser);
+  await calcoli(browser);
 }

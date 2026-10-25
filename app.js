@@ -644,6 +644,51 @@
     </div>`;
   }
 
+  // Tutti i numeri delle Statistiche, solo dai libri letti. Funzione pura: nessun accesso alla pagina.
+  // Una data di fine nel futuro vale come nessuna data; senza data vale l'eventuale anno di lettura (finishedYear).
+  function computeStats(books, oggi) {
+    const iso = new Date(oggi - oggi.getTimezoneOffset() * 6e4).toISOString().slice(0, 10), thisYear = oggi.getFullYear();
+    const isDate = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= iso;
+    const read = books.filter(b => b.status === "letto").map(b => {
+      const fin = isDate(b.finished) ? b.finished : "";
+      const fy = Number(b.finishedYear);
+      const year = fin ? Number(fin.slice(0, 4)) : (Number.isInteger(fy) && fy >= 1900 && fy <= thisYear ? fy : null);
+      return { b, fin, year, pages: Number(b.pages) > 0 ? Number(b.pages) : 0, rating: Number(b.rating) > 0 ? Math.min(5, Math.round(b.rating)) : 0 };
+    });
+    // Più recente prima: data di fine (o anno), poi ultima modifica.
+    const recent = (x, y) => ((y.fin || (y.year ? y.year + "-00" : "")).localeCompare(x.fin || (x.year ? x.year + "-00" : ""))) || ((y.b.updated || 0) - (x.b.updated || 0));
+    const avg = list => { const r = list.filter(x => x.rating); return r.length ? r.reduce((t, x) => t + x.rating, 0) / r.length : null; };
+    const sum = list => list.reduce((t, x) => t + x.pages, 0);
+    const months = list => { const m = Array(12).fill(0); list.forEach(x => { if (x.fin) m[Number(x.fin.slice(5, 7)) - 1]++; }); return m; };
+    const groups = (list, key) => { const m = new Map(); list.forEach(x => { const k = String(x.b[key] || "").trim(); if (k) { if (!m.has(k)) m.set(k, []); m.get(k).push(x); } }); return [...m].map(([name, xs]) => ({ name, xs })); };
+    const day = d => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5;
+    const timed = read.filter(x => x.fin && isDate(x.b.started)).map(x => ({ book: x.b, days: day(x.fin) - day(x.b.started) + 1 })).filter(t => t.days >= 1 && t.days <= 730);
+    const ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; read.forEach(x => { if (x.rating) ratings[x.rating]++; });
+    const mo = months(read);
+    const sempre = {
+      read: read.length, pages: sum(read), avgRating: avg(read), unrated: read.filter(x => !x.rating).length, ratings,
+      fiveStars: read.filter(x => x.rating === 5).sort(recent).map(x => x.b),
+      days: timed.length ? {
+        count: timed.length, avg: Math.round(timed.reduce((t, x) => t + x.days, 0) / timed.length),
+        fastest: timed.reduce((a, x) => x.days < a.days ? x : a), slowest: timed.reduce((a, x) => x.days > a.days ? x : a),
+      } : null,
+      months: mo, monthsCount: mo.reduce((t, n) => t + n, 0),
+      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs) }))
+        .sort((a, b) => b.count - a.count || b.pages - a.pages || a.name.localeCompare(b.name, "it")).slice(0, 6),
+      genres: groups(read, "genre").map(g => ({ name: g.name, count: g.xs.length }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "it")).slice(0, 6),
+    };
+    // Il più presente dell'anno; a parità quello letto più di recente.
+    const top = (list, key) => { const g = groups(list, key).map(g => ({ name: g.name, count: g.xs.length, last: g.xs.slice().sort(recent)[0] })); g.sort((a, b) => b.count - a.count || recent(a.last, b.last)); return g[0] ? { name: g[0].name, count: g[0].count } : null; };
+    const byYear = new Map(); read.forEach(x => { if (x.year) { if (!byYear.has(x.year)) byYear.set(x.year, []); byYear.get(x.year).push(x); } });
+    const anni = [...byYear].sort((a, b) => b[0] - a[0]).map(([year, xs]) => {
+      const best = xs.filter(x => x.rating).sort((a, b) => b.rating - a.rating || recent(a, b))[0];
+      return { year, count: xs.length, pages: sum(xs), avgRating: avg(xs), months: months(xs), topAuthor: top(xs, "author"), topGenre: top(xs, "genre"), best: best ? best.b : null };
+    });
+    return { sempre, anni, noYear: read.filter(x => !x.year).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
+  }
+  window.libreriaStats = Object.freeze({ compute: computeStats });
+
   function renderStats(list) {
     const read = list.filter(b => b.status === "letto");
     const pages = read.reduce((s, b) => s + (Number(b.pages) || 0), 0);
