@@ -620,8 +620,10 @@
     const nb = { ...b, status: st };
     // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
     if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) nb.finished = today();
-    if (st === "in-lettura" && !nb.started) nb.started = today();
-    if (st === "in-lettura") delete nb.finishedYear; // si rilegge: l'anno vecchio non vale più, come nella scheda
+    if (st === "in-lettura") { // si rilegge: la fine e l'anno della lettura precedente non valgono più, l'inizio riparte da oggi
+      delete nb.finishedYear;
+      if (nb.finished) { delete nb.finished; nb.started = today(); } else if (!nb.started) nb.started = today();
+    }
     if (st === "letto" && nb.pages) nb.page = nb.pages;
     upsert(nb);
     toast(`Spostato in ${STATUS[st]}`);
@@ -1014,10 +1016,11 @@
       </div>
       <div class="grid2">
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
-        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"></div>
+        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.status === "letto" ? "" : " disabled"}></div>
       </div>
+      <p class="hint err" id="f-date-err" role="alert" hidden></p>
       <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
-      <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
+      <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
   }
@@ -1039,19 +1042,66 @@
     if (seg) {
       const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
         if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
-      // «oppure solo l'anno» solo per un libro letto senza data di fine
-      const yearRow = () => { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); };
       seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
         seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
-        $("#f-status", sheet).value = btn.dataset.v; sync(); yearRow();
+        $("#f-status", sheet).value = btn.dataset.v; sync();
+        const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
+        if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
+        syncYearRow(sheet); syncPage(sheet);
       });
-      const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", yearRow);
+      const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", () => syncYearRow(sheet));
+      wireDates(sheet);
+      const dp = $("#d-pages", sheet); if (dp) dp.addEventListener("input", () => syncPage(sheet));
+      syncPage(sheet);
       requestAnimationFrame(sync);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
     });
+  }
+  // Coerenza delle date di lettura: né nel futuro, la fine non prima dell'inizio. `edited` dice quale campo si sta cambiando.
+  function dateProblem(started, finished, edited = "finished") {
+    const t = today();
+    if (finished && finished > t) return { field: "finished", msg: "La data di fine non può essere nel futuro." };
+    if (started && started > t) return { field: "started", msg: "La data di inizio non può essere nel futuro." };
+    if (started && finished && finished < started)
+      return edited === "started" ? { field: "started", msg: "La data di inizio non può seguire quella di fine." } : { field: "finished", msg: "La data di fine non può precedere quella di inizio." };
+    return null;
+  }
+  function wireDates(sheet) {
+    const sta = $("#f-started", sheet), fin = $("#f-finished", sheet), err = $("#f-date-err", sheet);
+    if (!sta || !fin) return;
+    const say = (field, msg) => { err.hidden = !msg; err.textContent = msg || ""; [sta, fin].forEach(x => x.removeAttribute("aria-invalid")); if (msg && field) field.setAttribute("aria-invalid", "true"); };
+    const limits = () => { const t = today(); sta.max = fin.value && fin.value < t ? fin.value : t; fin.min = sta.value || ""; fin.max = t; };
+    [sta, fin].forEach(el => {
+      el.dataset.ok = el.value; // ultimo valore coerente: se la nuova scelta non lo è, si torna a questo
+      el.addEventListener("change", () => {
+        const pr = dateProblem(sta.value, fin.value, el === sta ? "started" : "finished");
+        if (pr) { el.value = el.dataset.ok; say(el, pr.msg); } else { el.dataset.ok = el.value; say(null); }
+        limits(); syncYearRow(sheet);
+      });
+    });
+    limits();
+  }
+  function badDates(sheet) {
+    const sta = $("#f-started", sheet), fin = $("#f-finished", sheet);
+    if (!sta || !fin) return false;
+    const pr = dateProblem(sta.value, fin.disabled ? "" : fin.value);
+    if (!pr) return false;
+    const err = $("#f-date-err", sheet), el = pr.field === "started" ? sta : fin;
+    err.hidden = false; err.textContent = pr.msg; el.setAttribute("aria-invalid", "true"); el.focus();
+    return true;
+  }
+  // «oppure solo l'anno» solo per un libro letto senza data di fine
+  function syncYearRow(sheet) { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); }
+  // Un libro letto ha letto tutte le pagine: la pagina attuale segue il totale (e non si cambia a mano).
+  function syncPage(sheet) {
+    const pg = $("#f-page", sheet); if (!pg) return;
+    if (pg.dataset.orig === undefined) pg.dataset.orig = pg.value;
+    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || 0, done = $("#f-status", sheet).value === "letto" && tot > 0;
+    pg.readOnly = done; pg.value = done ? tot : pg.dataset.orig;
+    pg.placeholder = tot ? "su " + tot : "";
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
   function badYear(sheet) {
@@ -1068,9 +1118,12 @@
     const was = b.status;
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
+    if (b.status !== "letto") b.finished = ""; // la fine vale solo per un libro letto
     const y = $("#f-year", sheet); b.finishedYear = y && b.status === "letto" && !b.finished ? y.value.trim() : undefined;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
     const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
+    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || b.pages;
+    if (b.status === "letto" && tot) b.page = tot; // letto = tutte le pagine
     if (b.status === "letto" && was !== "letto" && !b.finished && !b.finishedYear) b.finished = today();
   }
   function readData(sheet, b) {
@@ -1085,7 +1138,7 @@
     if (hit.title) $("#d-title", sheet).value = hit.title;
     if (hit.author) $("#d-author", sheet).value = hit.author;
     if (!keepYear && hit.edYear && !$("#d-year", sheet).value) $("#d-year", sheet).value = hit.edYear;
-    if (hit.pages) $("#d-pages", sheet).value = hit.pages;
+    if (hit.pages) { $("#d-pages", sheet).value = hit.pages; $("#d-pages", sheet).dispatchEvent(new Event("input")); }
     if (hit.genre && !$("#d-genre", sheet).value) $("#d-genre", sheet).value = hit.genre;
     if (!$("#d-call", sheet).value && hit.author) $("#d-call", sheet).value = surname3(hit.author);
     if (hit.cover) { b.cover = hit.cover; delete b.noCover; }
@@ -1294,7 +1347,7 @@
       const put = (id, v, label, onlyEmpty) => {
         const el = $(id, sheet);
         if (!v || String(el.value) === String(v) || (onlyEmpty && el.value.trim())) return;
-        el.value = v; got.push(label);
+        el.value = v; el.dispatchEvent(new Event("input")); got.push(label);
       };
       put("#d-author", info.author, "autore");
       put("#d-year", info.edYear, "anno", true); // l'anno può essere quello della prima edizione: non lo sovrascrivo
@@ -1318,7 +1371,7 @@
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
     $("#s-close", sheet).onclick = dismissSheet;
-    $("#s-save", sheet).onclick = () => { if (badYear(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
+    $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
     const del = $("#s-del", sheet);
@@ -1380,7 +1433,7 @@
     if (!scan) setTimeout(() => $("#s-q", sheet).focus(), 50);
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
-      if (badYear(sheet)) return;
+      if (badYear(sheet) || badDates(sheet)) return;
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       readReading(sheet, b);
