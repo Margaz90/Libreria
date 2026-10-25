@@ -9,7 +9,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -103,6 +103,8 @@
     out.status = STATUS_ONE[out.status] ? out.status : "da-leggere";
     if (out.year) out.year = Number(out.year) || undefined;
     if (out.pages) out.pages = Number(out.pages) || undefined;
+    // Solo l'anno di lettura, per i libri letti senza data di fine: vale solo un anno plausibile e mai insieme alla data.
+    if (out.finishedYear !== undefined) { const y = Number(out.finishedYear); if (out.finished || !Number.isInteger(y) || y < 1900 || y > new Date().getFullYear()) delete out.finishedYear; else out.finishedYear = y; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
@@ -616,7 +618,8 @@
   }
   function setStatus(b, st) {
     const nb = { ...b, status: st };
-    if (st === "letto" && !nb.finished) nb.finished = today();
+    // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
+    if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) nb.finished = today();
     if (st === "in-lettura" && !nb.started) nb.started = today();
     if (st === "letto" && nb.pages) nb.page = nb.pages;
     upsert(nb);
@@ -641,28 +644,176 @@
     </div>`;
   }
 
-  function renderStats(list) {
-    const read = list.filter(b => b.status === "letto");
-    const pages = read.reduce((s, b) => s + (Number(b.pages) || 0), 0);
-    const rated = read.filter(b => b.rating > 0);
-    const avg = rated.length ? rated.reduce((s, b) => s + b.rating, 0) / rated.length : 0;
-    const years = {}; read.forEach(b => { const y = yearOf(b.finished); if (y) years[y] = (years[y] || 0) + 1; });
-    const ys = Object.keys(years).map(Number).sort((a, b) => a - b).slice(-8);
-    const max = Math.max(1, ...ys.map(y => years[y]));
-    const count = key => { const m = {}; read.forEach(b => { if (b[key]) m[b[key]] = (m[b[key]] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6); };
-    const undated = read.filter(b => !b.finished).length;
-    const bars = ys.length ? `<div class="bars">${ys.map(y => `<div class="bar"><em>${years[y]}</em><i style="height:${Math.round(years[y] / max * 100)}%"></i></div>`).join("")}</div>
-      <div class="bar-labels">${ys.map(y => `<span>${y}</span>`).join("")}</div>` : "";
-    const li = rows => rows.map(([a, n]) => `<li><span>${esc(a)}</span><span>${n}</span></li>`).join("") || `<li><span class="hint">Ancora nessun dato</span></li>`;
+  // Tutti i numeri delle Statistiche, solo dai libri letti. Funzione pura: nessun accesso alla pagina.
+  // Una data di fine nel futuro vale come nessuna data; senza data vale l'eventuale anno di lettura (finishedYear).
+  function computeStats(books, oggi) {
+    const iso = new Date(oggi - oggi.getTimezoneOffset() * 6e4).toISOString().slice(0, 10), thisYear = oggi.getFullYear();
+    const isDate = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= iso;
+    const read = books.filter(b => b.status === "letto").map(b => {
+      const fin = isDate(b.finished) ? b.finished : "";
+      const fy = Number(b.finishedYear);
+      const year = fin ? Number(fin.slice(0, 4)) : (Number.isInteger(fy) && fy >= 1900 && fy <= thisYear ? fy : null);
+      return { b, fin, year, pages: Number(b.pages) > 0 ? Number(b.pages) : 0, rating: Number(b.rating) > 0 ? Math.min(5, Math.round(b.rating)) : 0 };
+    });
+    // Più recente prima: data di fine (o anno), poi ultima modifica.
+    const recent = (x, y) => ((y.fin || (y.year ? y.year + "-00" : "")).localeCompare(x.fin || (x.year ? x.year + "-00" : ""))) || ((y.b.updated || 0) - (x.b.updated || 0));
+    const avg = list => { const r = list.filter(x => x.rating); return r.length ? r.reduce((t, x) => t + x.rating, 0) / r.length : null; };
+    const sum = list => list.reduce((t, x) => t + x.pages, 0);
+    const months = list => { const m = Array(12).fill(0); list.forEach(x => { if (x.fin) m[Number(x.fin.slice(5, 7)) - 1]++; }); return m; };
+    const groups = (list, key) => { const m = new Map(); list.forEach(x => { const k = String(x.b[key] || "").trim(); if (k) { if (!m.has(k)) m.set(k, []); m.get(k).push(x); } }); return [...m].map(([name, xs]) => ({ name, xs })); };
+    const day = d => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5;
+    const timed = read.filter(x => x.fin && isDate(x.b.started)).map(x => ({ book: x.b, days: day(x.fin) - day(x.b.started) + 1 })).filter(t => t.days >= 1 && t.days <= 730);
+    const ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; read.forEach(x => { if (x.rating) ratings[x.rating]++; });
+    const mo = months(read);
+    const sempre = {
+      read: read.length, pages: sum(read), avgRating: avg(read), unrated: read.filter(x => !x.rating).length, ratings,
+      fiveStars: read.filter(x => x.rating === 5).sort(recent).map(x => x.b),
+      days: timed.length ? {
+        count: timed.length, avg: Math.round(timed.reduce((t, x) => t + x.days, 0) / timed.length),
+        fastest: timed.reduce((a, x) => x.days < a.days ? x : a), slowest: timed.reduce((a, x) => x.days > a.days ? x : a),
+      } : null,
+      months: mo, monthsCount: mo.reduce((t, n) => t + n, 0),
+      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs) }))
+        .sort((a, b) => b.count - a.count || b.pages - a.pages || a.name.localeCompare(b.name, "it")).slice(0, 6),
+      genres: groups(read, "genre").map(g => ({ name: g.name, count: g.xs.length }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "it")).slice(0, 6),
+    };
+    // Il più presente dell'anno; a parità quello letto più di recente.
+    const top = (list, key) => { const g = groups(list, key).map(g => ({ name: g.name, count: g.xs.length, last: g.xs.slice().sort(recent)[0] })); g.sort((a, b) => b.count - a.count || recent(a.last, b.last)); return g[0] ? { name: g[0].name, count: g[0].count } : null; };
+    const byYear = new Map(); read.forEach(x => { if (x.year) { if (!byYear.has(x.year)) byYear.set(x.year, []); byYear.get(x.year).push(x); } });
+    const anni = [...byYear].sort((a, b) => b[0] - a[0]).map(([year, xs]) => {
+      const best = xs.filter(x => x.rating).sort((a, b) => b.rating - a.rating || recent(a, b))[0];
+      return { year, count: xs.length, pages: sum(xs), avgRating: avg(xs), months: months(xs), topAuthor: top(xs, "author"), topGenre: top(xs, "genre"), best: best ? best.b : null, books: xs.sort(recent).map(x => x.b) };
+    });
+    return { sempre, anni, noYear: read.filter(x => !x.year).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
+  }
+  window.libreriaStats = Object.freeze({ compute: computeStats });
+
+  const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+  const num = n => Number(n).toLocaleString("it-IT");
+  const dec = n => n == null ? "–" : n.toFixed(1).replace(".", ",");
+  const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
+  // Barra orizzontale con il numero accanto; il valore più alto in --accent.
+  const hbar = (label, n, max, title = "") => `<div class="hbar"><span class="hl"${title ? ` title="${esc(title)}"` : ""}>${label}</span><span class="ht"><i class="${n === max ? "top" : ""}" style="width:${max ? Math.round(n / max * 100) : 0}%"></i></span><em>${num(n)}</em></div>`;
+  function monthsHTML(m) {
+    const max = Math.max(...m);
+    return `<div class="months" aria-hidden="true">${m.map(n => `<i class="${n && n === max ? "top" : ""}" style="height:${max ? Math.round(n / max * 100) : 0}%"></i>`).join("")}</div>
+      <div class="mlab" aria-hidden="true">${MONTHS.map(x => `<span>${x[0].toUpperCase()}</span>`).join("")}</div>
+      <p class="sr">${m.map((n, i) => n ? `${MONTHS[i]} ${n}` : "").filter(Boolean).join(", ")}</p>`;
+  }
+  function renderStats(st) {
+    const S = st.sempre;
+    if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
+    const panel = (key, title, body) => `<section class="panel" data-panel="${key}"><h3>${title}</h3>${body}</section>`;
+    const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
+    const maxR = Math.max(...Object.values(S.ratings));
+    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
+      `<p class="hint">${S.unrated ? plural(S.unrated, "libro senza voto", "libri senza voto") + "." : ""}${S.fiveStars.length ? ` 5 stelle: ${S.fiveStars.slice(0, 4).map(b => esc(b.title)).join(", ")}${S.fiveStars.length > 4 ? ` e altri ${S.fiveStars.length - 4}` : ""}.` : ""}</p>`;
+    const D = S.days;
+    const tempo = D ? `<div class="trio"><div><b>${D.avg}</b><span>giorni in media</span></div>
+        <div><b>${D.fastest.days}</b><span>il più veloce · ${esc(D.fastest.book.title)}</span></div>
+        <div><b>${D.slowest.days}</b><span>il più lento · ${esc(D.slowest.book.title)}</span></div></div>
+        <p class="hint">Su ${plural(D.count, "libro", "libri")} con data di inizio e di fine.</p>`
+      : `<p class="hint">Aggiungi «Iniziato il» e «Finito il» nella scheda dei libri per sapere quanto tempo ti serve per finirne uno.</p>`;
+    const topM = S.months.indexOf(Math.max(...S.months));
+    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">Leggi di più a ${MONTHS[topM]}. Su ${plural(S.monthsCount, "libro", "libri")} con data di fine.</p>`
+      : `<p class="hint">Aggiungi «Finito il» nella scheda dei libri per vedere in quali mesi leggi di più.</p>`;
+    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><span title="${esc(a.name)}">${esc(a.name)}</span><span>${plural(a.count, "libro", "libri")}${a.pages ? ` · ${num(a.pages)} pp` : ""}${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></li>`).join("")}</ul>`
+      : `<p class="hint">Aggiungi l'autore nella scheda dei libri.</p>`;
+    const maxG = S.genres.length ? S.genres[0].count : 0;
+    const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
+    const years = st.anni.map((a, i) => `<details class="year" data-year="${a.year}"${i ? "" : " open"}>
+        <summary><b>${a.year}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></summary>
+        <div class="in">${a.months.some(Boolean) ? monthsHTML(a.months) : ""}
+          ${a.topAuthor || a.topGenre ? `<div class="pair">${a.topAuthor ? `<div><span class="label">Autore dell'anno</span><b>${esc(a.topAuthor.name)}</b><span>${plural(a.topAuthor.count, "libro", "libri")}</span></div>` : ""}${a.topGenre ? `<div><span class="label">Genere dell'anno</span><b>${esc(a.topGenre.name)}</b><span>${plural(a.topGenre.count, "libro", "libri")}</span></div>` : ""}</div>` : ""}
+          ${a.best ? `<div class="best">${coverHTML(a.best, 120)}<div><span class="label">Il preferito</span><b>${esc(a.best.title)}</b><span class="stars">${starStr(a.best.rating)}</span></div></div>` : ""}
+        </div></details>`).join("");
     return `<div class="stats">
-      <section class="panel"><h3>In sintesi</h3><div class="figures">
-        <div class="fig"><b>${read.length}</b><span>libri letti</span></div>
-        <div class="fig"><b>${pages >= 10000 ? Math.round(pages / 1000) + "k" : pages.toLocaleString("it-IT")}</b><span>pagine</span></div>
-        <div class="fig"><b>${avg ? avg.toFixed(1).replace(".", ",") : "–"}</b><span>voto medio</span></div></div></section>
-      <section class="panel"><h3>Libri finiti per anno</h3>${bars}${undated ? `<p class="hint">${undated} libri letti non hanno una data di fine: aggiungila dalla scheda del libro per vederli qui.</p>` : ""}</section>
-      <section class="panel"><h3>Autori più letti</h3><ul class="list">${li(count("author"))}</ul></section>
-      <section class="panel"><h3>Generi</h3><ul class="list">${li(count("genre"))}</ul></section>
+      ${stories ? `<div class="stories">${stories}</div>` : ""}
+      <h2 class="stats-group">Sempre</h2>
+      <div class="stats-grid">
+        ${panel("sintesi", "In sintesi", `<div class="figures">
+          <div class="fig"><b>${num(S.read)}</b><span>${S.read === 1 ? "libro letto" : "libri letti"}</span></div>
+          <div class="fig"><b>${S.pages >= 10000 ? Math.round(S.pages / 1000) + "k" : num(S.pages)}</b><span>pagine</span></div>
+          <div class="fig"><b>${dec(S.avgRating)}</b><span>voto medio</span></div>
+          <div class="fig"><b>${D ? D.avg : "–"}</b><span>giorni per libro</span></div></div>`)}
+        ${panel("voti", "Voti", voti)}
+        ${panel("tempo", "Tempo di lettura", tempo)}
+        ${panel("mesi", "Mesi", mesi)}
+        ${panel("autori", "Autori", autori)}
+        ${panel("generi", "Generi", generi)}
+      </div>
+      ${years ? `<h2 class="stats-group">Anno per anno</h2><div class="years">${years}</div>` : ""}
+      ${st.noYear ? `<p class="hint stats-noyear">${st.noYear === 1 ? "1 libro letto non ha un anno" : `${num(st.noYear)} libri letti non hanno un anno`}: aggiungilo dalla scheda del libro («Finito il» oppure solo l'anno).</p>` : ""}
     </div>`;
+  }
+
+  // Racconto a schermo intero di un anno appena concluso: schermate da sfogliare, senza avanzamento automatico.
+  function openStory(year) {
+    const now = new Date(), a = computeStats(state.books, now).anni.find(x => x.year === year);
+    if (!a) return;
+    const Y = computeStats(a.books, now).sempre, opener = document.activeElement;
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    const slide = (key, body) => `<section class="slide" data-s="${key}">${body}</section>`;
+    const list = [slide("copertina", `<p class="kick">Il tuo anno da lettore</p><p class="big">${year}</p><p class="mid">Ecco com'è andata.</p><p class="sm">Tocca a destra per continuare</p>`),
+      slide("numeri", `<p class="kick">I numeri</p><p class="big">${num(a.count)}</p><p class="mid">${a.count === 1 ? "libro letto" : "libri letti"}</p>${a.pages ? `<p class="big small">${num(a.pages)}</p><p class="mid">pagine</p><p class="sm">In media ${num(Math.max(1, Math.round(a.pages / (leap ? 366 : 365))))} pagine al giorno, tutti i giorni.</p>` : ""}`)];
+    if (a.count >= 3) {
+      const D = Y.days, topM = a.months.indexOf(Math.max(...a.months));
+      if (Y.monthsCount) list.push(slide("mese", `<p class="kick">Il mese più letto</p><p class="big small">${MONTHS[topM][0].toUpperCase() + MONTHS[topM].slice(1)}</p><p class="mid">${plural(a.months[topM], "libro finito", "libri finiti")}</p>${monthsHTML(a.months)}`));
+      if (D) list.push(slide("tempo", `<p class="kick">Tempo di lettura</p><p class="big">${D.avg}</p><p class="mid">${D.avg === 1 ? "giorno" : "giorni"} in media per libro</p><p class="sm">Il più veloce: ${esc(D.fastest.book.title)}, in ${plural(D.fastest.days, "giorno", "giorni")}.</p>`));
+      if (a.topAuthor) list.push(slide("autore", `<p class="kick">L'autore dell'anno</p><p class="mid name">${esc(a.topAuthor.name)}</p><p class="sm">${plural(a.topAuthor.count, "libro letto", "libri letti")}</p>`));
+      if (a.topGenre) list.push(slide("genere", `<p class="kick">Il genere dell'anno</p><p class="mid name">${esc(a.topGenre.name)}</p><p class="sm">${plural(a.topGenre.count, "libro", "libri")} su ${num(a.count)}</p>`));
+      if (a.best) list.push(slide("preferito", `<p class="kick">Il tuo preferito</p><div class="fav">${coverHTML(a.best, 300)}<div><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars">${starStr(a.best.rating)}</p></div></div>`));
+      if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
+    }
+    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><div class="story-covers">${a.books.slice(0, 12).map(b => coverHTML(b, 160)).join("")}</div><button class="story-done" type="button">Chiudi</button>`));
+    const el = document.createElement("div");
+    el.id = "story"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Il tuo ${year}`); el.tabIndex = -1;
+    el.innerHTML = `<div class="story-bars" aria-hidden="true">${list.map(() => "<i></i>").join("")}</div>
+      <button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button>
+      <div class="story-body">${list.join("")}</div>
+      <button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><button class="story-next" type="button" aria-label="Schermata successiva">›</button>`;
+    document.body.append(el); document.body.style.overflow = "hidden";
+    const slides = [...el.querySelectorAll(".slide")], bars = [...el.querySelectorAll(".story-bars i")];
+    let i = 0;
+    const show = n => {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach((x, k) => x.hidden = k !== i);
+      bars.forEach((x, k) => x.classList.toggle("on", k <= i));
+      $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
+      const a = document.activeElement; // un pulsante disattivato o nascosto perderebbe il focus: lo riporto sul racconto
+      if (a && a !== el && el.contains(a) && (a.disabled || !a.offsetParent)) el.focus();
+    };
+    const close = () => {
+      document.removeEventListener("keydown", keys, true); el.remove(); document.body.style.overflow = "";
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+      else { const c = document.querySelector(`.story-card[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
+    };
+    function keys(e) {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); show(i + 1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1); }
+      else if (e.key === "Tab") { // il focus resta nel racconto
+        const f = [...el.querySelectorAll("button:not([disabled])")].filter(b => b.offsetParent);
+        if (!f.length) return;
+        const at = f.indexOf(document.activeElement);
+        if (at < 0) { e.preventDefault(); (e.shiftKey ? f[f.length - 1] : f[0]).focus(); }
+        else if (e.shiftKey && at === 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && at === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    }
+    document.addEventListener("keydown", keys, true);
+    el.addEventListener("click", e => {
+      if (e.target.closest(".story-close, .story-done")) return close();
+      if (e.target.closest(".story-prev")) return show(i - 1);
+      if (e.target.closest(".story-next")) return show(i + 1);
+      const r = el.getBoundingClientRect();
+      show(e.clientX < r.left + r.width / 3 ? i - 1 : i + 1); // tocco: terzo sinistro indietro, il resto avanti
+    });
+    let x0 = null; // scorrimento orizzontale
+    el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; }, { passive: true });
+    el.addEventListener("touchend", e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) { e.preventDefault(); show(i + (dx < 0 ? 1 : -1)); } });
+    show(0); el.focus();
   }
 
   // Menu: filtri a pillole (telefono), scaffali nella colonna laterale (computer), sezione attiva, vista dorsi/copertine.
@@ -680,7 +831,7 @@
   function render() {
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
-    if (state.view === "stats") main.innerHTML = renderStats(state.books); // la ricerca non vale qui: la sua barra è nascosta
+    if (state.view === "stats") main.innerHTML = renderStats(computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
@@ -690,6 +841,7 @@
     wireMain(main);
   }
   function wireMain(root) {
+    root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;
@@ -860,6 +1012,7 @@
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
         <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"></div>
       </div>
+      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019"></div>
       <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
@@ -882,10 +1035,13 @@
     if (seg) {
       const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
         if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
+      // «oppure solo l'anno» solo per un libro letto senza data di fine
+      const yearRow = () => { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); };
       seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
         seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
-        $("#f-status", sheet).value = btn.dataset.v; sync();
+        $("#f-status", sheet).value = btn.dataset.v; sync(); yearRow();
       });
+      const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", yearRow);
       requestAnimationFrame(sync);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
@@ -895,11 +1051,13 @@
   }
   function readReading(sheet, b) {
     if (!$("#f-status", sheet)) return; // un libro nella lista dei desideri non ha campi di lettura
+    const was = b.status;
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
+    const y = $("#f-year", sheet); b.finishedYear = y && b.status === "letto" && !b.finished ? y.value.trim() : undefined;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
     const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
-    if (b.status === "letto" && !b.finished) b.finished = today();
+    if (b.status === "letto" && was !== "letto" && !b.finished && !b.finishedYear) b.finished = today();
   }
   function readData(sheet, b) {
     b.title = $("#d-title", sheet).value.trim() || b.title;
@@ -1581,7 +1739,7 @@
 
   // Scorciatoie da tastiera (su computer): / cerca, N nuovo libro, 1 e 2 per le sezioni
   document.addEventListener("keydown", e => {
-    if ($("#scrim") || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if ($("#scrim") || $("#story") || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
     if (e.key === "/") { e.preventDefault(); goSearch(); }
     else if (e.key === "n" || e.key === "N") { e.preventDefault(); openAdd(); }
     else if (e.key === "1") setView("libreria");

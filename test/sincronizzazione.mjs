@@ -91,6 +91,11 @@ export default async function ({ browser }) {
   await wait(async () => (await localBook(A, t0.id))?.rating === 5, 6000).catch(() => {});
   ok('vince la modifica più recente', (await localBook(A, t0.id))?.rating === 5 && (await localBook(B, t0.id))?.rating === 5);
 
+  // 9b. Anno di lettura (senza data di fine) impostato su A arriva su B
+  await openBook(A, t0.id); await A.fill('#f-finished', ''); await A.fill('#f-year', '2018'); await A.locator('#s-save').click();
+  await wait(async () => (await localBook(B, t0.id))?.finishedYear === 2018, 6000).catch(() => {});
+  ok('anno di lettura arriva su B', (await localBook(B, t0.id))?.finishedYear === 2018);
+
   // 10. Obiettivo impostato su A arriva su B
   const year = new Date().getFullYear();
   await A.locator('.goal').first().click(); await A.waitForSelector('#g-n'); await A.fill('#g-n', '5'); await A.click('#g-save');
