@@ -47,7 +47,12 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 
 ## Strumenti per Claude Code
 - **Test** in `test/` (non fanno parte dell'app e il service worker non li scarica): `node test/run.mjs` li lancia tutti (circa 1 minuto, 58 controlli), `node test/run.mjs ricerche accesso` solo alcuni. Gruppi: `interfaccia` (108 libri, 2 dimensioni, chiaro/scuro), `ricerche` (Google giù, Apple Books, nuovo tentativo senza chiave, Verifica ricerche), `accesso` (link su iPhone, Google su computer, popup bloccato/chiuso, account vuoto), `sincronizzazione` (tre dispositivi), `aggiornamento` (avviso di nuova versione). `test/lib.mjs` avvia da solo il server dell'app (8765) e un finto Firestore (8766); `test/firebase-stub.js` sostituisce l'SDK di Firebase. Le ricerche esterne sono simulate: i test non dipendono dalla rete.
-- **Hook** in `.claude/settings.json` (script in `.claude/hooks/`): dopo ogni modifica a un `.js` controlla la sintassi con `node --check` (errore → Claude lo corregge); prima di chiudere il lavoro avvisa se sono cambiati file dell'app rispetto a `origin/main` ma non `VERSION` in `sw.js`.
+- **Hook** in `.claude/settings.json` (script in `.claude/hooks/`, provabili a mano passando il JSON su stdin):
+  - `controlla-js.mjs`: dopo ogni modifica a un `.js` controlla la sintassi con `node --check` (errore → Claude lo corregge).
+  - `contrasto.mjs`: quando cambia `style.css` ricalcola il contrasto di `--ink`, `--muted`, `--title`, `--accent` su `--bg`/`--surface` e di `--accent-ink` su `--accent`, in chiaro e in scuro; sotto 4,5:1 segnala il problema (`--coral` è decorativo e non viene controllato). A mano: `node .claude/hooks/contrasto.mjs style.css`.
+  - `proteggi-file.mjs`: blocca le modifiche a `zxing.min.js` (libreria esterna) e `seed.json` (i 108 libri originali); si cambiano solo se Diego lo chiede.
+  - `test-prima-del-push.mjs`: prima di un `git push` verso `main` lancia `node test/run.mjs` e blocca la pubblicazione se un test fallisce (circa un minuto); i push di altri branch passano subito.
+  - `controlla-versione.mjs`: prima di chiudere il lavoro avvisa se sono cambiati file dell'app rispetto a `origin/main` ma non `VERSION` in `sw.js`.
 - **Skill**: `/pubblica` (versione, test, storia in questo file, commit e unione su `main`); `/acquisti` (conferme d'ordine Feltrinelli da Gmail → JSON degli acquisti arricchito, da importare da Altro → Backup).
 - **Subagent** `revisore-accessibilita`: contrasto dei colori, bersagli al tocco, etichette, movimento ridotto; solo resoconto.
 - **MCP** in `.mcp.json`: context7, per la documentazione aggiornata di Firebase e ZXing (va approvato al primo uso).
@@ -74,7 +79,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
-- **Strumenti di lavoro** (nessuna modifica all'app): test nel repository (`test/`), hook per sintassi e versione, skill `/pubblica` e `/acquisti`, revisore di accessibilità, context7.
+- **Strumenti di lavoro** (nessuna modifica all'app): test nel repository (`test/`), hook per sintassi, contrasto, file protetti, test prima di pubblicare e versione, skill `/pubblica` e `/acquisti`, revisore di accessibilità, context7.
 - **Nuovi caratteri e colori** (v44): Fraunces per i titoli al posto di Young Serif, font di sistema al posto di Libre Franklin e IBM Plex Mono (da 152 a 65 KB di font), titoli petrolio e dettagli corallo come l'icona.
 - **Link via email nell'app su iPhone** (v43): il popup di Google restava bloccato su «Apro l'accesso con Google…»; nell'app installata su iPhone si accede con il link via email.
 - **Accesso con Google su iPhone** (v42): popup al posto del redirect nell'app installata, avvisi chiari se l'accesso non si completa o se l'account non ha libri; «Accedi e sincronizza» in cima al menu Altro.

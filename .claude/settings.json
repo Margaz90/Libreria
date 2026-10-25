@@ -1,5 +1,29 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/proteggi-file.mjs\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push*)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-prima-del-push.mjs\"",
+            "timeout": 300,
+            "statusMessage": "Lancio i test prima di pubblicare…"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -9,6 +33,11 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/controlla-js.mjs\"",
             "timeout": 20,
             "statusMessage": "Controllo la sintassi…"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/contrasto.mjs\"",
+            "timeout": 20
           }
         ]
       }
