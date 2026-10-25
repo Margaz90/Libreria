@@ -11,7 +11,7 @@ export default async function ({ browser }) {
     await p.waitForTimeout(400);
     ok(`${tag}: carica i 108 libri Goodreads`, (await localBooks(p)).length === 108);
     ok(`${tag}: i libri compaiono sugli scaffali`, (await p.locator('#main [data-id]').count()) >= 15);
-    ok(`${tag}: niente scorrimento orizzontale`, !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth)));
+    ok(`${tag}: niente scorrimento orizzontale`, await p.evaluate(w => document.documentElement.scrollWidth <= w && innerWidth <= w, width));
     ok(`${tag}: titoli in Fraunces`, /Fraunces/.test(await p.evaluate(() => getComputedStyle(document.querySelector('h1')).fontFamily)));
     if (width < 1024) {
       await p.locator('.dock .more').click();

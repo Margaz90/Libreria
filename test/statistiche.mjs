@@ -19,7 +19,7 @@ async function scheda(browser) {
     { ...base, id: 's2', title: 'Anno', author: 'B', status: 'letto' },
     { ...base, id: 's3', title: 'Voti', author: 'C', status: 'letto' },
     { ...base, id: 's4', title: 'Nuovo', author: 'D', status: 'da-leggere' },
-    { ...base, id: 's5', title: 'Ripreso', author: 'E', status: 'da-leggere', finishedYear: 2019 },
+    { ...base, id: 's5', title: 'Ripreso', author: 'E', status: 'da-leggere', finishedYear: 2019, pages: 100 },
     { ...base, id: 's6', title: 'Errato', author: 'F', status: 'letto' },
   ]);
   const shown = () => p.locator('#f-year-row').isVisible().catch(() => false);
@@ -41,15 +41,17 @@ async function scheda(browser) {
   b = await book(p, 's2');
   ok('anno: salvato 2019 senza data', b.finishedYear === 2019 && !b.finished, JSON.stringify(b));
 
-  let bad = true;
+  let warned = true;
   for (const v of ['12', '2099']) {
     await openBook(p, 's6');
     if (await shown()) await p.fill('#f-year', v);
-    await save(p);
-    b = await book(p, 's6');
-    if (b.finishedYear !== undefined) bad = false;
+    await p.locator('#s-save').click(); await p.waitForTimeout(300);
+    const msg = await p.locator('#f-year-err').innerText({ timeout: 1000 }).catch(() => '');
+    warned = warned && await p.locator('#s-save').isVisible() && /1900/.test(msg) && (await p.getAttribute('#f-year', 'aria-invalid')) === 'true';
+    if (await p.locator('#s-save').isVisible()) { await p.fill('#f-year', ''); await save(p); }
   }
-  ok('anno non valido non salvato', bad && !b.finished, JSON.stringify(b));
+  b = await book(p, 's6');
+  ok('anno non valido: avviso, la scheda resta aperta e non si salva', warned && b.finishedYear === undefined && !b.finished, JSON.stringify(b));
 
   await openBook(p, 's3');
   await p.locator('.rate button[data-n="4"]').click();
@@ -69,6 +71,15 @@ async function scheda(browser) {
   await p.waitForTimeout(800);
   b = await book(p, 's5');
   ok('menu rapido: libro con solo l\'anno passa a Letto senza la data di oggi', b.status === 'letto' && !b.finished && b.finishedYear === 2019, JSON.stringify(b));
+
+  // Riletto: rimesso In lettura dal menu rapido perde l'anno vecchio, e «Finito» mette la data di oggi
+  await p.locator('#main [data-id="s5"]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 });
+  await p.waitForTimeout(700);
+  await p.locator('.quick [data-st="in-lettura"]').click(); await p.waitForTimeout(800);
+  const reread = await book(p, 's5');
+  await p.locator('[data-finish="s5"]').first().click(); await p.waitForTimeout(800);
+  b = await book(p, 's5');
+  ok('riletto: In lettura toglie l\'anno vecchio e Finito mette la data di oggi', reread.finishedYear === undefined && b.finished === isoToday(), JSON.stringify([reread, b]));
 
   ok('scheda: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
@@ -111,7 +122,7 @@ async function calcoli(browser) {
   ok('2025: autore Don Winslow (2), genere Thriller (2), preferito Uno', a25.topAuthor.name === 'Don Winslow' && a25.topAuthor.count === 2 && a25.topGenre.name === 'Thriller' && a25.topGenre.count === 2 && a25.best.id === 'Uno');
   ok('2024: 2 libri, 550 pp, voto 4, genere Narrativa (più recente a parità), preferito Tre', a24.count === 2 && a24.pages === 550 && a24.avgRating === 4 && a24.topGenre.name === 'Narrativa' && a24.best.id === 'Tre', J(a24));
   ok('2019 (solo anno): 1 libro, 900 pp, senza voto né preferito', a19.count === 1 && a19.pages === 900 && a19.avgRating === null && a19.best === null && J(a19.months) === J(Array(12).fill(0)), J(a19));
-  ok('2 libri letti senza anno', s.noYear === 2, s.noYear);
+  ok('1 libro letto senza anno e 1 con la data nel futuro', s.noYear === 1 && s.future === 1, `${s.noYear} ${s.future}`);
   ok('racconti: 2025 e 2024', J(s.racconti) === J([2025, 2024]), J(s.racconti));
   ok('racconti con oggi 1/6/2025: solo 2024', J((await compute(FIXTURE, '2025-06-01T12:00:00')).racconti) === J([2024]));
   const m = await compute([{ status: 'letto', title: 'X' }], '2026-10-25T12:00:00');
@@ -141,7 +152,8 @@ async function pagina(browser) {
   const sint = await txt('[data-panel="sintesi"]');
   ok('sintesi mostra 8 libri e 40 giorni', /\b8\b[\s\S]*libri letti/.test(sint) && /\b40\b[\s\S]*giorni/.test(sint), sint.replace(/\n/g, ' '));
   ok('anni 2025, 2024, 2019, il primo aperto', (await p.$$eval('details.year', els => els.map(e => e.dataset.year + (e.open ? '*' : '')).join())) === '2025*,2024,2019');
-  ok('nota libri senza anno: 2', /2 libri letti non hanno un anno/.test(await txt('.stats-noyear')));
+  ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /1 libro letto non ha un anno/.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
+  ok('stelle dei voti leggibili da VoiceOver', (await p.locator('[data-panel="voti"] [role="img"][aria-label="5 stelle"]').count()) === 1);
   ok('barre con il numero accanto (Generi: Thriller 3)', /Thriller\s*3/.test(await txt('[data-panel="generi"]')));
   await p.close2();
 
@@ -178,6 +190,8 @@ async function racconto(browser) {
   ok('una schermata visibile alla volta', (await p.locator('#story .slide:not([hidden])').count()) === 1);
   const c0 = await cur();
   await p.keyboard.press('ArrowRight'); const c1 = await cur();
+  const live = await p.locator('#story .story-live').innerText().catch(() => '');
+  ok('cambio di schermata annunciato a VoiceOver', (await p.getAttribute('#story .story-live', 'aria-live').catch(() => null)) === 'polite' && /2 di 9/.test(live), live);
   await p.locator('#story .story-next').dispatchEvent('click'); const c2 = await cur(); // sul telefono le frecce sono nascoste
   await p.keyboard.press('ArrowLeft'); const c3 = await cur();
   ok('avanti con → e con la freccia, indietro con ←', c0 === 'copertina' && c1 === 'numeri' && c2 === 'mese' && c3 === 'numeri', [c0, c1, c2, c3].join());
@@ -192,6 +206,8 @@ async function racconto(browser) {
   ok('tocco a sinistra indietro, a destra avanti', tl === 'voti' && tr === 'chiusura', tl + ' ' + tr);
   ok('racconto: niente scorrimento a 390 px', await noHScroll(p));
   await p.waitForTimeout(300); await p.screenshot({ path: '/tmp/racconto-chiusura.png' });
+  const font = await p.$eval('#story .story-done', e => { const c = getComputedStyle(e); return c.fontWeight + ' ' + c.fontSize; });
+  ok('pulsante Chiudi in grassetto da 15 px', font === '600 15px', font);
   await p.keyboard.press('Escape');
   const esc1 = !(await p.locator('#story').count()) && (await p.evaluate(() => document.activeElement?.dataset?.story)) === '2025';
   await open(2024);
