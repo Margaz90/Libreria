@@ -11,6 +11,9 @@
   --accent-ink: #FFF8F2;
   --wood: #7A5134;
   --wood-hi: #9A6B47;
+  --shelf: #C4473B; /* asse degli scaffali: corallo un po' più scuro */
+  --shelf-hi: #DC6252;
+  --shelf-lo: #9C362D;
   --shadow: rgba(28, 42, 43, .16);
   --scrim: rgba(10, 14, 14, .45);
   --spine-ink: #FBF6EC;
@@ -23,7 +26,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
-    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --wood: #4B3222; --wood-hi: #654532;
+    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --wood: #4B3222; --wood-hi: #654532; --shelf: #A9402F; --shelf-hi: #C24F3E; --shelf-lo: #7E2B22;
     --shadow: rgba(0,0,0,.45); --scrim: rgba(0,0,0,.6); color-scheme: dark;
   }
 }
@@ -58,10 +61,17 @@ h1 { font-family: var(--display); font-weight: var(--dw); font-size: clamp(30px,
 
 /* Scaffali */
 .shelf-block { display: flex; flex-direction: column; gap: 8px; }
-.shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 4px; border-bottom: 2px solid var(--coral); }
+.shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 4px; border-bottom: 3px solid var(--coral); }
 .shelf-head h2 { font-family: var(--display); font-weight: var(--dw); font-size: 21px; margin: 0; color: var(--title); }
 .shelf-head span { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.row { display: flex; align-items: flex-end; gap: 3px; flex-wrap: wrap; width: 100%; padding: 14px 8px 0; border-bottom: 12px solid var(--wood); box-shadow: 0 2px 0 var(--wood-hi) inset, 0 10px 14px -10px var(--shadow); background: linear-gradient(to bottom, transparent 70%, var(--shadow)); border-radius: 2px; }
+/* Scaffale: ogni fila è alta 204 px (i dorsi più bassi hanno spazio sopra), così l'asse si ripete sotto ogni fila.
+   Passo di una fila = 204 px di libri + 12 di asse + 14 di aria; l'ultima asse è sempre in fondo (anche a scaffale vuoto). */
+.row { --board: linear-gradient(var(--shelf-hi) 0 2px, var(--shelf) 2px 9px, var(--shelf-lo) 9px 12px);
+  display: flex; align-items: flex-end; column-gap: 3px; row-gap: 26px; flex-wrap: wrap; width: 100%; padding: 14px 8px 12px;
+  background: var(--board) left bottom / 100% 12px no-repeat,
+    repeating-linear-gradient(transparent 0 204px, var(--shelf-hi) 204px 206px, var(--shelf) 206px 213px, var(--shelf-lo) 213px 216px, transparent 216px 230px) 0 14px / 100% 230px;
+  border-radius: 2px; }
+.row .spine { margin-top: calc(204px - var(--h)); }
 .spine { border: 0; padding: 12px 0 8px; border-radius: 3px 3px 1px 1px; color: var(--spine-ink); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; background-size: 100% 100%; background-position: center; box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18); transition: transform .18s ease; }
 .spine:hover, .spine:focus-visible { transform: translateY(-8px); }
 .spine .t { flex: 1; min-height: 0; writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--display); font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 2; }
@@ -77,7 +87,7 @@ h1 { font-family: var(--display); font-weight: var(--dw); font-size: clamp(30px,
 .spine.photo .gloss { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 35%, transparent 60%, rgba(0,0,0,.35)); }
 .spine-edit { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--rule); padding-top: 12px; }
 .spine-row { display: flex; gap: 16px; align-items: flex-end; }
-.spine-prev { flex: none; display: flex; align-items: flex-end; min-height: 140px; padding: 0 6px; border-bottom: 6px solid var(--wood); }
+.spine-prev { flex: none; display: flex; align-items: flex-end; min-height: 140px; padding: 0 6px; border-bottom: 6px solid var(--shelf); }
 .spine-prev .spine { cursor: default; }
 .spine-actions { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .spine-actions label.btn { text-align: center; cursor: pointer; }

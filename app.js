@@ -549,14 +549,14 @@
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
       if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
-      return `<${tag} class="spine photo" ${attrs} style="height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span></${tag}>`;
+      return `<${tag} class="spine photo" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span></${tag}>`;
     }
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
-      return `<${tag} class="spine fromcover" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
+      return `<${tag} class="spine fromcover" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
         <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}</${tag}>`;
     }
-    return `<${tag} class="spine" ${attrs} style="height:${h}px;width:${w}px;background:${colorOf(b)}">
+    return `<${tag} class="spine" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
       <span class="band a"></span>${text}<span class="band b"></span></${tag}>`;
   }
 
