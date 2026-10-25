@@ -8,6 +8,7 @@
   --accent: #B03A30;
   --title: #2F5457; /* titoli petrolio, come l'icona */
   --coral: #F06A5C; /* dettagli: anello, barra di lettura, linea degli scaffali */
+  --badge: #D92D20; /* pallino del periodo di lettura da aggiornare (testo bianco, 4,8:1) */
   --accent-ink: #FFF8F2;
   --wood: #7A5134;
   --wood-hi: #9A6B47;
@@ -561,3 +562,12 @@ html { scroll-behavior: smooth; }
 @media (hover: hover) and (pointer: fine) { .story-prev, .story-next { display: block; } }
 #story button:focus-visible { outline: 3px solid #F06A5C; outline-offset: 2px; }
 .hint.err { color: var(--accent); }
+
+/* Segnale «da aggiornare»: pallino rosso con «!», come le notifiche sulle app dell'iPhone */
+.badge { position: absolute; z-index: 3; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: var(--badge); color: #fff; font: 700 12px/18px -apple-system, "Segoe UI", sans-serif; font-style: normal; text-align: center; box-shadow: 0 1px 2px rgba(0, 0, 0, .35); pointer-events: none; }
+.spine.stale { padding-top: 26px; }
+.spine .badge { top: 5px; left: 50%; transform: translateX(-50%); }
+.card { position: relative; }
+.card .badge { top: 6px; right: 6px; }
+.badge.inline { position: static; flex: none; display: inline-block; margin-top: 1px; }
+.stale-note { display: flex; gap: 8px; align-items: flex-start; }

@@ -543,23 +543,28 @@
   }
 
   // Dorso: foto vera se l'hai scattata, altrimenti una striscia della copertina, altrimenti il dorso disegnato.
+  // Libro letto con il periodo di lettura da aggiornare: manca quando l'ha finito (data o almeno l'anno) oppure le date non sono coerenti.
+  const needsDates = b => b.status === "letto" && ((!b.finished && !b.finishedYear) || !!dateProblem(b.started || "", b.finished || ""));
+  const STALE = "periodo di lettura da aggiornare";
+  const badgeHTML = b => needsDates(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
   function spineHTML(b, tag = "button") {
     const p = Math.min(Number(b.pages) || 280, 900);
     const h = Math.round(132 + p / 900 * 72);
     let w = Math.round(26 + p / 900 * 24);
-    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}"` : `aria-hidden="true"`;
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
+    const stale = tag === "button" && needsDates(b), bd = stale ? badgeHTML(b) : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
       if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
-      return `<${tag} class="spine photo" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span></${tag}>`;
+      return `<${tag} class="spine photo${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
     }
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
-      return `<${tag} class="spine fromcover" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
-        <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}</${tag}>`;
+      return `<${tag} class="spine fromcover${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+        <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}${bd}</${tag}>`;
     }
-    return `<${tag} class="spine" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
-      <span class="band a"></span>${text}<span class="band b"></span></${tag}>`;
+    return `<${tag} class="spine${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+      <span class="band a"></span>${text}<span class="band b"></span>${bd}</${tag}>`;
   }
 
   function progressOf(b) {
@@ -630,7 +635,7 @@
   }
 
   function cardHTML(b) {
-    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}">${coverHTML(b, 300)}
+    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${needsDates(b) ? ", " + STALE : ""}">${coverHTML(b, 300)}${badgeHTML(b)}
       <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
   }
   function renderCovers(list) {
@@ -1261,6 +1266,7 @@
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
         <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
         ${b.finished ? `<p class="hint">Finito il ${fmtDate(b.finished)}</p>` : ""}
+        ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div></div>
       <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
       <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
