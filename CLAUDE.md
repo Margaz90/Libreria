@@ -53,6 +53,8 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
   - `proteggi-file.mjs`: blocca le modifiche a `zxing.min.js` (libreria esterna) e `seed.json` (i 108 libri originali); si cambiano solo se Diego lo chiede.
   - `test-prima-del-push.mjs`: prima di un `git push` verso `main` lancia `node test/run.mjs` e blocca la pubblicazione se un test fallisce (circa un minuto); i push di altri branch passano subito.
   - `controlla-versione.mjs`: prima di chiudere il lavoro avvisa se sono cambiati file dell'app rispetto a `origin/main` ma non `VERSION` in `sw.js`.
+  - `promemoria-verifica.mjs`: a ogni richiesta controlla `.claude/verifica-hook.json`; se sono passati 30 giorni dall'ultima verifica, Claude esegue la skill `verifica-hook` nella stessa risposta (dopo aver fatto ciò che Diego ha chiesto), propone eventuali nuovi hook con pro e contro senza crearli, e pubblica la nuova data.
+- **Verifica mensile degli hook**: automatica (vedi `promemoria-verifica.mjs`), oppure a richiesta con `/verifica-hook`. Ultima verifica: data in `.claude/verifica-hook.json`.
 - **Skill**: `/pubblica` (versione, test, storia in questo file, commit e unione su `main`); `/acquisti` (conferme d'ordine Feltrinelli da Gmail → JSON degli acquisti arricchito, da importare da Altro → Backup).
 - **Subagent** `revisore-accessibilita`: contrasto dei colori, bersagli al tocco, etichette, movimento ridotto; solo resoconto.
 - **MCP** in `.mcp.json`: context7, per la documentazione aggiornata di Firebase e ZXing (va approvato al primo uso).
@@ -79,6 +81,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **Verifica mensile degli hook** (nessuna modifica all'app): promemoria automatico ogni 30 giorni e skill `verifica-hook`; prima verifica il 2026-10-25.
 - **Strumenti di lavoro** (nessuna modifica all'app): test nel repository (`test/`), hook per sintassi, contrasto, file protetti, test prima di pubblicare e versione, skill `/pubblica` e `/acquisti`, revisore di accessibilità, context7.
 - **Nuovi caratteri e colori** (v44): Fraunces per i titoli al posto di Young Serif, font di sistema al posto di Libre Franklin e IBM Plex Mono (da 152 a 65 KB di font), titoli petrolio e dettagli corallo come l'icona.
 - **Link via email nell'app su iPhone** (v43): il popup di Google restava bloccato su «Apro l'accesso con Google…»; nell'app installata su iPhone si accede con il link via email.
