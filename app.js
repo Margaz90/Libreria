@@ -342,6 +342,23 @@
   }
 
   // Ricerca per il campo "Cerca il libro": prova le fonti in ordine e unisce i risultati.
+  // --- fonte 4: Wikidata (solo per ISBN: gratuita, senza chiave, risposte in JSON) ---
+  async function wikidataSearch(isbn) {
+    const sparql = `SELECT ?itemLabel ?authorLabel ?date ?pages WHERE {
+      { ?item wdt:P212 "${isbn}" } UNION { ?item wdt:P957 "${isbn}" }
+      OPTIONAL { ?item wdt:P50 ?author. } OPTIONAL { ?item wdt:P577 ?date. } OPTIONAL { ?item wdt:P1104 ?pages. }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`;
+    let r;
+    try { r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(sparql), { headers: { Accept: "application/sparql-results+json" } }); }
+    catch { throw { code: "wikidata-rete" }; }
+    if (!r.ok) throw { code: "wikidata-" + r.status };
+    const j = await r.json();
+    return (j.results.bindings || []).map(b => ({
+      title: (b.itemLabel && b.itemLabel.value) || "", author: (b.authorLabel && b.authorLabel.value) || "",
+      edYear: b.date ? yearOf(b.date.value) : undefined, pages: b.pages ? Number(b.pages.value) || undefined : undefined,
+      genre: "", synopsis: "", isbn, lang: "", ita: false, cover: ""
+    })).filter(x => x.title && !/^Q\d+$/.test(x.title)); // senza etichetta Wikidata mostra il codice Q: lo scarto
+  }
   // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
   async function searchBooks(q) {
@@ -355,7 +372,8 @@
     const tries = [
       google,
       () => appleSearch(isbn || q),
-      () => openLibrarySearch(isbn ? "isbn:" + isbn : q, "")
+      () => openLibrarySearch(isbn ? "isbn:" + isbn : q, ""),
+      () => (isbn ? wikidataSearch(isbn) : Promise.resolve([]))
     ];
     for (const t of tries) {
       try { out = out.concat(await t()); } catch (e) { errors.push(e && e.code); }
