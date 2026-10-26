@@ -7,9 +7,10 @@ const VUOTO = { totalItems: 0 };
 const ISBN = '9788806219215';
 
 // Pagina con le fonti simulate: `google(url)` decide la risposta di Google Books, Open Library e Apple restano vuote.
-async function apri(browser, google, opts = {}) {
+async function apri(browser, google, { wikidata = [], ...opts } = {}) {
   const p = await newPage(browser, { external: 'allow', ...opts });
-  p.googleUrls = [];
+  p.googleUrls = []; p.wikidataUrls = [];
+  await p.route(/query\.wikidata\.org/, r => { p.wikidataUrls.push(r.request().url()); r.fulfill({ status: 200, contentType: 'application/sparql-results+json', body: JSON.stringify({ results: { bindings: wikidata } }) }); });
   await p.route(/www\.googleapis\.com\/books/, r => {
     const u = r.request().url(); p.googleUrls.push(u);
     const { status = 200, body } = google(u);
@@ -55,7 +56,17 @@ export default async function ({ browser }) {
   p = await apri(browser, () => ({ body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, '9780000000002');
-  ok('ISBN sconosciuto: messaggio chiaro', /nessuna fonte conosce questo ISBN/i.test(r.stato), r.stato);
+  // 3b. Un ISBN che solo Wikidata conosce: il risultato compare, e Wikidata non viene interrogato per i titoli
+  const riga = { itemLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
+  p = await apri(browser, () => ({ body: VUOTO }), { wikidata: [riga] });
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Wikidata: un ISBN noto solo lì compare nei risultati', r.titoli.includes('Underworld') && p.wikidataUrls.length === 1 && /9788806219215/.test(decodeURIComponent(p.wikidataUrls[0])), `${p.wikidataUrls.length} richieste · ${r.stato}`);
+  await cerca(p, 'Underworld DeLillo');
+  ok('Wikidata: non interrogato per una ricerca per titolo', p.wikidataUrls.length === 1, `richieste: ${p.wikidataUrls.length}`);
+  await p.close2();
+
+  // 3. ISBN che nessuna fonte conosce: messaggio chiaro, /nessuna fonte conosce questo ISBN/i.test(r.stato), r.stato);
   await p.close2();
 
   // 4. Un 503 passeggero: il blocco di Google dura 5 minuti, non 24 ore
