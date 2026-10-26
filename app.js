@@ -276,13 +276,15 @@
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    let retried = false;
     if (r.status === 503) { // servizio giù per le richieste con chiave: riprovo senza chiave dopo una pausa
-      await sleep(1200);
+      retried = true; await sleep(1200);
       try { r = await fetch(url.replace("key=" + GBOOKS_KEY + "&", "")); } catch { throw { code: "google-rete" }; }
     }
     // Quota finita, chiave rifiutata o servizio giù: non insisto (5 minuti se è giù, altrimenti fino alla prossima apertura).
     if (r.status === 429 || r.status === 403 || r.status === 503) {
-      state.googleDown = { code: r.status, until: Date.now() + (r.status === 503 ? 5 * 60e3 : 864e5) };
+      // Un 503, o un rifiuto dopo il tentativo senza chiave, è un problema passeggero: pausa di 5 minuti. Il resto (quota, chiave) vale per il giorno.
+      state.googleDown = { code: r.status, until: Date.now() + (r.status === 503 || retried ? 5 * 60e3 : 864e5) };
       throw { code: "google-" + r.status, msg: await googleMsg(r) };
     }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
@@ -340,11 +342,18 @@
   }
 
   // Ricerca per il campo "Cerca il libro": prova le fonti in ordine e unisce i risultati.
+  // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
+  const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
   async function searchBooks(q) {
     const errors = []; let out = [];
-    const isbn = /^[\d-]{10,17}$/.test(q) ? q.replace(/-/g, "") : "";
+    const isbn = parseIsbn(q);
+    const google = async () => {
+      if (isbn) return googleSearch("isbn:" + isbn, { italian: false }); // un ISBN identifica già l'edizione
+      const it = await googleSearch(q);
+      return it.length ? it : googleSearch(q, { italian: false }); // alcune edizioni italiane non hanno la lingua indicata
+    };
     const tries = [
-      () => googleSearch(isbn ? "isbn:" + isbn : q),
+      google,
       () => appleSearch(isbn || q),
       () => openLibrarySearch(isbn ? "isbn:" + isbn : q, "")
     ];
@@ -1182,7 +1191,9 @@
       status.textContent = "Cerco tra le edizioni italiane…"; box.innerHTML = "";
       try {
         results = await searchBooks(q);
-        status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati." : "Nessun risultato: prova con meno parole o compila a mano.";
+        status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
+          : parseIsbn(q) ? "Nessuna fonte conosce questo ISBN: compila i dati a mano."
+          : "Nessun risultato: prova con meno parole o compila a mano.";
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
           <div><b>${esc(r.title)}</b><span>${esc(r.author || "Autore sconosciuto")}${r.edYear ? " · " + r.edYear : ""}${r.pages ? " · " + r.pages + " pp." : ""}${r.lang && r.lang !== "it" ? " · " + r.lang.toUpperCase() : ""}</span></div></button>`).join("");
