@@ -103,6 +103,8 @@
     out.status = STATUS_ONE[out.status] ? out.status : "da-leggere";
     if (out.year) out.year = Number(out.year) || undefined;
     if (out.pages) out.pages = Number(out.pages) || undefined;
+    // Date di lettura solo come AAAA-MM-GG: arrivano anche da file importati e dal cloud, e finiscono nella pagina.
+    for (const k of ["started", "finished"]) if (out[k] !== undefined && !(typeof out[k] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(out[k]))) delete out[k];
     // Solo l'anno di lettura, per i libri letti senza data di fine: vale solo un anno plausibile e mai insieme alla data.
     if (out.finishedYear !== undefined) { const y = Number(out.finishedYear); if (out.finished || !Number.isInteger(y) || y < 1900 || y > new Date().getFullYear()) delete out.finishedYear; else out.finishedYear = y; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
@@ -1265,7 +1267,7 @@
       <div class="sheet-top">${coverHTML(b)}<div>
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
         <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
-        ${b.finished ? `<p class="hint">Finito il ${fmtDate(b.finished)}</p>` : ""}
+        ${b.finished ? `<p class="hint">Finito il ${esc(fmtDate(b.finished))}</p>` : ""}
         ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div></div>
       <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
@@ -1830,7 +1832,7 @@
     peek.innerHTML = `${coverHTML(b, 160)}<div class="pk-body"><b>${esc(b.title)}</b><span>${esc(b.author || "Autore sconosciuto")}</span>
       <span class="pk-meta">${[b.year, b.pages ? b.pages + " pp." : "", b.genre].filter(Boolean).map(esc).join(" · ")}</span>
       ${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}
-      <span class="pk-st">${b.status === "in-lettura" && tot ? `In lettura · ${pct}%` : STATUS_ONE[b.status]}${b.finished && b.status === "letto" ? " · " + fmtDate(b.finished) : ""}</span></div>`;
+      <span class="pk-st">${b.status === "in-lettura" && tot ? `In lettura · ${pct}%` : STATUS_ONE[b.status]}${b.finished && b.status === "letto" ? " · " + esc(fmtDate(b.finished)) : ""}</span></div>`;
     const r = el.getBoundingClientRect(), W = 280, H = peek.offsetHeight || 150, m = 10;
     let x = r.left + r.width / 2 - W / 2; x = Math.max(m, Math.min(innerWidth - W - m, x));
     let y = r.top - H - 12; const below = y < m; if (below) y = r.bottom + 12;
