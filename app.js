@@ -683,13 +683,39 @@
   function renderHero() {
     const hero = $("#hero");
     const reading = sorted(state.books.filter(b => b.status === "in-lettura"));
-    const show = reading.length && (state.filter === "tutti" || state.filter === "in-lettura") && state.view === "libreria";
-    hero.hidden = !show;
+    const lib = state.view === "libreria", f = state.filter;
+    const show = reading.length && (f === "tutti" || f === "in-lettura") && lib;
+    // Senza letture in corso: «Cosa leggo adesso?», salvo «Non ora».
+    const list = !reading.length && lib && (f === "tutti" || f === "da-leggere") && !nx.off ? nextList() : [];
+    hero.hidden = !show && !list.length;
     if (hero.contains(document.activeElement)) document.activeElement.blur(); // niente cursore su un elemento che sto sostituendo
-    if (!show) { hero.innerHTML = ""; return; }
-    hero.innerHTML = readingCards(reading);
-    wireMain(hero);
+    if (hero.hidden) { hero.innerHTML = ""; return; }
+    hero.setAttribute("aria-label", show ? "Libri in lettura" : "Il prossimo libro");
+    if (show) { hero.innerHTML = readingCards(reading); wireMain(hero); } else { hero.innerHTML = nextHTML(list); wireNext(hero); }
   }
+  // Proposte mostrate: restano le stesse finché i libri sono ancora in pila; «Altre proposte» le esclude (esaurita la pila si ricomincia).
+  const nx = { ex: [], list: [], off: false };
+  function nextList(more) {
+    if (more) nx.ex.push(...nx.list.map(x => x.book.id));
+    const pile = state.books.filter(b => b.status === "da-leggere");
+    if (more || !nx.list.length || nx.list.some(x => !pile.some(b => b.id === x.book.id))) {
+      nx.list = nextBooks(state.books, nx.ex);
+      if (!nx.list.length) { nx.ex = []; nx.list = nextBooks(state.books); }
+    }
+    return nx.list;
+  }
+  function nextHTML(list, h = "h3") {
+    const more = state.books.filter(b => b.status === "da-leggere").length > list.length, hero = h === "h3";
+    return `<section class="next"><${h}>Cosa leggo adesso?</${h}><div class="nlist">${list.map(({ book: b, reason }) => `<div class="ncard" data-next="${esc(b.id)}">${coverHTML(b, 120)}<div><span class="why">${esc(reason)}</span><b>${esc(b.title)}</b><span class="meta">${esc([b.author, b.pages && b.pages + " pp."].filter(Boolean).join(" · "))}</span></div><button class="btn primary" type="button" data-start="${esc(b.id)}" aria-label="Inizia ${esc(b.title)}">Inizia</button></div>`).join("")}</div>
+      <div class="nfoot">${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
+  }
+  function wireNext(root, sheet) {
+    root.querySelectorAll("[data-start]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.start); if (sheet) closeSheet(); if (b) setStatus(b, "in-lettura"); });
+    const m = $("[data-n=more]", root);
+    if (m) m.onclick = () => { nextList(true); if (sheet) fillNext(root); else renderHero(); const n = $("[data-n=more]", root); if (n) n.focus(); };
+    $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
+  }
+  function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
   // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
   function pquickHTML(b, tot, pg) {
     const id = esc(b.id), step = Number(b.pageStep) || 0;
@@ -730,7 +756,7 @@
     const spines = books.map(b => spineHTML(b)).join("");
     const more = all.length - books.length;
     const moreBtn = st === "in-lettura" ? "" : pagerHTML(st, books.length, all.length);
-    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2><span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
+    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2>${st === "da-leggere" && all.length ? `<button class="btn choose" type="button" data-choose>Scegli per me</button>` : ""}<span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
       ${st === "in-lettura" ? readingCards(books) : ""}
       ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : st === "desiderato" ? "Nessun desiderio. Con + Libro puoi salvare un libro nella lista dei desideri." : "Scaffale vuoto."}</div>`}</div>`}
       ${moreBtn}</section>`;
@@ -813,6 +839,22 @@
 
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");
+  // Il prossimo libro: fino a tre proposte dalla pila (affine all'ultimo letto, la più vecchia, a caso). Funzione pura.
+  function nextBooks(books, exclude = [], rnd = Math.random) {
+    const pile = books.filter(b => b.status === "da-leggere" && !exclude.includes(b.id)).sort((a, b) => (a.added || 0) - (b.added || 0));
+    const out = [], take = (b, kind, reason) => { out.push({ book: b, kind, reason }); pile.splice(pile.indexOf(b), 1); };
+    const k = (b, f) => String(b[f] || "").trim().toLowerCase(); // mai abbinare valori vuoti
+    const last = books.filter(b => b.status === "letto").sort((a, b) => String(b.finished || "").localeCompare(String(a.finished || "")) || (b.updated || 0) - (a.updated || 0)).slice(0, 3);
+    for (const f of ["author", "genre"]) {
+      const r = last.find(r => k(r, f) && pile.some(b => k(b, f) === k(r, f)));
+      if (r) { const v = String(r[f]).trim(); take(pile.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${v.split(/\s+/).pop()}` : `Un altro ${v}, come «${r.title}»`); break; }
+    }
+    if (pile.length) { const b = pile[0], d = new Date(b.added); take(b, "vecchio", b.added ? `In pila da ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Da più tempo in pila"); }
+    while (out.length < 3 && pile.length) take(pile[Math.floor(rnd() * pile.length) % pile.length], "caso", "A caso");
+    return out;
+  }
+  window.libreriaNext = Object.freeze({ next: nextBooks });
+
   const dec = n => n == null ? "–" : n.toFixed(1).replace(".", ",");
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
   // Barra orizzontale con il numero accanto; il valore più alto in --accent.
@@ -967,6 +1009,7 @@
   }
   function wireMain(root) {
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
+    root.querySelectorAll("[data-choose]").forEach(btn => btn.onclick = () => fillNext(openSheet("")));
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;

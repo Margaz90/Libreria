@@ -583,3 +583,19 @@ html { scroll-behavior: smooth; }
 .pquick input[type=range] { flex: 1; min-width: 0; height: 44px; accent-color: var(--coral); margin: 0; }
 .pquick .grow { flex: 1; }
 .pquick .btn { min-height: 44px; min-width: 52px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+/* Il prossimo libro: proposte nell'hero e nella scheda «Scegli per me» */
+.next { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.next h3, .sheet .next h2 { margin: 0; font-family: var(--display); font-weight: var(--dw); font-size: 19px; color: var(--title); }
+.next .nlist { display: grid; gap: 10px; }
+@media (min-width: 1024px) { .hero .next .nlist { grid-template-columns: repeat(3, 1fr); } }
+.ncard { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center; background: var(--bg); border-radius: 12px; padding: 10px; min-width: 0; }
+.ncard .cover { width: 52px; padding: 0; border-radius: 2px 4px 4px 2px; } .ncard .cover .ct, .ncard .cover .ca, .ncard .cover::after { display: none; }
+.ncard .why { display: block; line-height: 1.3; margin-bottom: 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.ncard b { display: block; font-family: var(--display); font-weight: var(--dw); font-size: 15.5px; line-height: 1.2; color: var(--title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ncard .meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ncard > div { min-width: 0; }
+.ncard .btn, .next .nfoot .btn { min-height: 44px; }
+.next .nfoot { display: flex; gap: 8px; justify-content: space-between; }
+.sheet .next { border: 0; padding: 0; background: none; }
+/* Si vede alto 36 px, ma il bordo trasparente porta il bersaglio al tocco a 44 px */
+.shelf-head .choose { margin: 0 6px 0 auto; min-height: 44px; padding: 6px 12px; font-size: 13px; border: 4px solid transparent; border-radius: 14px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--rule); }

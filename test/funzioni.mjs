@@ -1,4 +1,4 @@
-// Tre funzioni: pagina rapida nell'hero (cursore, +10, ripeti, annulla); copie prima delle operazioni su molti libri e ripristino.
+// Tre funzioni: pagina rapida nell'hero (cursore, +10, ripeti, annulla); copie prima delle operazioni su molti libri e ripristino; il prossimo libro.
 import { APP, ok, newPage, localBooks, toastText } from './lib.mjs';
 
 const load = async (p, books) => {
@@ -85,8 +85,8 @@ async function paginaRapida(browser) {
   await p.close2();
 }
 
-// Apre Altro → Backup.
-const backup = async p => { await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-file'); await p.waitForTimeout(300); };
+// Apre Altro → Backup (prima torno in cima: scorrendo in giù la barra in basso si nasconde).
+const backup = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(150); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-file'); await p.waitForTimeout(300); };
 // Import di un file dalla scheda Backup (come in sicurezza.mjs), con «aggiorna i libri già presenti» se richiesto.
 export async function importa(p, books, upd = false) {
   await backup(p);
@@ -172,7 +172,85 @@ async function copie(browser) {
   await h.close2();
 }
 
+async function prossimo(browser) {
+  const p = await newPage(browser);
+  await load(p, []);
+  const next = (books, ex = [], r = 0) => p.evaluate(([b, e, r]) => window.libreriaNext.next(b, e, () => r).map(x => ({ id: x.book.id, kind: x.kind, reason: x.reason, author: x.book.author })), [books, ex, r]);
+  const D = 'da-leggere', L = 'letto';
+  const pila = [
+    { id: 'n1', title: 'Il cartello', author: 'Don Winslow', genre: 'Thriller', status: D, added: Date.UTC(2024, 2, 10) },
+    { id: 'n2', title: 'Joe Country', author: 'Mick Herron', genre: 'Spionaggio', status: D, added: Date.UTC(2025, 5, 1) },
+    { id: 'n3', title: 'Stoner', author: 'John Williams', genre: 'Romanzo', status: D, added: Date.UTC(2025, 6, 1) },
+    { id: 'n4', title: 'Real Tigers', author: 'Mick Herron', genre: 'Spionaggio', status: D, added: Date.UTC(2025, 8, 1) },
+    { id: 'n5', title: 'Il giardino', author: 'Altro', genre: 'Giallo', status: D, added: Date.UTC(2025, 9, 1) },
+  ];
+  const letti = [
+    { id: 'l1', title: 'Slough House', author: 'Mick Herron', genre: 'Spionaggio', status: L, finished: '2026-09-01' },
+    { id: 'l2', title: 'Vecchio', author: 'Don Winslow', genre: 'Thriller', status: L, finished: '2020-01-01' },
+  ];
+  let l = await next([...pila, ...letti]);
+  ok('affine: stesso autore dell\'ultimo letto', l[0].kind === 'affine' && l[0].author === 'Mick Herron' && l[0].id === 'n2' && /Dopo «Slough House», ancora Herron$/.test(l[0].reason), JSON.stringify(l[0]));
+  ok('la più vecchia è quella con added minore', l[1].kind === 'vecchio' && l[1].id === 'n1' && l[1].reason === 'In pila da marzo 2024', JSON.stringify(l[1]));
+  ok('tre proposte diverse', l.length === 3 && new Set(l.map(x => x.id)).size === 3 && l[2].kind === 'caso');
+  l = await next([...pila, { id: 'l3', title: 'Altro giallo', author: 'Nessuno in pila', genre: 'Giallo', status: L, finished: '2026-10-01' }]);
+  ok('affine per genere se manca l\'autore', l[0].kind === 'affine' && l[0].id === 'n5' && /Un altro Giallo, come «Altro giallo»/.test(l[0].reason), JSON.stringify(l[0]));
+  l = await next([{ id: 'x1', title: 'Senza', status: D, added: 5, author: '', genre: ' ' }, { id: 'x2', title: 'Nulla', status: D, added: 9 }, { id: 'x3', title: 'Letto vuoto', status: L, author: ' ', genre: '' }]);
+  ok('libri senza autore né genere: nessun abbinamento vuoto', !l.some(x => x.kind === 'affine') && l.length === 2, JSON.stringify(l));
+  l = await next([...pila, ...letti], ['n2', 'n1', 'n3']);
+  ok('exclude: niente proposte già mostrate', l.length === 2 && l.every(x => !['n1', 'n2', 'n3'].includes(x.id)) && l[0].id === 'n4', JSON.stringify(l));
+  l = await next([...letti, { id: 'w', title: 'Desiderio', status: 'desiderato' }]);
+  ok('pila vuota: nessuna proposta', l.length === 0);
+
+  // Interfaccia
+  const base = { rating: 0 };
+  await load(p, [...pila, ...letti].map(b => ({ ...base, pages: 300, ...b })));
+  const hero = p.locator('#hero .next');
+  ok('hero senza letture mostra Cosa leggo adesso?', await hero.isVisible() && /Cosa leggo adesso\?/.test(await hero.innerText()) && await hero.locator('.ncard').count() === 3
+    && /Mick Herron · 300 pp\./.test(await hero.locator('.ncard').first().innerText()));
+  const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
+  ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
+  const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
+  const before = await ids(hero);
+  await p.locator('#n-more').click(); await p.waitForTimeout(200);
+  const after = await ids(p.locator('#hero .next'));
+  ok('Altre proposte cambia i libri', after.length > 0 && after.every(x => !before.includes(x)), `${before} → ${after}`);
+  await p.locator('#n-more').click(); await p.waitForTimeout(200);
+  ok('pila esaurita: si ricomincia', (await ids(p.locator('#hero .next'))).length === 3);
+  await p.locator('[data-filter="letto"]').first().click(); await p.waitForTimeout(200);
+  ok('filtro Letti: niente proposte', await p.locator('#hero .next').count() === 0);
+  await p.locator('[data-filter="da-leggere"]').first().click(); await p.waitForTimeout(200);
+  ok('filtro Da leggere: proposte visibili', await p.locator('#hero .next').isVisible());
+  await p.locator('[data-filter="tutti"]').first().click(); await p.waitForTimeout(200);
+  await p.locator('#n-later').click(); await p.waitForTimeout(200);
+  ok('Non ora nasconde la proposta', await p.locator('#hero .next').count() === 0);
+
+  const choose = p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]');
+  const cs = await choose.boundingBox();
+  ok('Scegli per me nello scaffale Da leggere (tocco di 44 px)', cs && cs.height >= 44, cs && cs.height);
+  await choose.click(); await p.waitForTimeout(300);
+  const sh = p.locator('.sheet .next');
+  ok('Scegli per me apre le proposte', await sh.isVisible() && await sh.locator('.ncard').count() === 3);
+  const id = (await ids(sh))[0];
+  await sh.locator(`button[data-start="${id}"]`).click(); await wait(p);
+  const today = await p.evaluate(() => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); });
+  const st = await book(p, id);
+  ok('Inizia porta a In lettura con inizio oggi', st.status === 'in-lettura' && st.started === today && await p.locator('.sheet').count() === 0
+    && await p.locator(`#hero .rcard [data-page="${id}"]`).count() === 1, `${st.status} ${st.started}`);
+  ok('con letture in corso l\'hero non propone', await p.locator('#hero .next').count() === 0);
+  await choose.click(); await p.waitForTimeout(300);
+  ok('Scegli per me funziona anche con letture in corso', await p.locator('.sheet .next .ncard').count() >= 1);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+
+  await load(p, [{ id: 'u1', title: 'Unico <b>', author: 'A', status: D, added: 1 }]);
+  ok('un solo libro in pila: una proposta, testo con esc', await p.locator('#hero .ncard').count() === 1 && /Unico <b>/.test(await p.locator('#hero .ncard b').innerText()));
+  await load(p, letti);
+  ok('pila vuota: niente hero né Scegli per me', await p.locator('#hero .next').count() === 0 && await p.locator('[data-choose]').count() === 0);
+  ok('prossimo libro: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await paginaRapida(browser);
   await copie(browser);
+  await prossimo(browser);
 }
