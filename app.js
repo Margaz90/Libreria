@@ -702,7 +702,7 @@
       nx.list = nextBooks(state.books, nx.ex);
       if (!nx.list.length) { nx.ex = []; nx.list = nextBooks(state.books); }
     }
-    return nx.list;
+    return nx.list = nx.list.map(x => ({ ...x, book: pile.find(b => b.id === x.book.id) || x.book })); // dati aggiornati (titolo, copertina…)
   }
   function nextHTML(list, h = "h3") {
     const more = state.books.filter(b => b.status === "da-leggere").length > list.length, hero = h === "h3";
@@ -710,7 +710,7 @@
       <div class="nfoot">${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
   }
   function wireNext(root, sheet) {
-    root.querySelectorAll("[data-start]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.start); if (sheet) closeSheet(); if (b) setStatus(b, "in-lettura"); });
+    root.querySelectorAll("[data-start]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); });
     const m = $("[data-n=more]", root);
     if (m) m.onclick = () => { nextList(true); if (sheet) fillNext(root); else renderHero(); const n = $("[data-n=more]", root); if (n) n.focus(); };
     $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
@@ -841,7 +841,8 @@
   const num = n => Number(n).toLocaleString("it-IT");
   // Il prossimo libro: fino a tre proposte dalla pila (affine all'ultimo letto, la più vecchia, a caso). Funzione pura.
   function nextBooks(books, exclude = [], rnd = Math.random) {
-    const pile = books.filter(b => b.status === "da-leggere" && !exclude.includes(b.id)).sort((a, b) => (a.added || 0) - (b.added || 0));
+    const add = b => { const n = Number(b.added); return isFinite(n) && n > 0 ? n : 0; };
+    const pile = books.filter(b => b.status === "da-leggere" && !exclude.includes(b.id)).sort((a, b) => add(a) - add(b));
     const out = [], take = (b, kind, reason) => { out.push({ book: b, kind, reason }); pile.splice(pile.indexOf(b), 1); };
     const k = (b, f) => String(b[f] || "").trim().toLowerCase(); // mai abbinare valori vuoti
     const last = books.filter(b => b.status === "letto").sort((a, b) => String(b.finished || "").localeCompare(String(a.finished || "")) || (b.updated || 0) - (a.updated || 0)).slice(0, 3);
@@ -849,7 +850,7 @@
       const r = last.find(r => k(r, f) && pile.some(b => k(b, f) === k(r, f)));
       if (r) { const v = String(r[f]).trim(); take(pile.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${v.split(/\s+/).pop()}` : `Un altro ${v}, come «${r.title}»`); break; }
     }
-    if (pile.length) { const b = pile[0], d = new Date(b.added); take(b, "vecchio", b.added ? `In pila da ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Da più tempo in pila"); }
+    if (pile.length) { const b = pile[0], d = new Date(add(b)); take(b, "vecchio", add(b) ? `In pila da ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Da più tempo in pila"); }
     while (out.length < 3 && pile.length) take(pile[Math.floor(rnd() * pile.length) % pile.length], "caso", "A caso");
     return out;
   }
@@ -1009,7 +1010,7 @@
   }
   function wireMain(root) {
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
-    root.querySelectorAll("[data-choose]").forEach(btn => btn.onclick = () => fillNext(openSheet("")));
+    root.querySelectorAll("[data-choose]").forEach(btn => btn.onclick = () => { const s = openSheet(""); fillNext(s); $("button", s).focus(); });
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;
@@ -1049,7 +1050,7 @@
   function refreshChanged(list) {
     if (!list.length) return;
     schedulePersist(); // i dati ricevuti vanno salvati sul dispositivo in ogni caso
-    if (list.some(x => x.from === "in-lettura" || x.to === "in-lettura" || x.removed)) renderHero();
+    if (list.some(x => [x.from, x.to].some(s => s === "in-lettura" || s === "da-leggere") || x.removed)) renderHero();
     const main = $("#main");
     const visibleNow = () => visible().filter(b => state.filter === "tutti" || b.status === state.filter);
     const focused = document.activeElement;
@@ -1088,6 +1089,7 @@
   // Sostituisce solo gli elementi di un libro (dorso, copertina) senza ridisegnare la pagina.
   function patchBook(id) {
     const b = state.books.find(x => x.id === id); if (!b) return;
+    if ($(`#hero [data-next="${CSS.escape(id)}"]`)) renderHero();
     document.querySelectorAll(`#main [data-id="${CSS.escape(id)}"], #hero [data-id="${CSS.escape(id)}"]`).forEach(el => {
       let html = null;
       if (el.classList.contains("spine")) html = spineHTML(b);

@@ -8,6 +8,11 @@ const load = async (p, books) => {
 };
 const book = async (p, id) => (await localBooks(p)).find(x => x.id === id);
 const wait = p => p.waitForTimeout(900);
+// Aspetta che il libro salvato in localStorage abbia i valori attesi (il salvataggio è ritardato di 700 ms); null = campo assente.
+const until = (p, id, o) => p.waitForFunction(([id, o]) => {
+  const b = JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').find(x => x.id === id);
+  return b && Object.entries(o).every(([k, v]) => b[k] === (v === null ? undefined : v));
+}, [id, o], { timeout: 4000 }).catch(() => {});
 
 async function paginaRapida(browser) {
   const p = await newPage(browser);
@@ -27,52 +32,52 @@ async function paginaRapida(browser) {
   const hs = await add10('p1').boundingBox();
   ok('bersagli al tocco di almeno 44 px', hs.height >= 44 && hs.width >= 44, `${hs.width}x${hs.height}`);
 
-  await add10('p1').click(); await wait(p);
+  await add10('p1').click(); await until(p, 'p1', { page: 110 });
   ok('+10 salva subito', (await book(p, 'p1')).page === 110, (await book(p, 'p1')).page);
   ok('toast «Pagina 110»', /Pagina 110/.test(await p.locator('.toast').innerText()));
-  await toastBtn().click(); await wait(p);
+  await toastBtn().click(); await until(p, 'p1', { page: 100 });
   ok('Annulla torna a 100', (await book(p, 'p1')).page === 100 && (await book(p, 'p1')).pageStep === undefined);
 
   await card('p1').locator('[data-page]').fill('130');
-  await card('p1').locator('[data-save]').click(); await wait(p);
+  await card('p1').locator('[data-save]').click(); await until(p, 'p1', { page: 130 });
   ok('pagina scritta a mano: salto ricordato', (await book(p, 'p1')).pageStep === 30, (await book(p, 'p1')).pageStep);
   const rep = card('p1').locator('button[data-repeat]');
   ok('ripeti mostra +30', (await rep.innerText()).trim() === '+30');
-  await rep.click(); await wait(p);
+  await rep.click(); await until(p, 'p1', { page: 160 });
   ok('ripeti porta a 160', (await book(p, 'p1')).page === 160, (await book(p, 'p1')).page);
-  await add10('p1').click(); await wait(p);
+  await add10('p1').click(); await until(p, 'p1', { page: 170 });
   ok('+10 non cambia il salto', (await book(p, 'p1')).pageStep === 30 && (await book(p, 'p1')).page === 170);
 
   // Annulla dopo un salto a mano ripristina anche il salto precedente.
   await card('p1').locator('[data-page]').fill('175');
-  await card('p1').locator('[data-save]').click(); await wait(p);
+  await card('p1').locator('[data-save]').click(); await until(p, 'p1', { page: 175 });
   ok('salto aggiornato a 5', (await book(p, 'p1')).pageStep === 5);
-  await toastBtn().click(); await wait(p);
+  await toastBtn().click(); await until(p, 'p1', { page: 170 });
   ok('Annulla ripristina pagina e salto', (await book(p, 'p1')).page === 170 && (await book(p, 'p1')).pageStep === 30);
 
   const r = card('p1').locator('input[type=range]');
   await r.fill('250');
   ok('cursore: durante il trascinamento non salva', (await book(p, 'p1')).page === 170);
-  await r.dispatchEvent('change'); await wait(p);
+  await r.dispatchEvent('change'); await until(p, 'p1', { page: 250 });
   ok('cursore: salva al rilascio', (await book(p, 'p1')).page === 250, (await book(p, 'p1')).page);
   ok('cursore: salto ricordato (80)', (await book(p, 'p1')).pageStep === 80);
 
-  await card('p1').locator('button[data-repeat]').click(); await wait(p);
+  await card('p1').locator('button[data-repeat]').click(); await until(p, 'p1', { page: 300 });
   const fin = await card('p1').locator('[data-finish]').isVisible().catch(() => false);
   ok('limite al totale e compare Finito', (await book(p, 'p1')).page === 300 && fin, (await book(p, 'p1')).page);
 
   ok('senza pagine totali: niente cursore, +10 funziona', await card('p2').locator('input[type=range]').count() === 0
-    && (await add10('p2').click(), await wait(p), (await book(p, 'p2')).page === 30), (await book(p, 'p2')).page);
+    && (await add10('p2').click(), await until(p, 'p2', { page: 30 }), (await book(p, 'p2')).page === 30), (await book(p, 'p2')).page);
 
   // Due +10 rapidi e Annulla: si torna alla pagina prima dell'ultimo gesto.
   await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 100 }]);
   await add10('p1').click(); await add10('p1').click();
-  await toastBtn().click(); await wait(p);
+  await toastBtn().click(); await until(p, 'p1', { page: 110 });
   ok('due +10 rapidi e Annulla: si torna a 110', (await book(p, 'p1')).page === 110, (await book(p, 'p1')).page);
   // Annulla dopo «Finito!»: il libro letto non deve tornare indietro di pagina.
   await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 295 }]);
-  await add10('p1').click(); await wait(p);
-  await card('p1').locator('[data-finish]').click(); await wait(p);
+  await add10('p1').click(); await until(p, 'p1', { page: 300 });
+  await card('p1').locator('[data-finish]').click(); await until(p, 'p1', { status: 'letto' });
   if (await toastBtn().count()) { await toastBtn().first().click(); await wait(p); }
   const fb = await book(p, 'p1');
   ok('Annulla dopo Finito: il libro resta letto con tutte le pagine', fb.status === 'letto' && fb.page === 300, `${fb.status} ${fb.page}`);
@@ -141,7 +146,8 @@ async function copie(browser) {
   await load(p, [{ ...base, id: 'c1', title: 'Originale', author: 'A' }, { ...base, id: 'c2', title: 'Secondo', author: 'B' }]);
   await importa(p, [{ title: 'Terzo', author: 'C' }]);
   await p.locator('#main [data-id="c2"]').first().click(); await p.waitForSelector('#s-del');
-  await p.locator('#s-del').click(); await p.locator('#s-del').click(); await p.waitForTimeout(900);
+  await p.locator('#s-del').click(); await p.locator('#s-del').click();
+  await p.waitForFunction(() => !JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(b => b.id === 'c2'), null, { timeout: 4000 }).catch(() => {});
   ok('libro eliminato', !(await book(p, 'c2')));
   await ripristina(p);
   const tombs = await p.evaluate(() => JSON.parse(localStorage.getItem('libreria-tombs') || '{}'));
@@ -198,6 +204,8 @@ async function prossimo(browser) {
   ok('libri senza autore né genere: nessun abbinamento vuoto', !l.some(x => x.kind === 'affine') && l.length === 2, JSON.stringify(l));
   l = await next([...pila, ...letti], ['n2', 'n1', 'n3']);
   ok('exclude: niente proposte già mostrate', l.length === 2 && l.every(x => !['n1', 'n2', 'n3'].includes(x.id)) && l[0].id === 'n4', JSON.stringify(l));
+  l = await next([{ id: 'z1', title: 'Data strana', status: D, added: 'ieri' }, { id: 'z2', title: 'Altra', status: D, added: -3 }]);
+  ok('added non valido: «Da più tempo in pila»', l[0].reason === 'Da più tempo in pila' && !/NaN|undefined/.test(JSON.stringify(l)), JSON.stringify(l));
   l = await next([...letti, { id: 'w', title: 'Desiderio', status: 'desiderato' }]);
   ok('pila vuota: nessuna proposta', l.length === 0);
 
@@ -209,6 +217,9 @@ async function prossimo(browser) {
     && /Mick Herron · 300 pp\./.test(await hero.locator('.ncard').first().innerText()));
   const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
   ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
+  await p.locator('#main [data-id="n2"]').first().click(); await p.waitForSelector('.sheet details.edit');
+  await p.locator('.sheet details.edit summary').click(); await p.locator('#d-title').fill('Joe Country (nuovo)'); await p.locator('#s-save').click(); await p.waitForTimeout(300);
+  ok('titolo di un libro proposto modificato: l\'hero mostra il nuovo', /Joe Country \(nuovo\)/.test(await p.locator('#hero .ncard[data-next="n2"]').innerText().catch(() => '')));
   const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
   const before = await ids(hero);
   await p.locator('#n-more').click(); await p.waitForTimeout(200);
@@ -231,7 +242,7 @@ async function prossimo(browser) {
   const sh = p.locator('.sheet .next');
   ok('Scegli per me apre le proposte', await sh.isVisible() && await sh.locator('.ncard').count() === 3);
   const id = (await ids(sh))[0];
-  await sh.locator(`button[data-start="${id}"]`).click(); await wait(p);
+  await sh.locator(`button[data-start="${id}"]`).click(); await until(p, id, { status: 'in-lettura' });
   const today = await p.evaluate(() => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); });
   const st = await book(p, id);
   ok('Inizia porta a In lettura con inizio oggi', st.status === 'in-lettura' && st.started === today && await p.locator('.sheet').count() === 0
