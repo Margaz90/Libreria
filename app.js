@@ -230,10 +230,12 @@
   }
   // Completa autore, anno, pagine, genere e copertina per ISBN, in sottofondo: l'app resta usabile.
   const enrich = { busy: false };
+  // Generazione dei dati: il ripristino di una copia la incrementa e i lavori in sottofondo partiti prima si fermano.
+  let dataGen = 0;
   async function enrichBooks(ids) {
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
     enrich.busy = true;
-    const line = $("#enrich");
+    const gen = dataGen, line = $("#enrich");
     const errors = {}; let fixed = 0, missed = 0;
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri: ${k + 1} di ${ids.length}`; }
@@ -241,6 +243,7 @@
       if (b && (!b.author || (!b.cover && !b.noCover))) {
         const errs = {};
         const hit = await fetchInfo(b, errs).catch(() => null);
+        if (gen !== dataGen) return; // copia ripristinata nel frattempo
         if (hit && (hit.author || hit.cover)) {
           if (!b.author && hit.author) b.author = hit.author;
           if (!b.year && hit.edYear) b.year = hit.edYear;
@@ -259,6 +262,7 @@
         }
       }
       await sleep(250);
+      if (gen !== dataGen) return;
     }
     enrich.busy = false;
     if (line) line.hidden = true;
@@ -277,9 +281,12 @@
   async function copies(mode, fn) {
     const db = await new Promise((res, rej) => {
       const r = indexedDB.open("libreria-copie", 1);
+      // su WebKit l'apertura a volte non risponde: meglio nessuna copia che un import bloccato
+      let late = false;
+      const t = setTimeout(() => { late = true; rej(new Error("timeout")); }, 1500);
       r.onupgradeneeded = () => r.result.createObjectStore("copie", { keyPath: "id" });
-      r.onsuccess = () => res(r.result); r.onerror = r.onblocked = () => rej(r.error);
-      setTimeout(rej, 1500); // su WebKit l'apertura a volte non risponde: meglio nessuna copia che un import bloccato
+      r.onsuccess = () => { clearTimeout(t); if (late) r.result.close(); else res(r.result); }; // aperto in ritardo: lo chiudo
+      r.onerror = r.onblocked = () => { clearTimeout(t); rej(r.error); };
     });
     return new Promise((res, rej) => {
       const t = db.transaction("copie", mode), q = fn(t.objectStore("copie"));
@@ -297,11 +304,14 @@
       return true;
     } catch { return false; }
   }
-  const listSnapshots = async () => ((await copies("readonly", s => s.getAll())) || []).reverse().map(c => ({ id: c.id, at: c.at, label: c.label, count: c.books.length }));
+  const listSnapshots = async () => ((await copies("readonly", s => s.getAll())) || []).reverse().map(c => ({ id: c.id, at: c.at, label: c.label, count: c.books.length, ids: c.books.map(b => b.id) }));
   const when = at => { const d = new Date(at), z = n => String(n).padStart(2, "0"); return `${z(d.getDate())}/${z(d.getMonth() + 1)} alle ${z(d.getHours())}:${z(d.getMinutes())}`; };
   async function restoreSnapshot(id) {
     let c; try { c = await copies("readonly", s => s.get(id)); } catch {}
     if (!c) return false; // letta prima della nuova copia: con 3 copie quella nuova cancellerebbe la più vecchia
+    dataGen++; // ferma «Completa autori e copertine» e la ricerca delle copertine, che riempirebbero di nuovo i libri
+    if (enrich.busy) { enrich.busy = false; const line = $("#enrich"); if (line) line.hidden = true; }
+    state.coverJob = null;
     await snapshot("Prima del ripristino");
     const now = Date.now(), cur = new Map(state.books.map(b => [b.id, b])), keep = new Set(c.books.map(b => b.id)), t = getTombs();
     const gone = state.books.filter(b => !keep.has(b.id)).map(b => b.id);
@@ -531,11 +541,12 @@
     if (!navigator.onLine) { toast("Serve una connessione per cercare le copertine."); return; }
     const todo = redo ? state.books.filter(b => !b.coverManual && !b.spine) : state.books.filter(b => !b.cover && !b.noCover);
     if (!todo.length) { toast("Tutti i libri hanno già una copertina."); return; }
-    state.coverJob = { done: 0, total: todo.length, found: 0 };
+    const job = state.coverJob = { done: 0, total: todo.length, found: 0 }, gen = dataGen;
     const errors = {};
     try {
       for (const b of todo) {
         const hit = await findCover(b, errors);
+        if (gen !== dataGen) return; // copia ripristinata nel frattempo: niente più modifiche né messaggi
         const cur = state.books.find(x => x.id === b.id);
         if (cur && hit && cur.cover !== hit.cover) {
           cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages;
@@ -547,12 +558,16 @@
         if (state.coverJob.done % 10 === 0) schedulePersist();
         onProgress && onProgress(state.coverJob);
         await sleep(200);
+        if (gen !== dataGen) return;
       }
     } finally {
-      const { found, done } = state.coverJob; state.coverJob = null;
-      persist(); render(); onProgress && onProgress(null);
-      const errs = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
-      toast(`Copertine trovate: ${found} su ${done}.` + (found < done && errs ? ` Errori: ${errs}.` : ""));
+      if (gen !== dataGen) onProgress && onProgress(null); // fermato dal ripristino: niente salvataggio né messaggio
+      else {
+        const { found, done } = job; state.coverJob = null;
+        persist(); render(); onProgress && onProgress(null);
+        const errs = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
+        toast(`Copertine trovate: ${found} su ${done}.` + (found < done && errs ? ` Errori: ${errs}.` : ""));
+      }
     }
   }
 
@@ -848,7 +863,10 @@
     const last = books.filter(b => b.status === "letto").sort((a, b) => String(b.finished || "").localeCompare(String(a.finished || "")) || (b.updated || 0) - (a.updated || 0)).slice(0, 3);
     for (const f of ["author", "genre"]) {
       const r = last.find(r => k(r, f) && pile.some(b => k(b, f) === k(r, f)));
-      if (r) { const v = String(r[f]).trim(); take(pile.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${v.split(/\s+/).pop()}` : `Un altro ${v}, come «${r.title}»`); break; }
+      if (r) {
+        const v = String(r[f]).trim(), who = /,| e |\bvari\b/i.test(v) ? v : v.split(/\s+/).pop(); // più autori: il nome intero, non l'ultima parola
+        take(pile.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${who}` : `Stesso genere di «${r.title}»: ${v}`); break;
+      }
     }
     if (pile.length) { const b = pile[0], d = new Date(add(b)); take(b, "vecchio", add(b) ? `In pila da ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Da più tempo in pila"); }
     while (out.length < 3 && pile.length) take(pile[Math.floor(rnd() * pile.length) % pile.length], "caso", "A caso");
@@ -1050,7 +1068,9 @@
   function refreshChanged(list) {
     if (!list.length) return;
     schedulePersist(); // i dati ricevuti vanno salvati sul dispositivo in ogni caso
-    if (list.some(x => [x.from, x.to].some(s => s === "in-lettura" || s === "da-leggere") || x.removed)) renderHero();
+    // Le proposte (da leggere) si vedono solo senza letture in corso: altrimenti non ridisegno l'hero, che toglierebbe il focus dalla pagina.
+    const reading = state.books.some(b => b.status === "in-lettura");
+    if (list.some(x => [x.from, x.to].includes("in-lettura") || x.removed || (!reading && [x.from, x.to].includes("da-leggere")))) renderHero();
     const main = $("#main");
     const visibleNow = () => visible().filter(b => state.filter === "tutti" || b.status === state.filter);
     const focused = document.activeElement;
@@ -1865,15 +1885,24 @@
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
-    const ul = $("#u-list", sheet);
-    listSnapshots().then(l => {
-      ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(c.label)}<small>${when(c.at)} · ${c.count} libri</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("") : `<p class="hint">Nessuna copia per ora.</p>`;
-    }, () => { ul.outerHTML = `<p class="hint" id="u-none">L'annullamento non è disponibile su questo dispositivo</p>`; });
-    ul.onclick = e => { // conferma in due tocchi
+    const ul = $("#u-list", sheet); let snaps = [];
+    const fillCopies = () => listSnapshots().then(l => { // richiamata dopo un import con la scheda aperta
+      snaps = l;
+      ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(c.label)}<small>${when(c.at)} · ${plural(c.count, "libro", "libri")}</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("")
+        + `<p class="hint" id="u-sync">Il ripristino vale anche sugli altri dispositivi collegati.</p>` : `<p class="hint">Nessuna copia per ora.</p>`;
+    }, () => { if (ul.isConnected) ul.outerHTML = `<p class="hint" id="u-none">L'annullamento non è disponibile su questo dispositivo</p>`; });
+    fillCopies();
+    ul.onclick = e => { // conferma in due tocchi; il secondo dice quanti libri spariranno
       const b = e.target.closest("[data-restore]"); if (!b) return;
-      if (b.classList.contains("danger")) { closeSheet(); restoreSnapshot(Number(b.dataset.restore)); return; }
+      if (b.classList.contains("danger")) {
+        closeSheet();
+        restoreSnapshot(Number(b.dataset.restore)).then(done => { if (!done) toast("Copia non trovata: ripristino non riuscito"); });
+        return;
+      }
       ul.querySelectorAll(".danger").forEach(x => { x.classList.remove("danger"); x.textContent = "Ripristina"; });
-      b.classList.add("danger"); b.textContent = "Conferma ripristino";
+      const c = snaps.find(x => x.id === Number(b.dataset.restore)), keep = new Set(c ? c.ids : []);
+      const n = c ? state.books.filter(x => !keep.has(x.id)).length : 0;
+      b.classList.add("danger"); b.textContent = n ? `Conferma: toglie ${plural(n, "libro", "libri")}` : "Conferma ripristino";
     };
     let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, csv = false;
     const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet);
@@ -1946,6 +1975,7 @@
       }
       const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
       st.textContent = `Importati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".";
+      fillCopies(); // la copia appena fatta compare in Annulla
     };
   }
 
