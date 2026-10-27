@@ -70,6 +70,7 @@ Etichette: «Aggiungi 10 pagine», «Aggiungi N pagine», cursore «Pagina attua
   2. i libri presenti ora e assenti nella copia vengono eliminati con `removeBook` (segnaposto per il cloud);
   3. i libri della copia sostituiscono quelli attuali, mantenendo `spine`/`spineRatio` attuali dello stesso `id`;
   4. ogni libro ripristinato riceve `updated = Date.now()` e `cloudHook("changed", id)`, così vince sulla versione nel cloud;
+  4b. gli `id` ripristinati vengono tolti da `libreria-tombs`, altrimenti un libro eliminato dopo la copia verrebbe cancellato di nuovo dal cloud;
   5. `schedulePersist()`, `render()`, messaggio «Libreria riportata al gg/mm alle hh:mm».
 - Se IndexedDB non è disponibile la sezione mostra «L'annullamento non è disponibile su questo dispositivo».
 
