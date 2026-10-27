@@ -139,14 +139,18 @@
     if (tot) v = Math.min(v, tot);
     const jump = v - oldPage;
     const step = manual && jump >= 1 && jump <= 2000 ? jump : prev.pageStep;
+    if (v === oldPage && step === prev.pageStep) return; // niente da salvare
     const before = { page: prev.page, pageStep: prev.pageStep };
-    const apply = (page, pageStep) => {
+    const apply = (page, pageStep, undo) => {
       const k = state.books.findIndex(x => x.id === id); if (k < 0) return;
+      if (undo && state.books[k].status !== "in-lettura") return; // già finito o spostato: Annulla non tocca la pagina
+      const ae = document.activeElement, fk = ae && ae.closest && ae.closest("#hero") ? ["data-add", "data-repeat", "data-save"].find(a => ae.hasAttribute(a)) : null;
       state.books[k] = { ...clean({ ...state.books[k], page, pageStep }), id, updated: Date.now() };
       schedulePersist(); renderHero(); renderTally(); cloudHook("changed", id);
+      if (fk) { const sel = fk === "data-add" ? `[data-add][data-id-add="${CSS.escape(id)}"]` : `[${fk}="${CSS.escape(id)}"]`; const nb = $("#hero " + sel); if (nb) nb.focus({ preventScroll: true }); }
     };
     apply(v, step);
-    toast("Pagina " + v, { label: "Annulla", run: () => apply(before.page, before.pageStep) });
+    toast("Pagina " + v, { label: "Annulla", run: () => apply(before.page, before.pageStep, true) });
   }
   function addMany(list, { update = false } = {}) {
     const known = new Map(state.books.map(b => [keyOf(b), b]));

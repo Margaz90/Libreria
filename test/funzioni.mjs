@@ -69,6 +69,18 @@ async function paginaRapida(browser) {
   await add10('p1').click(); await add10('p1').click();
   await toastBtn().click(); await wait(p);
   ok('due +10 rapidi e Annulla: si torna a 110', (await book(p, 'p1')).page === 110, (await book(p, 'p1')).page);
+  // Annulla dopo «Finito!»: il libro letto non deve tornare indietro di pagina.
+  await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 295 }]);
+  await add10('p1').click(); await wait(p);
+  await card('p1').locator('[data-finish]').click(); await wait(p);
+  if (await toastBtn().count()) { await toastBtn().first().click(); await wait(p); }
+  const fb = await book(p, 'p1');
+  ok('Annulla dopo Finito: il libro resta letto con tutte le pagine', fb.status === 'letto' && fb.page === 300, `${fb.status} ${fb.page}`);
+  // Salvataggio manuale senza cambiamenti: niente toast.
+  await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 100, pageStep: 30 }]);
+  const upd0 = (await book(p, 'p1')).updated;
+  await card('p1').locator('[data-save]').click(); await wait(p);
+  ok('stessa pagina + Aggiorna: niente salvataggio né toast', await p.locator('.toast').count() === 0 && (await book(p, 'p1')).updated === upd0 && (await book(p, 'p1')).pageStep === 30);
   ok('pagina rapida: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
