@@ -25,7 +25,7 @@ const cerca = async (p, q) => {
   await p.fill('#s-q', q); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
   const stato = await p.locator('#s-status').innerText().catch(() => '');
   const titoli = await p.locator('#s-results .result b').allInnerTexts().catch(() => []);
-  const primo = await p.locator('#s-results .result').first().innerText().catch(() => '');
+  const primo = (await p.locator('#s-results .result').count()) ? await p.locator('#s-results .result').first().innerText() : '';
   const pulsante = await p.locator('#s-title').count();
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   return { stato, titoli, primo, pulsante };
