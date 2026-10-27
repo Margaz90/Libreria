@@ -1,5 +1,6 @@
 // Sincronizzazione tra tre dispositivi con il finto Firebase: accesso, modifiche, eliminazioni, foto, unione, obiettivo.
 import { APP, API, ok, wait, newPage, localBooks, resetCloud } from './lib.mjs';
+import { importa, ripristina } from './funzioni.mjs';
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
 const cloudCount = async () => (await (await fetch(API + '/col?path=' + encodeURIComponent('users/u1/books'))).json()).filter(x => !x.data.deleted).length;
@@ -101,6 +102,14 @@ export default async function ({ browser }) {
   await A.locator('.goal').first().click(); await A.waitForSelector('#g-n'); await A.fill('#g-n', '5'); await A.click('#g-save');
   const goal = await wait(async () => (await B.evaluate(y => (JSON.parse(localStorage.getItem('libreria-settings') || '{}').goals || {})[y], year)) === 5, 8000).then(() => true, () => false);
   ok('obiettivo impostato su A arriva su B', goal);
+
+  // 11. Ripristino di una copia su A: i libri tornano come prima anche su B
+  await importa(A, [{ title: t2.title.toUpperCase(), author: t2.author }], true);
+  await wait(async () => (await localBook(B, t2.id))?.title === t2.title.toUpperCase(), 6000).catch(() => {});
+  const up = (await localBook(B, t2.id))?.title === t2.title.toUpperCase();
+  await ripristina(A);
+  await wait(async () => (await localBook(B, t2.id))?.title === t2.title, 6000).catch(() => {});
+  ok('ripristino su A arriva su B', up && (await localBook(B, t2.id))?.title === t2.title && !!(await localBook(A, t2.id))?.spine);
 
   const errs = [...A.errs, ...B.errs, ...D.errs];
   ok('sincronizzazione: nessun errore in console', !errs.length, errs.join(' / '));

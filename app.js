@@ -272,6 +272,50 @@
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
   }
 
+  /* ---------- copie prima delle operazioni su molti libri (IndexedDB) ---------- */
+  // Ogni copia: { id = at (ms), at, label, books } senza le foto dei dorsi; si tengono le ultime 3.
+  async function copies(mode, fn) {
+    const db = await new Promise((res, rej) => {
+      const r = indexedDB.open("libreria-copie", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("copie", { keyPath: "id" });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return new Promise((res, rej) => {
+      const t = db.transaction("copie", mode), q = fn(t.objectStore("copie"));
+      t.oncomplete = () => { db.close(); res(q && q.result); };
+      t.onerror = t.onabort = () => { db.close(); rej(t.error); };
+    });
+  }
+  let lastCopy = 0;
+  // Non blocca mai l'operazione: se IndexedDB manca o fallisce restituisce false.
+  async function snapshot(label) {
+    try {
+      const at = lastCopy = Math.max(Date.now(), lastCopy + 1);
+      const books = state.books.map(b => { const c = { ...clean(b), id: b.id }; delete c.spine; delete c.spineRatio; delete c.spineAt; return c; });
+      await copies("readwrite", s => { s.put({ id: at, at, label, books }); const k = s.getAllKeys(); k.onsuccess = () => k.result.slice(0, -3).forEach(x => s.delete(x)); });
+      return true;
+    } catch { return false; }
+  }
+  const listSnapshots = async () => ((await copies("readonly", s => s.getAll())) || []).reverse().map(c => ({ id: c.id, at: c.at, label: c.label, count: c.books.length }));
+  const when = at => { const d = new Date(at), z = n => String(n).padStart(2, "0"); return `${z(d.getDate())}/${z(d.getMonth() + 1)} alle ${z(d.getHours())}:${z(d.getMinutes())}`; };
+  async function restoreSnapshot(id) {
+    let c; try { c = await copies("readonly", s => s.get(id)); } catch {}
+    if (!c) return false; // letta prima della nuova copia: con 3 copie quella nuova cancellerebbe la più vecchia
+    await snapshot("Prima del ripristino");
+    const now = Date.now(), cur = new Map(state.books.map(b => [b.id, b])), keep = new Set(c.books.map(b => b.id)), t = getTombs();
+    const gone = state.books.filter(b => !keep.has(b.id)).map(b => b.id);
+    gone.forEach(x => { t[x] = now; }); keep.forEach(x => delete t[x]); setTombs(t); // come removeBook, ma con un solo render
+    state.books = c.books.map(b => {
+      const o = cur.get(b.id) || {}, nb = { ...clean(b), id: b.id, updated: now };
+      for (const k of ["spine", "spineRatio", "spineAt"]) if (o[k]) nb[k] = o[k];
+      return nb;
+    });
+    schedulePersist(); render();
+    gone.forEach(x => cloudHook("removed", x)); keep.forEach(x => cloudHook("changed", x));
+    toast("Libreria riportata al " + when(c.at));
+    return true;
+  }
+
   /* ---------- Google Books / Open Library ---------- */
   function normVolume(v) {
     const i = v.volumeInfo || {};
@@ -1598,6 +1642,7 @@
     },
     refresh() { schedulePersist(); render(); },
     refreshChanged,
+    snapshot,
     tally: () => renderTally(),
     status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
     error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg); },
@@ -1747,6 +1792,11 @@
     const sheet = openSheet(`
       <h2>Backup e copertine</h2>
       <section class="arch">
+        <span class="label">Annulla</span>
+        <p class="hint">Prima delle operazioni su molti libri salvo una copia: puoi tornare indietro.</p>
+        <div class="ulist" id="u-list"></div>
+      </section>
+      <section class="arch">
         <span class="label">Backup</span>
         <p class="${backupDue() ? "warn" : "hint"}">${days === null ? "Non hai ancora fatto un backup." : days === 0 ? "Ultimo backup: oggi." : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa.`} I dati stanno solo su questo iPhone: esportalo ogni tanto in File o iCloud.</p>
         <div class="actions"><button class="btn primary" id="i-export">Esporta backup</button></div>
@@ -1769,7 +1819,17 @@
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
-    let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false;
+    const ul = $("#u-list", sheet);
+    listSnapshots().then(l => {
+      ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(/^Prima/.test(c.label) ? c.label : `Prima di «${c.label}»`)}<small>${when(c.at)} · ${c.count} libri</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("") : `<p class="hint">Nessuna copia per ora.</p>`;
+    }, () => { ul.outerHTML = `<p class="hint" id="u-none">L'annullamento non è disponibile su questo dispositivo</p>`; });
+    ul.onclick = e => { // conferma in due tocchi
+      const b = e.target.closest("[data-restore]"); if (!b) return;
+      if (b.classList.contains("danger")) { closeSheet(); restoreSnapshot(Number(b.dataset.restore)); return; }
+      ul.querySelectorAll(".danger").forEach(x => { x.classList.remove("danger"); x.textContent = "Ripristina"; });
+      b.classList.add("danger"); b.textContent = "Conferma ripristino";
+    };
+    let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, csv = false;
     const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet);
     const showCounts = () => {
       if (purchases) { // file di acquisti: nuovi in Da leggere, desideri spostati, il resto invariato
@@ -1804,7 +1864,7 @@
     if (ia) ia.onclick = () => {
       if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
       const ids = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).map(b => b.id);
-      closeSheet(); enrichBooks(ids); // in sottofondo: la scheda si chiude e l'app resta usabile
+      closeSheet(); snapshot("Prima di «Completa autori e copertine»").then(() => enrichBooks(ids)); // in sottofondo: la scheda si chiude e l'app resta usabile
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
@@ -1813,9 +1873,9 @@
       rd.onload = () => {
         try {
           const txt = String(rd.result);
-          purchases = false;
+          purchases = false; csv = false;
           if (/\.json$/i.test(f.name) || txt.trim().startsWith("{") || txt.trim().startsWith("[")) { const j = JSON.parse(txt); pending = Array.isArray(j) ? j : (j.books || []); purchases = !!(j && j.acquisti); }
-          else pending = fromGoodreads(txt);
+          else { pending = fromGoodreads(txt); csv = true; }
           if (purchases) { showCounts(); return; }
           const known = new Set(state.books.map(keyOf));
           const valid = pending.filter(b => b && b.title);
@@ -1825,7 +1885,9 @@
       };
       rd.readAsText(f);
     };
-    go.onclick = () => {
+    go.onclick = async () => {
+      go.disabled = true;
+      await snapshot(purchases ? "Prima dell'import degli acquisti" : csv ? "Prima dell'import del CSV" : "Prima dell'import del backup");
       if (purchases) {
         const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
         closeSheet();
