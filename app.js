@@ -176,7 +176,8 @@
     const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
     const byIsbn = isbn ? await settle([
       () => googleSearch("isbn:" + isbn, { italian: false, max: 3 }).then(tag("Google Books")),
-      () => openLibrarySearch("isbn:" + isbn, "", 3).then(tag("Open Library"))
+      () => openLibrarySearch("isbn:" + isbn, "", 3).then(tag("Open Library")),
+      () => wikidataSearch(isbn).then(tag("Wikidata"))
     ], errors) : [];
     const idHit = byIsbn.find(x => x.author) || byIsbn[0];
     const author = b.author || (idHit && idHit.author) || "";
@@ -344,8 +345,11 @@
   // Ricerca per il campo "Cerca il libro": prova le fonti in ordine e unisce i risultati.
   // --- fonte 4: Wikidata (solo per ISBN: gratuita, senza chiave, risposte in JSON) ---
   async function wikidataSearch(isbn) {
+    // Wikidata registra l'ISBN in forma a 13 cifre (P212) o a 10 (P957): le cerco entrambe.
+    const i13 = isbn.length === 13 ? isbn : isbn13From10(isbn);
+    const i10 = isbn.length === 10 ? isbn : isbn10From13(isbn);
     const sparql = `SELECT ?itemLabel ?authorLabel ?date ?pages WHERE {
-      { ?item wdt:P212 "${isbn}" } UNION { ?item wdt:P957 "${isbn}" }
+      { ?item wdt:P212 "${i13}" } ${i10 ? `UNION { ?item wdt:P957 "${i10}" }` : ""}
       OPTIONAL { ?item wdt:P50 ?author. } OPTIONAL { ?item wdt:P577 ?date. } OPTIONAL { ?item wdt:P1104 ?pages. }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`;
     let r;
@@ -354,11 +358,15 @@
     if (!r.ok) throw { code: "wikidata-" + r.status };
     const j = await r.json();
     return (j.results.bindings || []).map(b => ({
-      title: (b.itemLabel && b.itemLabel.value) || "", author: (b.authorLabel && b.authorLabel.value) || "",
+      title: (b.itemLabel && b.itemLabel.value) || "",
+      author: b.authorLabel && !/^Q\d+$/.test(b.authorLabel.value) ? b.authorLabel.value : "", // senza nome, Wikidata mostra il codice Q
       edYear: b.date ? yearOf(b.date.value) : undefined, pages: b.pages ? Number(b.pages.value) || undefined : undefined,
       genre: "", synopsis: "", isbn, lang: "", ita: false, cover: ""
     })).filter(x => x.title && !/^Q\d+$/.test(x.title)); // senza etichetta Wikidata mostra il codice Q: lo scarto
   }
+  // Conversione tra ISBN-10 e ISBN-13 (stessa cifra di controllo ISBN-10 e EAN-13).
+  const isbn13From10 = i => { const core = "978" + i.slice(0, 9); const s = [...core].reduce((t, c, k) => t + Number(c) * (k % 2 ? 3 : 1), 0); return core + ((10 - (s % 10)) % 10); };
+  const isbn10From13 = i => { if (!i.startsWith("978")) return ""; const core = i.slice(3, 12); const s = [...core].reduce((t, c, k) => t + Number(c) * (10 - k), 0); const c = (11 - (s % 11)) % 11; return core + (c === 10 ? "X" : String(c)); };
   // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
   async function searchBooks(q) {
@@ -382,7 +390,9 @@
     if (!out.length && errors.length === tries.length) throw { code: errors.join(", ") };
     // Prima le edizioni italiane (l'ordine tra le altre resta quello delle fonti).
     const isIt = x => x.lang === "it" || !!x.ita;
-    return out.sort((a, b) => (isIt(b) ? 1 : 0) - (isIt(a) ? 1 : 0)).slice(0, 15);
+    const res = out.sort((a, b) => (isIt(b) ? 1 : 0) - (isIt(a) ? 1 : 0)).slice(0, 15);
+    res.errors = errors.filter(Boolean); // fonti che non hanno risposto: servono a dire la verità quando non si trova nulla
+    return res;
   }
 
   function originalTitle(b) {
@@ -1202,16 +1212,19 @@
   }
   function wireSearch(sheet, onPick) {
     const input = $("#s-q", sheet), status = $("#s-status", sheet), box = $("#s-results", sheet);
-    let results = [];
+    let results = [], seq = 0; // seq: una risposta lenta di una ricerca vecchia non deve sovrascrivere quella nuova
     const go = async () => {
       const q = input.value.trim(); if (!q) { status.textContent = "Scrivi un titolo, un autore o un ISBN."; return; }
       if (!navigator.onLine) { status.textContent = "Sei offline: compila i campi a mano."; return; }
+      const mine = ++seq;
       status.textContent = "Cerco tra le edizioni italiane…"; box.innerHTML = "";
       try {
-        results = await searchBooks(q);
+        const found = await searchBooks(q);
+        if (mine !== seq) return;
+        results = found;
         status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
-          : parseIsbn(q) ? "Nessuna fonte conosce questo ISBN."
-          : "Nessun risultato: prova con meno parole o compila a mano.";
+          : parseIsbn(q) && !results.errors.length ? "Nessuna fonte conosce questo ISBN."
+          : "Nessun risultato" + (results.errors.length ? ": alcune fonti non hanno risposto (" + results.errors.join(", ") + ")" : ": prova con meno parole") + ". Riprova più tardi o compila a mano.";
 
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
@@ -1224,6 +1237,7 @@
           box.append(alt);
         }
       } catch (e) {
+        if (mine !== seq) return;
         status.textContent = "Ricerca non riuscita (" + ((e && e.code) || "errore") + "). Controlla la connessione o compila a mano.";
       }
     };
@@ -1743,7 +1757,7 @@
     if (iv) iv.onclick = async () => {
       vs.textContent = "Verifico le ricerche…"; state.googleDown = null; // la verifica prova sempre Google, anche se prima era giù
       const out = [];
-      try { const g = await googleSearch("isbn:9788804731481", { max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
+      try { const g = await googleSearch("isbn:9788804731481", { italian: false, max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
       catch (e) { out.push(`Google Books: ${e.code || "errore"}${e.msg ? " — " + e.msg : ""}`); }
       try { const o = await openLibrarySearch("isbn:9788804731481", "", 1); out.push(`Open Library: OK (${o.length} risultati)`); }
       catch (e) { out.push(`Open Library: ${e.code || "errore"}`); }
