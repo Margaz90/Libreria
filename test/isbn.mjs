@@ -17,7 +17,8 @@ async function apri(browser, google, { wikidata = [], ...opts } = {}) {
     r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   });
   await p.route(/openlibrary\.org\/search/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: [] }) }));
-  await p.route(/itunes\.apple\.com/, r => r.abort());
+  // Apple risponde (JSONP, senza risultati): così il messaggio dice solo ciò che davvero manca
+  await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}({"results":[]})` }); });
   return p;
 }
 const cerca = async (p, q) => {
