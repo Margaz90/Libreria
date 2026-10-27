@@ -1210,12 +1210,19 @@
       try {
         results = await searchBooks(q);
         status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
-          : parseIsbn(q) ? "Nessuna fonte conosce questo ISBN: compila i dati a mano."
+          : parseIsbn(q) ? "Nessuna fonte conosce questo ISBN."
           : "Nessun risultato: prova con meno parole o compila a mano.";
+
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
-          <div><b>${esc(r.title)}</b><span>${esc(r.author || "Autore sconosciuto")}${r.edYear ? " · " + r.edYear : ""}${r.pages ? " · " + r.pages + " pp." : ""}${r.lang && r.lang !== "it" ? " · " + r.lang.toUpperCase() : ""}</span></div></button>`).join("");
+          <div><b>${esc(r.title)}</b><span>${esc(r.author || "Autore sconosciuto")}${r.edYear ? " · " + r.edYear : ""}${r.pages ? " · " + r.pages + " pp." : ""}${r.isbn ? " · ISBN " + esc(r.isbn) : ""}${r.lang && r.lang !== "it" ? " · " + r.lang.toUpperCase() : ""}</span></div></button>`).join("");
         box.querySelectorAll(".result").forEach(el => el.onclick = () => { onPick(results[Number(el.dataset.i)]); box.innerHTML = ""; status.textContent = "Dati inseriti: controllali prima di salvare."; });
+        if (!results.length && parseIsbn(q)) { // le fonti possono avere il libro senza il suo ISBN: si cerca per titolo e autore
+          const alt = document.createElement("button");
+          alt.type = "button"; alt.className = "btn"; alt.id = "s-title"; alt.textContent = "Cerca per titolo e autore";
+          alt.onclick = () => { box.innerHTML = ""; status.textContent = ""; input.value = ""; input.placeholder = "Titolo e autore, es. Underworld DeLillo"; input.focus(); };
+          box.append(alt);
+        }
       } catch (e) {
         status.textContent = "Ricerca non riuscita (" + ((e && e.code) || "errore") + "). Controlla la connessione o compila a mano.";
       }

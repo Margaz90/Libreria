@@ -25,8 +25,10 @@ const cerca = async (p, q) => {
   await p.fill('#s-q', q); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
   const stato = await p.locator('#s-status').innerText().catch(() => '');
   const titoli = await p.locator('#s-results .result b').allInnerTexts().catch(() => []);
+  const primo = (await p.locator('#s-results .result').count()) ? await p.locator('#s-results .result').first().innerText() : '';
+  const pulsante = await p.locator('#s-title').count();
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
-  return { stato, titoli };
+  return { stato, titoli, primo, pulsante };
 };
 const isbnChiamate = p => p.googleUrls.filter(u => /isbn/i.test(decodeURIComponent(u)));
 
@@ -52,10 +54,26 @@ export default async function ({ browser }) {
   ok('ISBN-10 con X finale: cercato come ISBN-10', isbnChiamate(p).some(u => /isbn:880621921X/.test(decodeURIComponent(u))), isbnChiamate(p).join(' ; '));
   await p.close2();
 
+  // 2b. Il risultato mostra l'ISBN dell'edizione, così si riconosce quella giusta
+  p = await apri(browser, u => (/Underworld/.test(decodeURIComponent(u)) ? { body: EINAUDI } : { body: VUOTO }));
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, 'Underworld DeLillo');
+  ok('risultato: mostra l\'ISBN dell\'edizione', r.primo.includes('9788806219215'), r.primo.replace(/\n/g, ' | '));
+  await p.close2();
+
   // 3. ISBN che nessuna fonte conosce: messaggio che lo dice e propone di compilare a mano
   p = await apri(browser, () => ({ body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, '9780000000002');
+  ok('ISBN sconosciuto: messaggio chiaro', /nessuna fonte conosce questo ISBN/i.test(r.stato), r.stato);
+  ok('ISBN sconosciuto: c\'è il pulsante per cercare per titolo e autore', r.pulsante === 1, '');
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q');
+  await p.fill('#s-q', '9780000000002'); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
+  await p.locator('#s-title').click();
+  const pronto = await p.evaluate(() => ({ focus: document.activeElement && document.activeElement.id, vuoto: document.querySelector('#s-q').value === '' }));
+  ok('ISBN sconosciuto: il pulsante porta alla ricerca per titolo e autore', pronto.focus === 's-q' && pronto.vuoto, JSON.stringify(pronto));
+  await p.close2();
+
   // 3b. Un ISBN che solo Wikidata conosce: il risultato compare, e Wikidata non viene interrogato per i titoli
   const riga = { itemLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
   p = await apri(browser, () => ({ body: VUOTO }), { wikidata: [riga] });
@@ -66,8 +84,6 @@ export default async function ({ browser }) {
   ok('Wikidata: non interrogato per una ricerca per titolo', p.wikidataUrls.length === 1, `richieste: ${p.wikidataUrls.length}`);
   await p.close2();
 
-  // 3. ISBN che nessuna fonte conosce: messaggio chiaro, /nessuna fonte conosce questo ISBN/i.test(r.stato), r.stato);
-  await p.close2();
 
   // 4. Un 503 passeggero: il blocco di Google dura 5 minuti, non 24 ore
   p = await apri(browser, (() => { let primo = true; return () => {
