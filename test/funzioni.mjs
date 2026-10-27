@@ -159,6 +159,17 @@ async function copie(browser) {
   ok('senza IndexedDB: import riuscito e #u-none visibile', (await localBooks(q)).length === 2 && await none.isVisible().catch(() => false)
     && /L'annullamento non è disponibile su questo dispositivo/.test(await none.innerText().catch(() => '')) && !q.errs.length, q.errs.join(' / '));
   await q.close2();
+
+  // IndexedDB che non risponde mai (può capitare su WebKit): la copia rinuncia e l'import parte lo stesso.
+  const h = await newPage(browser, { init: { fn: () => { IDBFactory.prototype.open = function () { return {}; }; } } });
+  await load(h, [{ ...base, id: 'c1', title: 'Originale', author: 'A' }]);
+  await backup(h);
+  await h.setInputFiles('#i-file', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify([{ title: 'Bloccato', author: 'S' }])) });
+  await h.waitForFunction(() => !document.querySelector('#i-go').disabled, null, { timeout: 5000 });
+  await h.locator('#i-go').click();
+  const done = await h.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').length === 2, null, { timeout: 4000 }).then(() => true, () => false);
+  ok('IndexedDB che non risponde: l\'import parte entro pochi secondi', done && !h.errs.length, h.errs.join(' / '));
+  await h.close2();
 }
 
 export default async function ({ browser }) {

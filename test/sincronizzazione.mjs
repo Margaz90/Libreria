@@ -81,6 +81,11 @@ export default async function ({ browser }) {
   await wait(async () => (await localBooks(D)).length === 108 && (await cloudCount()) === 108, 15000).catch(() => {});
   ok('unione: 107 libri del cloud + 1 del telefono', (await localBooks(D)).length === 108 && (await cloudCount()) === 108, `locale ${(await localBooks(D)).length}, cloud ${await cloudCount()}`);
 
+  await D.locator('.dock .more').click(); await D.locator('[data-m=backup]').click(); await D.waitForSelector('#u-list .urow', { timeout: 3000 }).catch(() => {});
+  const urow = await D.locator('#u-list .urow').first().innerText().catch(() => '');
+  ok('unione: copia «Prima dell\'unione con il cloud»', /^Prima dell'unione con il cloud/.test(urow), urow.split('\n')[0]);
+  await D.locator('#i-close').click();
+
   // 8. Riavvio con sessione attiva
   await A.reload(); await A.waitForTimeout(2500);
   ok('riavviando, la sessione resta attiva', await A.evaluate(() => !!window.libreriaCloud && window.libreriaCloud.connected));

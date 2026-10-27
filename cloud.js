@@ -193,7 +193,7 @@
         choice = await H.askMerge(live);
         if (!choice) { await auth.signOut(); return; }
       }
-      if (first && H.books().length && H.snapshot) await H.snapshot("Unione con il cloud"); // si può annullare da Backup
+      if (first && H.books().length && H.snapshot) await H.snapshot("Prima dell'unione con il cloud"); // si può annullare da Backup
       await reconcile(choice, snap);
       listen();
       const n = H.books().length;

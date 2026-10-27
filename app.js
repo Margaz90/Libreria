@@ -278,7 +278,8 @@
     const db = await new Promise((res, rej) => {
       const r = indexedDB.open("libreria-copie", 1);
       r.onupgradeneeded = () => r.result.createObjectStore("copie", { keyPath: "id" });
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      r.onsuccess = () => res(r.result); r.onerror = r.onblocked = () => rej(r.error);
+      setTimeout(rej, 1500); // su WebKit l'apertura a volte non risponde: meglio nessuna copia che un import bloccato
     });
     return new Promise((res, rej) => {
       const t = db.transaction("copie", mode), q = fn(t.objectStore("copie"));
@@ -1821,7 +1822,7 @@
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
     const ul = $("#u-list", sheet);
     listSnapshots().then(l => {
-      ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(/^Prima/.test(c.label) ? c.label : `Prima di «${c.label}»`)}<small>${when(c.at)} · ${c.count} libri</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("") : `<p class="hint">Nessuna copia per ora.</p>`;
+      ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(c.label)}<small>${when(c.at)} · ${c.count} libri</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("") : `<p class="hint">Nessuna copia per ora.</p>`;
     }, () => { ul.outerHTML = `<p class="hint" id="u-none">L'annullamento non è disponibile su questo dispositivo</p>`; });
     ul.onclick = e => { // conferma in due tocchi
       const b = e.target.closest("[data-restore]"); if (!b) return;
@@ -1885,9 +1886,11 @@
       };
       rd.readAsText(f);
     };
+    let busy = false;
     go.onclick = async () => {
-      go.disabled = true;
+      if (busy) return; busy = go.disabled = true;
       await snapshot(purchases ? "Prima dell'import degli acquisti" : csv ? "Prima dell'import del CSV" : "Prima dell'import del backup");
+      busy = false; // da qui in poi è tutto sincrono
       if (purchases) {
         const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
         closeSheet();
