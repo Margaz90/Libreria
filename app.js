@@ -9,7 +9,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "coverManual", "added", "updated", "spineAt"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -107,6 +107,8 @@
     for (const k of ["started", "finished"]) if (out[k] !== undefined && !(typeof out[k] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(out[k]))) delete out[k];
     // Solo l'anno di lettura, per i libri letti senza data di fine: vale solo un anno plausibile e mai insieme alla data.
     if (out.finishedYear !== undefined) { const y = Number(out.finishedYear); if (out.finished || !Number.isInteger(y) || y < 1900 || y > new Date().getFullYear()) delete out.finishedYear; else out.finishedYear = y; }
+    // Salto dell'ultima pagina scritta (per «+N»): intero tra 1 e 2000.
+    if (out.pageStep !== undefined) { const n = Number(out.pageStep); if (!Number.isInteger(n) || n < 1 || n > 2000) delete out.pageStep; else out.pageStep = n; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
@@ -127,6 +129,24 @@
       patchBook(id); renderTally();
     } else render();
     cloudHook("changed", id);
+  }
+  // Pagina rapida: salva come upsert ma ridisegna solo l'hero. add = pagine da aggiungere, to = pagina esatta;
+  // manual (campo numerico o cursore) ricorda il salto in pageStep. «Annulla» ripristina page e pageStep di prima di questo gesto.
+  function pageQuick(id, { add, to, manual } = {}) {
+    const prev = state.books.find(x => x.id === id); if (!prev) return;
+    const oldPage = Math.max(0, Number(prev.page) || 0), tot = Number(prev.pages) || 0;
+    let v = Math.max(0, Math.round(Number(to !== undefined ? to : oldPage + (add || 0)) || 0));
+    if (tot) v = Math.min(v, tot);
+    const jump = v - oldPage;
+    const step = manual && jump >= 1 && jump <= 2000 ? jump : prev.pageStep;
+    const before = { page: prev.page, pageStep: prev.pageStep };
+    const apply = (page, pageStep) => {
+      const k = state.books.findIndex(x => x.id === id); if (k < 0) return;
+      state.books[k] = { ...clean({ ...state.books[k], page, pageStep }), id, updated: Date.now() };
+      schedulePersist(); renderHero(); renderTally(); cloudHook("changed", id);
+    };
+    apply(v, step);
+    toast("Pagina " + v, { label: "Annulla", run: () => apply(before.page, before.pageStep) });
   }
   function addMany(list, { update = false } = {}) {
     const known = new Map(state.books.map(b => [keyOf(b), b]));
@@ -621,6 +641,11 @@
     hero.innerHTML = readingCards(reading);
     wireMain(hero);
   }
+  // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
+  function pquickHTML(b, tot, pg) {
+    const id = esc(b.id), step = Number(b.pageStep) || 0;
+    return `<div class="pquick">${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" data-range="${id}" aria-label="Pagina attuale di ${esc(b.title)}">` : `<span class="grow"></span>`}<button class="btn" type="button" data-add="10" data-id-add="${id}" aria-label="Aggiungi 10 pagine">+10</button>${step ? `<button class="btn" type="button" data-repeat="${id}" aria-label="Aggiungi ${step} pagine">+${step}</button>` : ""}</div>`;
+  }
   // Libro in lettura in primo piano: etichetta, pagina modificabile, pulsanti Aggiorna e Dettagli.
   function readingCards(books) {
     if (!books.length) return "";
@@ -632,6 +657,7 @@
           <span class="rlabel">In lettura adesso</span>
           <h3>${esc(b.title)}</h3><p class="hint">${esc(b.author || "")}${b.callNo ? ` · <span class="callno">${esc(b.callNo)}</span>` : ""}</p>
           <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+          ${pquickHTML(b, tot, pg)}
           <div class="prow">
             <label class="pin">pag. <input type="number" inputmode="numeric" min="0" ${tot ? `max="${tot}"` : ""} value="${pg || ""}" placeholder="0" data-page="${esc(b.id)}" aria-label="Pagina attuale di ${esc(b.title)}"></label>
             <span class="hint">${tot ? `di ${tot} · ${pct}%` : "pagine totali non note"}</span>
@@ -911,7 +937,14 @@
     root.querySelectorAll("[data-page]").forEach(inp => inp.onchange = () => {
       const b = state.books.find(x => x.id === inp.dataset.page); if (!b) return;
       const v = Math.max(0, parseInt(inp.value, 10) || 0);
-      upsert({ ...b, page: b.pages ? Math.min(v, b.pages) : v });
+      pageQuick(b.id, { to: v, manual: true });
+    });
+    root.querySelectorAll("[data-add]").forEach(btn => btn.onclick = () => pageQuick(btn.dataset.idAdd, { add: Number(btn.dataset.add) }));
+    root.querySelectorAll("[data-repeat]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.repeat); if (b && b.pageStep) pageQuick(b.id, { add: b.pageStep }); });
+    root.querySelectorAll("[data-range]").forEach(r => {
+      // Durante il trascinamento cambio solo il numero mostrato; salvo al rilascio.
+      r.oninput = () => { const n = root.querySelector(`[data-page="${CSS.escape(r.dataset.range)}"]`); if (n) n.value = r.value; };
+      r.onchange = () => pageQuick(r.dataset.range, { to: Number(r.value), manual: true });
     });
     root.querySelectorAll("[data-save]").forEach(btn => btn.onclick = () => {
       const inp = root.querySelector(`[data-page="${CSS.escape(btn.dataset.save)}"]`);

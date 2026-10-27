@@ -573,3 +573,9 @@ html { scroll-behavior: smooth; }
 .card .badge { top: 6px; right: 6px; }
 .badge.inline { position: static; flex: none; display: inline-block; margin-top: 1px; }
 .stale-note { display: flex; gap: 8px; align-items: flex-start; }
+
+/* Pagina rapida nella scheda «In lettura adesso» */
+.pquick { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.pquick input[type=range] { flex: 1; min-width: 0; height: 44px; accent-color: var(--coral); margin: 0; }
+.pquick .grow { flex: 1; }
+.pquick .btn { min-height: 44px; min-width: 52px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
