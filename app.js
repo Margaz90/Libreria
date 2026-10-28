@@ -547,8 +547,10 @@ OPTIONAL { ?work p:P179 ?st. ${wdSer} } } LIMIT 500`, false);
   async function authorWorks(a, cache) {
     const k = seriesKey(a);
     if (!cache.has(k)) {
-      const j = await wdGet("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent(a));
-      const ids = (j.search || []).map(x => x.id).filter(x => /^Q\d+$/.test(x)).slice(0, 3);
+      const url = "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent(a);
+      const qs = j => (j.search || []).map(x => x.id).filter(x => /^Q\d+$/.test(x)).slice(0, 3);
+      let ids = qs(await wdGet(url));
+      if (!ids.length) { await sleep(1500); ids = qs(await wdGet(url)); } // a volte Wikidata rifiuta per un momento: riprovo una volta
       cache.set(k, ids.length ? await wdWorks(`SELECT ?work ?st ?ser ?no ?nx ?n2 ?x2 WHERE { hint:Query hint:optimizer "None".
 VALUES ?a { ${ids.map(x => "wd:" + x).join(" ")} } ?work wdt:P50 ?a. ?work p:P179 ?st. ${wdSer}
 FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
@@ -561,6 +563,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const j = await (await fetchT("https://openlibrary.org/isbn/" + isbn + ".json")).json(), k = j.works && j.works[0] && j.works[0].key;
       return String(j.translation_of || (/^\/works\/OL\d+W$/.test(k) && (await (await fetchT("https://openlibrary.org" + k + ".json")).json()).title) || "");
     } catch { return ""; }
+  }
+  // Titoli originali dalla ricerca di Open Library per titolo e autore (solo risultati dello stesso autore).
+  async function olTitles(t, a) {
+    try {
+      const j = await (await fetchT("https://openlibrary.org/search.json?limit=3&fields=title,author_name&q=" + encodeURIComponent(t + " " + a))).json(), sn = titleCore(a.split(/\s+/).pop());
+      return [...new Set((j.docs || []).filter(d => (d.author_name || []).some(n => titleCore(n).includes(sn))).map(d => String(d.title || "")).filter(x => x && !sameTitle(x, t)))];
+    } catch { return []; }
   }
   // Seguito solo con un'edizione italiana.
   async function itEdition(t, a) {
@@ -582,6 +591,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const ws = await authorWorks(a, cache);
       w = pickWork(ws, b.title, b.series);
       if (w === 0 && isbn && ws.length) { const t = await olTitle(isbn); if (t) w = pickWork(ws, t, b.series); }
+      if (w === 0 && ws.length) for (const t of await olTitles(b.title, a)) { w = pickWork(ws, t, b.series); if (w !== 0) break; } // senza ISBN (libri Goodreads)
     }
     if (!w) return null;
     const r = { series: w.series };

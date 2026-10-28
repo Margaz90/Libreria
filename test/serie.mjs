@@ -210,7 +210,7 @@ async function fonti(browser) {
   await p.route(/www\.wikidata\.org\/w\/api\.php/, r => { p.n.cerca++; if (p.cfg.fail === 'rete') return r.abort(); const a = new URL(r.request().url()).searchParams.get('search'); json(r, { search: (p.cfg.idsBy ? p.cfg.idsBy(a) : p.cfg.ids).map(id => ({ id })) }); });
   await p.route(/openlibrary\.org\/isbn\//, r => p.cfg.ol ? json(r, p.cfg.ol) : json(r, {}, 404));
   await p.route(/openlibrary\.org\/works\//, r => p.cfg.olWork ? json(r, p.cfg.olWork) : json(r, {}, 404));
-  await p.route(/openlibrary\.org\/search/, r => json(r, { docs: [] }));
+  await p.route(/openlibrary\.org\/search/, r => { p.olq = decodeURIComponent(r.request().url()); json(r, { docs: p.cfg.olSearch || [] }); });
   await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}(${JSON.stringify({ results: p.cfg.apple.map(t => ({ trackName: t, artistName: p.cfg.appleAuthor })) })})` }); });
   await p.route(/www\.googleapis\.com\/books/, r => json(r, { items: p.cfg.google.map(t => ({ volumeInfo: { title: t, authors: ['Mick Herron'], language: 'it' } })) }));
   return p;
@@ -250,6 +250,20 @@ async function ricerca(browser) {
   p.cfg.works = [W('Q12', 'Spook Street', 'Slough House', '4')]; p.cfg.ol = { translation_of: 'Spook Street' };
   r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });
   ok('passo 3: titolo originale da Open Library', r && r.series === 'Slough House' && r.no === '4', JSON.stringify(r));
+  // Passo 3 senza ISBN: titolo originale dalla ricerca di Open Library (titolo e autore)
+  p.cfg.ol = null; p.cfg.works = [W('Q10', 'Slow Horses', 'Slough House', '1')]; p.cfg.olSearch = [{ title: 'Slow Horses', author_name: ['Mick Herron'] }];
+  r = await find(p, { ...MH, title: 'Un covo di bastardi' });
+  ok('passo 3 senza ISBN: titolo originale dalla ricerca di Open Library', r && r.series === 'Slough House' && r.no === '1' && /Un covo di bastardi/.test(p.olq || ''), JSON.stringify(r) + ' ' + p.olq);
+  p.cfg.olSearch = [{ title: 'Slow Horses', author_name: ['Altra Persona'] }];
+  r = await find(p, { ...MH, title: 'Un covo di bastardi' });
+  ok('passo 3 senza ISBN: un risultato di un altro autore non vale', r === null, JSON.stringify(r));
+  p.cfg.olSearch = null;
+  // Ricerca dell'autore rifiutata da Wikidata (risposta senza candidati): riprova una volta
+  p.cfg.idsBy = a => (p.rifiuti = (p.rifiuti || 0) + 1) === 1 ? [] : ['Q1'];
+  p.cfg.works = [W('Q43', 'Harry Potter e la pietra filosofale', 'Harry Potter', '1')];
+  r = await find(p, { author: 'J.K. Rowling', title: 'Harry Potter e la pietra filosofale' });
+  ok('ricerca autore senza candidati: riprova una volta', r && r.series === 'Harry Potter' && r.no === '1' && p.rifiuti === 2, JSON.stringify(r) + ' tentativi ' + p.rifiuti);
+  p.cfg.idsBy = null; p.cfg.works = [W('Q12', 'Spook Street', 'Slough House', '4')];
   p.cfg.ol = { works: [{ key: '/works/OL1W' }] }; p.cfg.olWork = { title: 'Spook Street' };
   r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });
   ok('passo 3: titolo dall\'opera Open Library', r && r.no === '4', JSON.stringify(r));
