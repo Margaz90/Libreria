@@ -21,6 +21,7 @@
 <h1>Diagnosi della ricerca delle serie</h1>
 <p>Prova la ricerca su alcuni libri di serie note e mostra cosa risponde ogni fonte. Non modifica i tuoi libri. Alla fine tocca «Copia il risultato» e incollalo a Claude.</p>
 <button id="go" disabled>Avvio…</button>
+<button id="var">Confronta le interrogazioni</button>
 <button id="copy" class="alt">Copia il risultato</button>
 <details><summary>Prova un altro libro</summary>
   <input id="t" placeholder="Titolo"><input id="a" placeholder="Autore"><input id="i" placeholder="ISBN (facoltativo)">
@@ -83,6 +84,55 @@
   document.getElementById("one").onclick = async () => {
     const b = { title: document.getElementById("t").value.trim(), author: document.getElementById("a").value.trim(), isbn: document.getElementById("i").value.replace(/[^\dXx]/g, "") || undefined };
     if (S && b.title) await test(b);
+  };
+  // Tre modi di chiedere a Wikidata le opere in serie di un autore: tempi e righe.
+  const LANGS = '"it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs"';
+  const sparql = async q => {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 30000), t0 = Date.now();
+    try {
+      const r = await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q), { headers: { Accept: "application/sparql-results+json" }, signal: c.signal });
+      const ms = Date.now() - t0; if (!r.ok) return { ms, err: "HTTP " + r.status };
+      const j = await r.json(); return { ms, rows: j.results.bindings };
+    } catch (e) { return { ms: Date.now() - t0, err: e.name }; } finally { clearTimeout(t); }
+  };
+  const ser = `?work p:P179 ?st. ?st a wikibase:BestRank; ps:P179 ?ser.
+OPTIONAL { ?st pq:P1545 ?n1 } OPTIONAL { ?work wdt:P1545 ?n2 } BIND(COALESCE(?n1, ?n2) AS ?no)
+OPTIONAL { ?st pq:P156 ?x1 } OPTIONAL { ?work wdt:P156 ?x2 } BIND(COALESCE(?x1, ?x2) AS ?nx)
+OPTIONAL { ?nx rdfs:label ?ni FILTER(LANG(?ni) = "it") }
+OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } OPTIONAL { ?ser rdfs:label ?sm FILTER(LANG(?sm) = "mul") } BIND(COALESCE(?si, ?se, ?sm) AS ?sl)`;
+  const qA = q => `SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) WHERE {
+VALUES ?a { wd:${q} } ?work wdt:P50 ?a. FILTER NOT EXISTS { ?work wdt:P629 [] } ${ser}
+OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN (${LANGS})) }
+} GROUP BY ?work ?st LIMIT 500`;
+  const qB = q => `SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) WHERE {
+{ SELECT DISTINCT ?work WHERE { VALUES ?a { wd:${q} } ?work wdt:P50 ?a; wdt:P179 ?any. FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } }
+${ser}
+OPTIONAL { { ?work rdfs:label ?nm } UNION { ?work skos:altLabel ?nm } FILTER(LANG(?nm) IN (${LANGS})) }
+} GROUP BY ?work ?st LIMIT 500`;
+  const qC1 = q => `SELECT ?work ?st ?ser ?no ?nx WHERE { hint:Query hint:optimizer "None".
+VALUES ?a { wd:${q} } ?work wdt:P50 ?a. ?work p:P179 ?st. ?st ps:P179 ?ser.
+OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`;
+  const qC2 = ids => `SELECT ?x ?nm WHERE { VALUES ?x { ${ids.join(" ")} } { ?x rdfs:label ?nm } UNION { ?x skos:altLabel ?nm } FILTER(LANG(?nm) IN (${LANGS})) }`;
+  const short = rows => rows.slice(0, 2).map(r => Object.values(r).map(v => String(v.value).replace("http://www.wikidata.org/entity/", "").slice(0, 40)).join(" / ")).join(" | ");
+  document.getElementById("var").onclick = async () => {
+    out.textContent = `Confronto del ${new Date().toLocaleString("it-IT")}\n`;
+    for (const [nome, q] of [["Mick Herron", "Q24929761"], ["J. K. Rowling", "Q34660"], ["George R. R. Martin", "Q181677"], ["Stieg Larsson", "Q186317"]]) {
+      log(`\n▶ ${nome}`);
+      for (const [k, f] of [["A (attuale)", qA], ["B (prima le opere)", qB]]) {
+        const r = await sparql(f(q)); log(`   · ${k}: ${r.err ? "ERRORE " + r.err : r.rows.length + " righe"} in ${r.ms} ms${r.rows ? " — " + short(r.rows) : ""}`);
+      }
+      const c1 = await sparql(qC1(q));
+      if (c1.err) { log(`   · C1 (solo serie): ERRORE ${c1.err} in ${c1.ms} ms`); continue; }
+      const ids = [...new Set(c1.rows.flatMap(r => ["work", "ser", "nx"].map(k => r[k] && r[k].value)).filter(Boolean))].map(u => "wd:" + u.split("/").pop());
+      log(`   · C1 (solo serie): ${c1.rows.length} righe in ${c1.ms} ms — ${short(c1.rows)}`);
+      if (ids.length) { const c2 = await sparql(qC2(ids)); log(`   · C2 (titoli): ${c2.err ? "ERRORE " + c2.err : c2.rows.length + " righe"} in ${c2.ms} ms`); }
+    }
+    const t0 = Date.now();
+    try {
+      const r = await fetch("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent("Andrea Camilleri"));
+      log(`\n▶ Cerca «Andrea Camilleri»: ${r.status} in ${Date.now() - t0} ms — ${(await r.text()).slice(0, 400)}`);
+    } catch (e) { log(`\n▶ Cerca «Andrea Camilleri»: ERRORE ${e.name}`); }
+    log("\nFine.");
   };
   document.getElementById("copy").onclick = async () => {
     try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Copiato"; }
