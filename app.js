@@ -298,7 +298,7 @@
     await snapshot("Prima di «Cerca le serie»");
     if (gen !== dataGen) return; // copia ripristinata durante la copia
     for (let k = 0; k < ids.length; k++) {
-      if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length}`; }
+      if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length} · tieni l'app aperta`; }
       const b = state.books.find(x => x.id === ids[k]);
       let err = false;
       const r = b && await findSeries(b, cache).catch(e => { bad++; err = /wikidata-(429|503)/.test(e && e.code); return null; });
@@ -401,11 +401,11 @@
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
     let r;
-    try { r = await fetch(url); } catch { throw { code: "google-rete" }; }
+    try { r = await fetchT(url); } catch { throw { code: "google-rete" }; }
     let retried = false;
     if (r.status === 503) { // servizio giù per le richieste con chiave: riprovo senza chiave dopo una pausa
       retried = true; await sleep(1200);
-      try { r = await fetch(url.replace("key=" + GBOOKS_KEY + "&", "")); } catch { throw { code: "google-rete" }; }
+      try { r = await fetchT(url.replace("key=" + GBOOKS_KEY + "&", "")); } catch { throw { code: "google-rete" }; }
     }
     // Quota finita, chiave rifiutata o servizio giù: non insisto (5 minuti se è giù, altrimenti fino alla prossima apertura).
     if (r.status === 429 || r.status === 403 || r.status === 503) {
@@ -420,6 +420,11 @@
 
   // --- fonte 2: Apple Books (negozio italiano, via JSONP) ---
   let jsonpN = 0;
+  // Ogni richiesta ha un tempo massimo: su iPhone una risposta può non arrivare mai (cambio di rete, app in pausa).
+  function fetchT(url, opts = {}) {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), window.libreriaNetMs || 20000);
+    return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(t));
+  }
   function jsonp(url, ms = 8000) {
     return new Promise((resolve, reject) => {
       const cb = "__mlcb" + (++jsonpN) + "_" + Date.now();
@@ -450,7 +455,7 @@
     const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language" +
       (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
     let r;
-    try { r = await fetch(url); } catch { throw { code: "openlibrary-rete" }; }
+    try { r = await fetchT(url); } catch { throw { code: "openlibrary-rete" }; }
     if (!r.ok) throw { code: "openlibrary-" + r.status };
     const j = await r.json();
     return (j.docs || []).map(d => ({
@@ -489,7 +494,7 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
   async function wdGet(url) {
     let r;
-    try { r = await fetch(url, { headers: { Accept: "application/sparql-results+json, application/json" } }); } catch { throw { code: "wikidata-rete" }; }
+    try { r = await fetchT(url, { headers: { Accept: "application/sparql-results+json, application/json" } }); } catch { throw { code: "wikidata-rete" }; }
     if (!r.ok) throw { code: "wikidata-" + r.status };
     return r.json();
   }
@@ -527,8 +532,8 @@ OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mu
   // Titolo originale (Open Library).
   async function olTitle(isbn) {
     try {
-      const j = await (await fetch("https://openlibrary.org/isbn/" + isbn + ".json")).json(), k = j.works && j.works[0] && j.works[0].key;
-      return String(j.translation_of || (/^\/works\/OL\d+W$/.test(k) && (await (await fetch("https://openlibrary.org" + k + ".json")).json()).title) || "");
+      const j = await (await fetchT("https://openlibrary.org/isbn/" + isbn + ".json")).json(), k = j.works && j.works[0] && j.works[0].key;
+      return String(j.translation_of || (/^\/works\/OL\d+W$/.test(k) && (await (await fetchT("https://openlibrary.org" + k + ".json")).json()).title) || "");
     } catch { return ""; }
   }
   // Seguito solo con un'edizione italiana.

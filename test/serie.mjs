@@ -185,6 +185,7 @@ async function fonti(browser) {
     if (p.cfg.fail === 'rete') return r.abort();
     if (p.cfg.fail) return json(r, {}, p.cfg.fail);
     const q = decodeURIComponent(new URL(r.request().url()).searchParams.get('query') || ''); p.q.push(q);
+    if (p.cfg.hangIf && p.cfg.hangIf(q)) return; // risposta che non arriva mai
     const st = p.cfg.failIf && p.cfg.failIf(q); if (st) return json(r, {}, st);
     const serie = /P179/.test(q), isbn = /P212/.test(q), autore = /P50/.test(q);
     if (isbn) p.n.isbn++; if (autore) p.n.autore++;
@@ -448,6 +449,21 @@ async function cercaSerie(browser) {
   ok('Wikidata 503 a metà: prosegue e il messaggio lo dice', /Serie trovate per 2 libri su 3/.test(em) && /Wikidata non risponde ×1/.test(em), em);
   ok('Wikidata 503 a metà: il terzo libro si cerca lo stesso', e3.series === 'Slough House' && e3.seriesNo === '2', JSON.stringify(e3));
   p.cfg.idsBy = null; p.cfg.failIf = null;
+
+  // Wikidata che non risponde mai sul libro di mezzo: dopo il tempo massimo si passa al libro dopo
+  await clear();
+  await load(p, [{ ...base, id: 'k1', title: 'Tigri vere' }, { ...base, id: 'k2', title: 'Libro due', author: 'Autore Due' }, { ...base, id: 'k3', title: 'Leoni morti', author: 'Terza Autrice' }]);
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3'), W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q15', 'Libro due', 'Altra', '1')];
+  p.cfg.idsBy = a => [{ 'Autore Due': 'Q2', 'Terza Autrice': 'Q3' }[a] || 'Q1'];
+  p.cfg.hangIf = q => /wd:Q2 /.test(q);
+  await p.evaluate(() => { window.libreriaNetMs = 1500; });
+  await run(); await waitToast(/Serie trovate/, 15000);
+  const km = await toasts();
+  await until(p, 'k3', { series: 'Slough House' });
+  const k3 = await book(p, 'k3');
+  ok('Wikidata che non risponde: dopo il tempo massimo si passa al libro dopo', /Serie trovate per 2 libri su 3/.test(km) && /Wikidata non risponde ×1/.test(km) && k3.series === 'Slough House', km + ' · ' + JSON.stringify(k3));
+  await p.evaluate(() => { delete window.libreriaNetMs; });
+  p.cfg.idsBy = null; p.cfg.hangIf = null;
 
   // Wikidata sempre giù: dopo due errori di fila la ricerca si ferma
   await clear();
