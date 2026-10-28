@@ -247,7 +247,7 @@
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
     enrich.busy = true;
     const gen = dataGen, line = $("#enrich");
-    const errors = {}, sc = new Map(); let fixed = 0, missed = 0, ser = 0;
+    const errors = {}, sc = new Map(); let fixed = 0, missed = 0, ser = 0, wdOff = false;
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri: ${k + 1} di ${ids.length}`; }
       const b = state.books.find(x => x.id === ids[k]);
@@ -272,8 +272,8 @@
           Object.entries(errs).forEach(([c, n]) => { errors[c] = (errors[c] || 0) + n; });
         }
       }
-      if (b && !b.series && !b.seriesManual) { // anche la serie, con la stessa cache per tutto il giro
-        const r = await findSeries(b, sc).catch(() => null);
+      if (b && !wdOff && !b.series && !b.seriesManual) { // anche la serie
+        const r = await findSeries(b, sc).catch(e => { wdOff = /wikidata-(429|503)/.test(e && e.code); return null; });
         if (gen !== dataGen) return;
         if (r) { Object.assign(b, clean(applySeries(b, r)), { updated: Date.now() }); ser++; cloudHook("changed", b.id); patchBook(b.id); }
       }
@@ -282,7 +282,7 @@
     }
     enrich.busy = false;
     if (line) line.hidden = true;
-    schedulePersist(); if (ser) render(); else renderTally(); // la serie può spostare i libri nell'ordine
+    schedulePersist(); if (ser) render(); else renderTally();
     const err = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
     toast(`Informazioni aggiornate per ${fixed} libri su ${ids.length}.` + (missed ? ` Non trovati: ${missed}${err ? " (" + err + ")" : ""}.` : ""));
   }
@@ -440,26 +440,23 @@
   // Ricerca per il campo "Cerca il libro": prova le fonti in ordine e unisce i risultati.
   // --- fonte 4: Wikidata (solo per ISBN: gratuita, senza chiave, risposte in JSON) ---
   async function wikidataSearch(isbn) {
-    // Wikidata registra l'ISBN in forma a 13 cifre (P212) o a 10 (P957): le cerco entrambe.
-    const i13 = isbn.length === 13 ? isbn : isbn13From10(isbn);
-    const i10 = isbn.length === 10 ? isbn : isbn10From13(isbn);
-    const sparql = `SELECT ?itemLabel ?authorLabel ?date ?pages WHERE {
-      { ?item wdt:P212 "${i13}" } ${i10 ? `UNION { ?item wdt:P957 "${i10}" }` : ""}
-      OPTIONAL { ?item wdt:P50 ?author. } OPTIONAL { ?item wdt:P577 ?date. } OPTIONAL { ?item wdt:P1104 ?pages. }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`;
-    return (await wdSparql(sparql)).map(b => ({
-      title: (b.itemLabel && b.itemLabel.value) || "",
-      author: b.authorLabel && !/^Q\d+$/.test(b.authorLabel.value) ? b.authorLabel.value : "", // senza nome, Wikidata mostra il codice Q
+    return (await wdSparql(`SELECT ?edLabel ?authorLabel ?date ?pages WHERE { ${wdIsbn(isbn)}
+OPTIONAL { ?ed wdt:P50 ?author. } OPTIONAL { ?ed wdt:P577 ?date. } OPTIONAL { ?ed wdt:P1104 ?pages. }
+SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`)).map(b => ({
+      title: wv(b.edLabel) || "", author: wv(b.authorLabel) || "",
       edYear: b.date ? yearOf(b.date.value) : undefined, pages: b.pages ? Number(b.pages.value) || undefined : undefined,
       genre: "", synopsis: "", isbn, lang: "", ita: false, cover: ""
-    })).filter(x => x.title && !/^Q\d+$/.test(x.title)); // senza etichetta Wikidata mostra il codice Q: lo scarto
+    })).filter(x => x.title);
   }
+  // ISBN con i trattini, in ogni divisione (come su Wikidata).
+  const wdIsbn = isbn => { isbn = isbn.toUpperCase(); const i13 = isbn.length === 13 ? isbn : isbn13From10(isbn), i10 = isbn.length === 10 ? isbn : isbn10From13(isbn), o = [];
+    for (const [p, s] of [[i13.slice(0, 3) + "-", i13.slice(3)], ["", i10]]) if (s) for (let i = 1; i < 6; i++) for (let j = i + 1; j < 9; j++) o.push(`"${p}${s.slice(0, i)}-${s.slice(i, j)}-${s.slice(j, 9)}-${s[9]}"`);
+    return `VALUES ?i { ${o.join(" ")} } ?ed wdt:P212|wdt:P957 ?i.`; };
   // Conversione tra ISBN-10 e ISBN-13 (stessa cifra di controllo ISBN-10 e EAN-13).
   const isbn13From10 = i => { const core = "978" + i.slice(0, 9); const s = [...core].reduce((t, c, k) => t + Number(c) * (k % 2 ? 3 : 1), 0); return core + ((10 - (s % 10)) % 10); };
   const isbn10From13 = i => { if (!i.startsWith("978")) return ""; const core = i.slice(3, 12); const s = [...core].reduce((t, c, k) => t + Number(c) * (10 - k), 0); const c = (11 - (s % 11)) % 11; return core + (c === 10 ? "X" : String(c)); };
   // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
-  // Wikidata: errori come le altre fonti (wikidata-rete, wikidata-<status>).
   async function wdGet(url) {
     let r;
     try { r = await fetch(url, { headers: { Accept: "application/sparql-results+json, application/json" } }); } catch { throw { code: "wikidata-rete" }; }
@@ -467,17 +464,23 @@
     return r.json();
   }
   const wdSparql = q => wdGet("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q)).then(j => j.results.bindings || []);
-  const wv = x => x && !/^Q\d+$/.test(x.value) ? x.value : undefined; // senza etichetta Wikidata dà il codice Q
-  // Opere con serie (P179): nomi in ogni lingua, serie, numero e seguito (qualificatore, altrimenti proprietà diretta).
-  const wdWorks = where => wdSparql(`SELECT ?work (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) WHERE {
-      ${where} ?work p:P179 ?st. ?st ps:P179 ?ser. OPTIONAL { ?work rdfs:label|skos:altLabel ?nm }
-      OPTIONAL { ?st pq:P1545 ?n1 } OPTIONAL { ?work wdt:P1545 ?n2 } BIND(COALESCE(?n1, ?n2) AS ?no)
-      OPTIONAL { ?st pq:P156 ?x1 } OPTIONAL { ?work wdt:P156 ?x2 } BIND(COALESCE(?x1, ?x2) AS ?nx)
-      OPTIONAL { ?nx rdfs:label ?ni FILTER(LANG(?ni) = "it") }
-      OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } BIND(COALESCE(?si, ?se) AS ?sl)
-    } GROUP BY ?work LIMIT 500`).then(rs => rs.map(r => ({ id: r.work.value, names: String(wv(r.names) || "").split("|"), series: wv(r.s), no: wv(r.n), it: wv(r.it) })));
-  // Una sola opera (con quel titolo): 0 = nessuna, null = più di una (mai indovinare).
-  const pickWork = (ws, t) => { const h = ws.filter(w => w.series && (!t || w.names.some(n => sameTitle(n, t)))); return new Set(h.map(w => w.id)).size > 1 ? null : h[0] || 0; };
+  const wv = x => x && !/^Q\d+$/.test(x.value) ? x.value : undefined; // niente codici Q
+  // Opere (non edizioni) con serie, una riga per serie.
+  const wdWorks = where => wdSparql(`SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) WHERE {
+${where} FILTER NOT EXISTS { ?work wdt:P629 [] } ?work p:P179 ?st. ?st a wikibase:BestRank; ps:P179 ?ser.
+OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs")) }
+OPTIONAL { ?st pq:P1545 ?n1 } OPTIONAL { ?work wdt:P1545 ?n2 } BIND(COALESCE(?n1, ?n2) AS ?no)
+OPTIONAL { ?st pq:P156 ?x1 } OPTIONAL { ?work wdt:P156 ?x2 } BIND(COALESCE(?x1, ?x2) AS ?nx)
+OPTIONAL { ?nx rdfs:label ?ni FILTER(LANG(?ni) = "it") }
+OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } OPTIONAL { ?ser rdfs:label ?sm FILTER(LANG(?sm) = "mul") } BIND(COALESCE(?si, ?se, ?sm) AS ?sl)
+} GROUP BY ?work ?st LIMIT 500`).then(rs => rs.map(r => ({ id: r.work.value, names: String(wv(r.names) || "").split("|"), series: wv(r.s), no: wv(r.n), it: wv(r.it) })));
+  // Una sola opera: 0 = nessuna, null = più d'una.
+  const pickWork = (ws, t) => {
+    let h = ws.filter(w => w.series && (!t || w.names.some(n => sameTitle(n, t))));
+    const ex = t ? h.filter(w => w.names.some(n => titleCore(n) === titleCore(t))) : [];
+    if (ex.length) h = ex;
+    return new Set(h.map(w => w.id)).size > 1 ? null : h.find(w => w.no) || h[0] || 0;
+  };
   async function authorWorks(a, cache) {
     const k = seriesKey(a);
     if (!cache.has(k)) {
@@ -487,27 +490,26 @@
     }
     return cache.get(k);
   }
-  // Titolo originale da Open Library; un errore salta solo questo passo.
+  // Titolo originale (Open Library).
   async function olTitle(isbn) {
     try {
       const j = await (await fetch("https://openlibrary.org/isbn/" + isbn + ".json")).json(), k = j.works && j.works[0] && j.works[0].key;
       return String(j.translation_of || (/^\/works\/OL\d+W$/.test(k) && (await (await fetch("https://openlibrary.org" + k + ".json")).json()).title) || "");
     } catch { return ""; }
   }
-  // Seguito: solo se esiste un'edizione italiana con quel titolo (Apple Books, poi Google Books in italiano).
+  // Seguito solo con un'edizione italiana.
   async function itEdition(t, a) {
     for (const f of [() => appleSearch(t + " " + a, 5), () => googleSearch(t + " " + a, { max: 5 })]) {
       try { if ((await f()).some(x => sameTitle(x.title, t))) return true; } catch {}
     }
     return false;
   }
-  // Serie del libro: 1) ISBN, 2) opere dell'autore, 3) titolo originale. Non modifica il libro.
+  // Serie: 1) ISBN, 2) autore, 3) titolo originale.
   async function findSeries(b, cache = new Map()) {
     const isbn = parseIsbn(b.isbn), a = String(b.author || "").split(",")[0].trim();
     let w = 0;
     if (isbn) {
-      const i13 = isbn.length === 13 ? isbn : isbn13From10(isbn), i10 = isbn.length === 10 ? isbn : isbn10From13(isbn);
-      w = pickWork(await wdWorks(`{ ?ed wdt:P212 "${i13}" } ${i10 ? `UNION { ?ed wdt:P957 "${i10}" }` : ""} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work)`));
+      w = pickWork(await wdWorks(`{ SELECT ?work WHERE { ${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) } }`));
     }
     if (w === 0 && a) {
       const ws = await authorWorks(a, cache);
@@ -520,18 +522,18 @@
     if (w.it && await itEdition(w.it, a)) r.next = w.it;
     return r;
   }
-  // Copia del libro con la serie trovata: serie e numero solo senza seriesManual; il seguito solo per la stessa serie.
+  // Copia con la serie trovata, rispettando seriesManual.
   function applySeries(b, r) {
     const o = { ...b };
     if (!b.seriesManual && r.series) {
       const s = seriesName(r.series);
-      if (seriesKey(s) !== seriesKey(b.series)) delete o.seriesNext;
+      if (seriesKey(s) !== seriesKey(b.series)) { delete o.seriesNo; delete o.seriesNext; }
       o.series = s; if (r.no) o.seriesNo = r.no;
     }
     if (r.next && seriesKey(o.series) === seriesKey(r.series)) o.seriesNext = r.next;
     return o;
   }
-  // Nuovo libro: serie cercata in sottofondo, senza messaggi.
+  // Nuovo libro: serie in sottofondo.
   function seriesLater(id) {
     const b = state.books.find(x => x.id === id);
     if (b && navigator.onLine) findSeries(b).then(r => {
@@ -1664,10 +1666,10 @@
       const cur = { ...b }; readData(sheet, cur); // usa titolo e autore come sono ora nei campi
       refBtn.disabled = true; refSt.textContent = "Cerco le informazioni…";
       const errors = {};
-      const info = (await fetchInfo(cur, errors).catch(() => null)) || {};
-      const sr = await findSeries(cur).catch(() => null);
+      const info0 = await fetchInfo(cur, errors).catch(() => null), info = info0 || {};
+      const sr = await findSeries({ ...cur, isbn: cur.isbn || info.isbn }).catch(() => null);
       refBtn.disabled = false;
-      if (!info.isbn && !info.author && !info.cover && !sr) {
+      if (!info0 && !sr) {
         const err = Object.keys(errors).join(", ");
         refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.`;
         return;
@@ -1689,9 +1691,9 @@
         b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", info.synopsis].filter(Boolean).join("\n");
         const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; syn.hidden = false; got.push("trama");
       }
-      if (sr) { // serie e numero nei campi, seguito nei dati della scheda: tutto si tiene con Salva
+      if (sr) { // si tiene con Salva
         const nb = applySeries(cur, sr);
-        if (nb.series !== cur.series || nb.seriesNo !== cur.seriesNo) { $("#d-series", sheet).value = b.series = nb.series; $("#d-series-no", sheet).value = b.seriesNo = nb.seriesNo || ""; got.push("serie"); }
+        if (nb.series !== cur.series || nb.seriesNo !== cur.seriesNo) { $("#d-series", sheet).value = b.series = nb.series; $("#d-series-no", sheet).value = b.seriesNo = nb.seriesNo || ""; b.seriesNext = nb.seriesNext; got.push("serie"); }
         if (nb.seriesNext && nb.seriesNext !== b.seriesNext) { b.seriesNext = nb.seriesNext; got.push("seguito"); }
       }
       if (info.cover && info.cover !== b.cover && !b.coverManual) { b.cover = info.cover; delete b.noCover; cvc.disabled = false; got.push("copertina"); }

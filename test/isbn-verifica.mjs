@@ -5,7 +5,7 @@ import { APP, ok, newPage } from './lib.mjs';
 const VUOTO = { totalItems: 0 };
 const EINAUDI_ISBN = '9788806219215';
 const ISBN10 = '8806219219';
-const WD_AUTORE = { itemLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
+const WD_AUTORE = { edLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
 
 async function apri(browser, { google, wikidata = [], ol = { docs: [] } } = {}) {
   const p = await newPage(browser, { external: 'allow' });
@@ -47,7 +47,7 @@ export default async function ({ browser }) {
   p = await apri(browser, { wikidata: [WD_AUTORE] });
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   stato = await cerca(p, ISBN10);
-  ok('ISBN-10: Wikidata cercata anche con l\'ISBN a 13 cifre', p.wUrls.some(u => u.includes(EINAUDI_ISBN)), p.wUrls.map(u => u.slice(-160)).join(' ; '));
+  ok('ISBN-10: Wikidata cercata anche con l\'ISBN a 13 cifre, con i trattini', p.wUrls.some(u => u.includes('"978-88-06-21921-5"') && u.includes('"88-06-21921-9"')), p.wUrls.map(u => u.slice(-160)).join(' ; '));
   await p.close2();
 
   // E. Etichette Wikidata senza nome (codice Q) non finiscono nei risultati come autore

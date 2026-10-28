@@ -76,11 +76,11 @@ export default async function ({ browser }) {
   await p.close2();
 
   // 3b. Un ISBN che solo Wikidata conosce: il risultato compare, e Wikidata non viene interrogato per i titoli
-  const riga = { itemLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
+  const riga = { edLabel: { value: 'Underworld' }, authorLabel: { value: 'Don DeLillo' }, date: { value: '1997-11-01T00:00:00Z' }, pages: { value: '832' } };
   p = await apri(browser, () => ({ body: VUOTO }), { wikidata: [riga] });
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Wikidata: un ISBN noto solo lì compare nei risultati', r.titoli.includes('Underworld') && p.wikidataUrls.length === 1 && /9788806219215/.test(decodeURIComponent(p.wikidataUrls[0])), `${p.wikidataUrls.length} richieste · ${r.stato}`);
+  ok('Wikidata: un ISBN noto solo lì compare nei risultati', r.titoli.includes('Underworld') && p.wikidataUrls.length === 1 && decodeURIComponent(p.wikidataUrls[0]).includes('"978-88-06-21921-5"'), `${p.wikidataUrls.length} richieste · ${r.stato}`);
   await cerca(p, 'Underworld DeLillo');
   ok('Wikidata: non interrogato per una ricerca per titolo', p.wikidataUrls.length === 1, `richieste: ${p.wikidataUrls.length}`);
   await p.close2();

@@ -199,6 +199,16 @@ async function ricerca(browser) {
   ok('passo 1: ISBN → serie, numero dal qualificatore', r && r.series === 'Slough House' && r.no === '3' && p.n.autore === 0, JSON.stringify(r));
   const q1 = p.q.find(q => /P212/.test(q)) || '';
   ok('passo 1: numero anche da P1545 diretta, seguito anche da P156 diretta', /pq:P1545/.test(q1) && /wdt:P1545/.test(q1) && /pq:P156/.test(q1) && /wdt:P156/.test(q1) && /P629/.test(q1), q1.slice(0, 300));
+  ok('passo 1: ISBN con i trattini come su Wikidata (P212 e P957)', q1.includes('"978-88-452-9999-7"') && q1.includes('"88-452-9999-6"') && /wdt:P212\|wdt:P957/.test(q1), q1.slice(0, 300));
+  ok('edizioni escluse dalle opere (collana editoriale), rango migliore, etichetta mul', /FILTER NOT EXISTS \{ \?work wdt:P629 \[\] \}/.test(q1) && /wikibase:BestRank/.test(q1) && /"mul"/.test(q1) && /GROUP BY \?work \?st/.test(q1));
+  // Opera in due serie: il numero è quello della sua serie
+  p.cfg.isbn = []; p.cfg.works = [W('Q20', 'Guards! Guards!|A me le guardie!', 'City Watch'), W('Q20', 'Guards! Guards!|A me le guardie!', 'Discworld', '8')];
+  r = await find(p, { author: 'Terry Pratchett', title: 'A me le guardie!' });
+  ok('opera in due serie: numero della serie giusta', r && r.series === 'Discworld' && r.no === '8', JSON.stringify(r));
+  // Titolo identico vince sul titolo che inizia allo stesso modo
+  p.cfg.works = [W('Q31', 'Foundation and Empire|Fondazione e Impero', 'Ciclo della Fondazione', '2'), W('Q30', 'Foundation|Fondazione', 'Ciclo della Fondazione', '1')];
+  r = await find(p, { author: 'Isaac Asimov', title: 'Fondazione' });
+  ok('titolo identico preferito: «Fondazione» non è ambiguo', r && r.no === '1', JSON.stringify(r));
   // Passo 2: titolo contro etichette e alias delle opere dell'autore
   p.cfg.isbn = []; p.cfg.works = [W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
   r = await find(p, { ...MH, title: 'Tigri vere' });
@@ -252,9 +262,10 @@ async function usoRicerca(browser) {
     { ...base, id: 'a2', title: 'Tigri vere bis', series: 'Mia serie', seriesNo: '9', seriesManual: true },
     { ...base, id: 'a3', title: 'Leoni morti', series: 'Vecchia', seriesNo: '7', seriesNext: 'Seguito' },
     { ...base, id: 'a4', title: 'Libro HTML' },
+    { ...base, id: 'a5', title: 'Senza numero', series: 'Vecchia', seriesNo: '7', seriesNext: 'Seguito' },
   ]);
   p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere|Tigri vere bis', 'Slough House', '3', 'La strada degli spettri'), W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q12', 'Spook Street|La strada degli spettri', 'Slough House', '4'),
-    W('Q13', 'Libro HTML', '<img src=x onerror="window.__x=1">', '1')];
+    W('Q14', 'Senza numero', 'Slough House'), W('Q13', 'Libro HTML', '<img src=x onerror="window.__x=1">', '1')];
   p.cfg.apple = ['La strada degli spettri'];
   const open = async id => { await p.locator(`#main [data-id="${id}"]`).click(); await p.waitForSelector('.sheet'); };
   const refresh = async () => { await p.locator('#s-refresh').click(); await p.waitForFunction(() => !document.querySelector('#s-refresh').disabled && !/Cerco/.test(document.querySelector('#s-ref-status').textContent), null, { timeout: 8000 }).catch(() => {}); };
@@ -278,6 +289,12 @@ async function usoRicerca(browser) {
   const shown = await p.locator('.sheet-top button[data-series]').innerText().catch(() => '');
   ok('testi con HTML da Wikidata innocui', b.series === '<img src=x onerror="window.__x=1">' && /<img src=x/.test(shown) && await p.locator('img[src="x"]').count() === 0 && await p.evaluate(() => window.__x === undefined), shown);
   await p.keyboard.press('Escape'); await p.waitForSelector('.sheet', { state: 'detached' }).catch(() => {});
+
+  // Serie diversa: numero e seguito vecchi tolti
+  await open('a5'); await refresh(); await save();
+  await until(p, 'a5', { series: 'Slough House', seriesNo: null, seriesNext: null });
+  b = await book(p, 'a5');
+  ok('serie cambiata: numero e seguito vecchi tolti', b.series === 'Slough House' && b.seriesNo === undefined && b.seriesNext === undefined && b.seriesManual === undefined, JSON.stringify(b));
 
   // Errore di rete: i campi restano
   p.cfg.fail = 'rete';
