@@ -70,7 +70,7 @@ export async function newPage(browser, { width = 390, height = 844, dark = false
   p.on('console', m => { if (m.type() === 'error' && !/net::|Failed to load resource|ERR_/.test(m.text())) p.errs.push(m.text()); });
   await p.route(/cdn\.jsdelivr\.net/, r => r.fulfill({ contentType: 'application/javascript', body: /app-compat/.test(r.request().url()) ? STUB : '' }));
   await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort()); // i test non dipendono dalla rete
-  if (external === 'abort') await p.route(/www\.googleapis\.com\/books|itunes\.apple\.com|openlibrary\.org|mzstatic\.com/, r => r.abort());
+  if (external === 'abort') await p.route(/www\.googleapis\.com\/books|itunes\.apple\.com|openlibrary\.org|mzstatic\.com|wikidata\.org/, r => r.abort());
   p.close2 = () => ctx.close();
   return p;
 }

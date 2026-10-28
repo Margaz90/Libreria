@@ -161,7 +161,147 @@ async function ordine(browser) {
   await p.close2();
 }
 
+// --- Ricerca della serie (Wikidata, Open Library, conferma del seguito italiano), con fonti simulate ---
+const W = (id, names, s, n, it) => ({ work: { value: 'http://www.wikidata.org/entity/' + id }, names: { value: names }, ...(s ? { s: { value: s } } : {}), ...(n ? { n: { value: n } } : {}), ...(it ? { it: { value: it } } : {}) });
+async function fonti(browser) {
+  const p = await newPage(browser, { external: 'allow' });
+  p.cfg = { isbn: [], works: [], ids: ['Q1'], ol: null, olWork: null, apple: [], google: [], fail: null };
+  p.n = { isbn: 0, autore: 0, cerca: 0 }; p.q = [];
+  const json = (r, body, status = 200) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  await p.route(/query\.wikidata\.org/, r => {
+    if (p.cfg.fail === 'rete') return r.abort();
+    if (p.cfg.fail) return json(r, {}, p.cfg.fail);
+    const q = decodeURIComponent(new URL(r.request().url()).searchParams.get('query') || ''); p.q.push(q);
+    const serie = /P179/.test(q), isbn = /P212/.test(q), autore = /P50/.test(q);
+    if (isbn) p.n.isbn++; if (autore) p.n.autore++;
+    json(r, { results: { bindings: !serie ? [] : isbn ? p.cfg.isbn : autore ? p.cfg.works : [] } });
+  });
+  await p.route(/www\.wikidata\.org\/w\/api\.php/, r => { p.n.cerca++; if (p.cfg.fail === 'rete') return r.abort(); json(r, { search: p.cfg.ids.map(id => ({ id })) }); });
+  await p.route(/openlibrary\.org\/isbn\//, r => p.cfg.ol ? json(r, p.cfg.ol) : json(r, {}, 404));
+  await p.route(/openlibrary\.org\/works\//, r => p.cfg.olWork ? json(r, p.cfg.olWork) : json(r, {}, 404));
+  await p.route(/openlibrary\.org\/search/, r => json(r, { docs: [] }));
+  await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}(${JSON.stringify({ results: p.cfg.apple.map(t => ({ trackName: t, artistName: 'Mick Herron' })) })})` }); });
+  await p.route(/www\.googleapis\.com\/books/, r => json(r, { items: p.cfg.google.map(t => ({ volumeInfo: { title: t, authors: ['Mick Herron'], language: 'it' } })) }));
+  return p;
+}
+const find = (p, b, twice) => p.evaluate(async ([b, twice]) => {
+  const S = window.libreriaSeries, c = new Map();
+  try { const r = await S.findSeries(b, c); if (twice) await S.findSeries({ ...b, title: twice }, c); return r; } catch (e) { return { err: e && e.code }; }
+}, [b, twice || null]);
+
+async function ricerca(browser) {
+  const p = await fonti(browser);
+  await p.goto(APP + '/'); await p.waitForSelector('#main');
+  const MH = { author: 'Mick Herron' };
+  // Passo 1: ISBN → opera → serie e numero
+  p.cfg.isbn = [W('Q10', 'Real Tigers', 'Slough House', '3')];
+  let r = await find(p, { ...MH, title: 'Tigri vere', isbn: '978-88-452-9999-7' });
+  ok('passo 1: ISBN → serie, numero dal qualificatore', r && r.series === 'Slough House' && r.no === '3' && p.n.autore === 0, JSON.stringify(r));
+  const q1 = p.q.find(q => /P212/.test(q)) || '';
+  ok('passo 1: numero anche da P1545 diretta, seguito anche da P156 diretta', /pq:P1545/.test(q1) && /wdt:P1545/.test(q1) && /pq:P156/.test(q1) && /wdt:P156/.test(q1) && /P629/.test(q1), q1.slice(0, 300));
+  // Passo 2: titolo contro etichette e alias delle opere dell'autore
+  p.cfg.isbn = []; p.cfg.works = [W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('passo 2: titolo italiano contro alias inglese dell\'opera', r && r.series === 'Slough House' && r.no === '3', JSON.stringify(r));
+  // Passo 3: titolo originale da Open Library
+  p.cfg.works = [W('Q12', 'Spook Street', 'Slough House', '4')]; p.cfg.ol = { translation_of: 'Spook Street' };
+  r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });
+  ok('passo 3: titolo originale da Open Library', r && r.series === 'Slough House' && r.no === '4', JSON.stringify(r));
+  p.cfg.ol = { works: [{ key: '/works/OL1W' }] }; p.cfg.olWork = { title: 'Spook Street' };
+  r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });
+  ok('passo 3: titolo dall\'opera Open Library', r && r.no === '4', JSON.stringify(r));
+  p.cfg.ol = null;
+  // Due opere diverse con lo stesso titolo: mai indovinare
+  p.cfg.works = [W('Q10', 'Tigri vere', 'Slough House', '3'), W('Q99', 'Tigri vere', 'Altra serie', '1')];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('due opere che combaciano: nessuna serie', r === null, JSON.stringify(r));
+  // Stessa cache: una sola interrogazione per autore
+  p.cfg.works = [W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  p.n.autore = 0; p.n.cerca = 0;
+  await find(p, { ...MH, title: 'Tigri vere' }, 'Leoni morti');
+  ok('una sola interrogazione per autore su due libri', p.n.autore === 1 && p.n.cerca === 1, JSON.stringify(p.n));
+  // Seguito italiano
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('seguito senza etichetta italiana: assente', r && r.next === undefined, JSON.stringify(r));
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3', 'La strada degli spettri')];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('etichetta italiana ma nessuna edizione: assente', r && r.series === 'Slough House' && r.next === undefined, JSON.stringify(r));
+  p.cfg.apple = ['La strada degli spettri'];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('edizione trovata su Apple Books: titolo italiano', r && r.next === 'La strada degli spettri', JSON.stringify(r));
+  p.cfg.apple = []; p.cfg.google = ['La strada degli spettri: romanzo'];
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('edizione trovata su Google Books: titolo italiano', r && r.next === 'La strada degli spettri', JSON.stringify(r));
+  p.cfg.google = [];
+  // Errori di Wikidata
+  p.cfg.fail = 'rete'; r = await find(p, { ...MH, title: 'Altro', isbn: '9788845299997' });
+  ok('errore di rete: codice wikidata-rete', r && r.err === 'wikidata-rete', JSON.stringify(r));
+  p.cfg.fail = 503; r = await find(p, { ...MH, title: 'Altro', isbn: '9788845299997' });
+  ok('Wikidata giù: codice wikidata-503', r && r.err === 'wikidata-503', JSON.stringify(r));
+  p.cfg.fail = null;
+  ok('ricerca: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
+async function usoRicerca(browser) {
+  const p = await fonti(browser);
+  const base = { added: 1, rating: 0, status: 'da-leggere', author: 'Mick Herron' };
+  await load(p, [
+    { ...base, id: 'a1', title: 'Tigri vere' },
+    { ...base, id: 'a2', title: 'Tigri vere bis', series: 'Mia serie', seriesNo: '9', seriesManual: true },
+    { ...base, id: 'a3', title: 'Leoni morti', series: 'Vecchia', seriesNo: '7', seriesNext: 'Seguito' },
+    { ...base, id: 'a4', title: 'Libro HTML' },
+  ]);
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere|Tigri vere bis', 'Slough House', '3', 'La strada degli spettri'), W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q12', 'Spook Street|La strada degli spettri', 'Slough House', '4'),
+    W('Q13', 'Libro HTML', '<img src=x onerror="window.__x=1">', '1')];
+  p.cfg.apple = ['La strada degli spettri'];
+  const open = async id => { await p.locator(`#main [data-id="${id}"]`).click(); await p.waitForSelector('.sheet'); };
+  const refresh = async () => { await p.locator('#s-refresh').click(); await p.waitForFunction(() => !document.querySelector('#s-refresh').disabled && !/Cerco/.test(document.querySelector('#s-ref-status').textContent), null, { timeout: 8000 }).catch(() => {}); };
+  const save = async () => { await p.locator('#s-save').click(); await p.waitForSelector('.sheet', { state: 'detached' }); };
+
+  await open('a1'); await refresh();
+  ok('Aggiorna informazioni riempie Serie e N.', await p.inputValue('#d-series') === 'Slough House' && await p.inputValue('#d-series-no') === '3', await p.locator('#s-ref-status').innerText());
+  await save(); await until(p, 'a1', { series: 'Slough House', seriesNo: '3', seriesNext: 'La strada degli spettri' });
+  let b = await book(p, 'a1');
+  ok('Aggiorna informazioni: salvati serie, numero e seguito, senza seriesManual', b.series === 'Slough House' && b.seriesNo === '3' && b.seriesNext === 'La strada degli spettri' && b.seriesManual === undefined, JSON.stringify(b));
+
+  await open('a2'); await refresh();
+  const manual = await p.inputValue('#d-series') === 'Mia serie' && await p.inputValue('#d-series-no') === '9';
+  await save(); await p.waitForTimeout(900); b = await book(p, 'a2');
+  ok('Aggiorna informazioni rispetta seriesManual', manual && b.series === 'Mia serie' && b.seriesNo === '9' && b.seriesManual === true, JSON.stringify(b));
+
+  await open('a4'); await refresh(); await save();
+  await until(p, 'a4', { seriesNo: '1' });
+  b = await book(p, 'a4');
+  await open('a4');
+  const shown = await p.locator('.sheet-top button[data-series]').innerText().catch(() => '');
+  ok('testi con HTML da Wikidata innocui', b.series === '<img src=x onerror="window.__x=1">' && /<img src=x/.test(shown) && await p.locator('img[src="x"]').count() === 0 && await p.evaluate(() => window.__x === undefined), shown);
+  await p.keyboard.press('Escape'); await p.waitForSelector('.sheet', { state: 'detached' }).catch(() => {});
+
+  // Errore di rete: i campi restano
+  p.cfg.fail = 'rete';
+  await open('a3'); await refresh();
+  const kept = await p.inputValue('#d-series') === 'Vecchia' && await p.inputValue('#d-series-no') === '7';
+  await save(); await p.waitForTimeout(900); b = await book(p, 'a3');
+  ok('errore di rete: i campi restano', kept && b.series === 'Vecchia' && b.seriesNo === '7' && b.seriesNext === 'Seguito', JSON.stringify(b));
+  p.cfg.fail = null;
+
+  // Nuovo libro: ricerca in sottofondo dopo il salvataggio
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+  await p.fill('#d-title', 'La strada degli spettri'); await p.fill('#d-author', 'Mick Herron');
+  await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 6000 }).catch(() => {});
+  b = (await localBooks(p)).find(x => x.title === 'La strada degli spettri') || {};
+  ok('nuovo libro: serie trovata in sottofondo', b.series === 'Slough House' && b.seriesNo === '4' && b.seriesManual === undefined, JSON.stringify(b));
+  ok('uso della ricerca: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
+  await ricerca(browser);
+  await usoRicerca(browser);
   await pulizia(browser);
   await titoli(browser);
   await scheda(browser);
