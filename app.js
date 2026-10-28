@@ -733,8 +733,8 @@
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
   // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
   function pquickHTML(b, tot, pg) {
-    const id = esc(b.id), step = Number(b.pageStep) || 0;
-    return `<div class="pquick">${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" data-range="${id}" aria-label="Pagina attuale di ${esc(b.title)}">` : `<span class="grow"></span>`}<button class="btn" type="button" data-add="10" data-id-add="${id}" aria-label="Aggiungi 10 pagine">+10</button>${step ? `<button class="btn" type="button" data-repeat="${id}" aria-label="Aggiungi ${step} pagine">+${step}</button>` : ""}</div>`;
+    const id = esc(b.id), t = esc(b.title), step = Number(b.pageStep) || 0;
+    return `<div class="pquick">${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" data-range="${id}" aria-label="Avanzamento di ${t}" aria-valuetext="pagina ${Math.min(pg, tot)} di ${tot}">` : `<span class="grow"></span>`}<button class="btn" type="button" data-add="10" data-id-add="${id}" aria-label="Aggiungi 10 pagine a ${t}">+10</button>${step ? `<button class="btn" type="button" data-repeat="${id}" aria-label="Aggiungi ${step} pagine a ${t}">+${step}</button>` : ""}</div>`;
   }
   // Libro in lettura in primo piano: etichetta, pagina modificabile, pulsanti Aggiorna e Dettagli.
   function readingCards(books) {
@@ -1054,7 +1054,7 @@
     root.querySelectorAll("[data-repeat]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.repeat); if (b && b.pageStep) pageQuick(b.id, { add: b.pageStep }); });
     root.querySelectorAll("[data-range]").forEach(r => {
       // Durante il trascinamento cambio solo il numero mostrato; salvo al rilascio.
-      r.oninput = () => { const n = root.querySelector(`[data-page="${CSS.escape(r.dataset.range)}"]`); if (n) n.value = r.value; };
+      r.oninput = () => { const n = root.querySelector(`[data-page="${CSS.escape(r.dataset.range)}"]`); if (n) n.value = r.value; r.setAttribute("aria-valuetext", `pagina ${r.value} di ${r.max}`); };
       r.onchange = () => pageQuick(r.dataset.range, { to: Number(r.value), manual: true });
     });
     root.querySelectorAll("[data-save]").forEach(btn => btn.onclick = () => {

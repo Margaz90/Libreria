@@ -26,8 +26,10 @@ async function paginaRapida(browser) {
   const toastBtn = () => p.locator('.toast button');
 
   ok('pagina rapida: +10, ripeti e cursore con etichette', await card('p1').locator('.pquick').count() === 1
-    && /Aggiungi 10 pagine/.test(await add10('p1').getAttribute('aria-label'))
-    && /Pagina attuale di Con totale/.test(await card('p1').locator('input[type=range]').getAttribute('aria-label'))
+    && await add10('p1').getAttribute('aria-label') === 'Aggiungi 10 pagine a Con totale'
+    && await add10('p2').getAttribute('aria-label') === 'Aggiungi 10 pagine a Senza totale'
+    && await card('p1').locator('input[type=range]').getAttribute('aria-label') === 'Avanzamento di Con totale'
+    && await card('p1').locator('input[type=range]').getAttribute('aria-valuetext') === 'pagina 100 di 300'
     && await card('p1').locator('button[data-repeat]').count() === 0);
   const hs = await add10('p1').boundingBox();
   ok('bersagli al tocco di almeno 44 px', hs.height >= 44 && hs.width >= 44, `${hs.width}x${hs.height}`);
@@ -42,7 +44,7 @@ async function paginaRapida(browser) {
   await card('p1').locator('[data-save]').click(); await until(p, 'p1', { page: 130 });
   ok('pagina scritta a mano: salto ricordato', (await book(p, 'p1')).pageStep === 30, (await book(p, 'p1')).pageStep);
   const rep = card('p1').locator('button[data-repeat]');
-  ok('ripeti mostra +30', (await rep.innerText()).trim() === '+30');
+  ok('ripeti mostra +30', (await rep.innerText()).trim() === '+30' && await rep.getAttribute('aria-label') === 'Aggiungi 30 pagine a Con totale');
   await rep.click(); await until(p, 'p1', { page: 160 });
   ok('ripeti porta a 160', (await book(p, 'p1')).page === 160, (await book(p, 'p1')).page);
   await add10('p1').click(); await until(p, 'p1', { page: 170 });
