@@ -22,6 +22,7 @@
 <p>Prova la ricerca su alcuni libri di serie note e mostra cosa risponde ogni fonte. Non modifica i tuoi libri. Alla fine tocca «Copia il risultato» e incollalo a Claude.</p>
 <button id="go" disabled>Avvio…</button>
 <button id="var">Confronta le interrogazioni</button>
+<button id="det">Dettagli dei casi difficili</button>
 <button id="copy" class="alt">Copia il risultato</button>
 <details><summary>Prova un altro libro</summary>
   <input id="t" placeholder="Titolo"><input id="a" placeholder="Autore"><input id="i" placeholder="ISBN (facoltativo)">
@@ -132,6 +133,44 @@ OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } FILTER NOT EXISTS { ?
       const r = await fetch("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent("Andrea Camilleri"));
       log(`\n▶ Cerca «Andrea Camilleri»: ${r.status} in ${Date.now() - t0} ms — ${(await r.text()).slice(0, 400)}`);
     } catch (e) { log(`\n▶ Cerca «Andrea Camilleri»: ERRORE ${e.name}`); }
+    log("\nFine.");
+  };
+  // Dettagli: risposta grezza della ricerca autore, opere che combaciano col titolo, titolo originale da Open Library.
+  const getText = async url => { const c = new AbortController(), t = setTimeout(() => c.abort(), 20000), t0 = Date.now();
+    try { const r = await fetch(url, { signal: c.signal }); return { ms: Date.now() - t0, status: r.status, text: await r.text() }; } catch (e) { return { ms: Date.now() - t0, err: e.name }; } finally { clearTimeout(t); } };
+  async function dettagli(title, author) {
+    log(`\n▶ ${title} — ${author}`);
+    for (let i = 1; i <= 2; i++) {
+      const r = await getText("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent(author));
+      let ids = [];
+      try { ids = (JSON.parse(r.text).search || []).map(x => x.id); } catch {}
+      log(`   · cerca autore (tentativo ${i}): ${r.err || r.status} in ${r.ms} ms — ${ids.length ? ids.slice(0, 3).join(" ") : "senza candidati: " + String(r.text || "").slice(0, 300)}`);
+      if (ids.length) {
+        const c1 = await sparql(qC1(ids[0]));
+        if (c1.err) { log("   · opere: ERRORE " + c1.err); break; }
+        const items = [...new Set(c1.rows.flatMap(x => ["work", "ser"].map(k => x[k] && x[k].value)).filter(Boolean))].map(u => "wd:" + u.split("/").pop());
+        const c2 = items.length ? await sparql(qC2(items).replace("SELECT ?x ?nm", "SELECT ?x ?nm (LANG(?nm) AS ?lg)")) : { rows: [] };
+        const names = {}; (c2.rows || []).forEach(x => { const k = x.x.value.split("/").pop(); (names[k] = names[k] || []).push(x.nm.value + "@" + (x.lg ? x.lg.value : "")); });
+        const id = u => u.split("/").pop(), sm = S.sameTitle;
+        const hit = c1.rows.filter(x => (names[id(x.work.value)] || []).some(n => sm(n.replace(/@\w*$/, ""), title)));
+        const near = c1.rows.filter(x => !hit.includes(x) && (names[id(x.work.value)] || []).some(n => n.toLowerCase().includes(title.toLowerCase().split(" ").filter(w => w.length > 3)[0] || "§")));
+        const show = x => { const w = id(x.work.value), sr = id(x.ser.value); const nm = (names[w] || []).filter(n => /@(it|en)$/.test(n)).slice(0, 4).join(" · "); const sl = (names[sr] || []).filter(n => /@(it|en|mul)$/.test(n)).slice(0, 2).join(" · "); return `${w} [${nm}] serie ${sr} [${sl}] n.${x.no ? x.no.value : "?"}`; };
+        log(`   · opere che combaciano col titolo: ${hit.length}${hit.length ? "\n       " + hit.slice(0, 6).map(show).join("\n       ") : ""}`);
+        if (near.length) log(`   · opere simili: ${near.length}\n       ` + near.slice(0, 4).map(show).join("\n       "));
+        break;
+      }
+      await new Promise(x => setTimeout(x, 1500));
+    }
+    for (const u of ["title=" + encodeURIComponent(title) + "&author=" + encodeURIComponent(author), "q=" + encodeURIComponent(title + " " + author)]) {
+      const r = await getText("https://openlibrary.org/search.json?limit=5&fields=title,author_name,language&" + u);
+      let docs = []; try { docs = JSON.parse(r.text).docs || []; } catch {}
+      log(`   · Open Library ${u.split("=")[0]}: ${r.err || r.status} in ${r.ms} ms — ${docs.length ? docs.map(d => d.title + " (" + (d.author_name || []).slice(0, 1).join("") + ")").join(" | ") : "nessun risultato"}`);
+    }
+  }
+  document.getElementById("det").onclick = async () => {
+    if (!S) return;
+    out.textContent = `Dettagli del ${new Date().toLocaleString("it-IT")}\n`;
+    for (const [t, a] of [["Leoni morti", "Mick Herron"], ["Un covo di bastardi", "Mick Herron"], ["Harry Potter e la pietra filosofale", "J.K. Rowling"], ["Il trono di spade", "George R.R. Martin"], ["Le tigri sono in giro", "Mick Herron"]]) await dettagli(t, a);
     log("\nFine.");
   };
   document.getElementById("copy").onclick = async () => {
