@@ -307,11 +307,12 @@ async function usoRicerca(browser) {
   // Nuovo libro: ricerca in sottofondo dopo il salvataggio
   await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
   await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q'); // la scheda ha finito di aprirsi
   await p.fill('#d-title', 'La strada degli spettri'); await p.fill('#d-author', 'Mick Herron');
   await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 12000 }).catch(() => {});
   b = (await localBooks(p)).find(x => x.title === 'La strada degli spettri') || {};
-  ok('nuovo libro: serie trovata in sottofondo', b.series === 'Slough House' && b.seriesNo === '4' && b.seriesManual === undefined, JSON.stringify(b));
+  ok('nuovo libro: serie trovata in sottofondo', b.series === 'Slough House' && b.seriesNo === '4' && b.seriesManual === undefined, 'autore: ' + b.author + ' · ' + JSON.stringify(b));
   ok('uso della ricerca: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
@@ -400,13 +401,22 @@ async function prossimo(browser) {
     const s1 = N(a[0], a), s2 = N(b[0], b), s3 = N(c[0], c);
     const n1 = X([v('r3', '3', { ...L, finished: '2026-01-01' }, 'Spook Street'), v('p4', '4', { ...D, added: 5 }), { id: 'h', title: 'Altro', author: 'Mick Herron', ...D, added: 1 }], [], () => 0);
     const n2 = X([{ id: 'r', title: 'Leoni morti', author: 'A', series: S, seriesNext: 'Tigri vere', ...L }, { id: 't', title: 'Tigri vere', author: 'B', ...D }], [], () => 0);
-    return { a: s1 && s1.book && s1.book.id, b: s2, c: s3 && s3.book && s3.book.id, d: N(d[0], d), e: N({ id: 'z', title: 'Z', ...L }, a), f: N({ ...a[0], seriesNo: undefined }, a),
+    const g = [v('g1', '1', L), v('g2', '2', { ...L, seriesNext: 'Tigri vere' }), v('g4', '4', D)];
+    const h = [v('k1', '1', L), v('k2', '2', { ...L, seriesNext: 'Tigri vere' }), v('k3', '3', D, 'Real Tigers')];
+    const sg = N(g[0], g), sh = N(h[0], h);
+    const n3 = X([v('m2', '2', { ...L, finished: '2026-01-01', seriesNext: 'Tigri vere' }), v('m4', '4', { ...D, added: 5 }), { id: 'o', title: 'Altro', author: 'Altro', ...D, added: 1 }], [], () => 0);
+    const n4 = X([v('q3', '3', { ...L, finished: '2026-02-01' }), v('q4', '4', { ...L, finished: '2025-01-01' }), v('q5', '5', D)], [], () => 0);
+    return { g: sg, h: sh && sh.book && sh.book.id, n3: n3.map(x => x.book.id + ':' + x.kind), n4: n4[0] && n4[0].reason, a: s1 && s1.book && s1.book.id, b: s2, c: s3 && s3.book && s3.book.id, d: N(d[0], d), e: N({ id: 'z', title: 'Z', ...L }, a), f: N({ ...a[0], seriesNo: undefined }, a),
       n1: n1[0] && [n1[0].book.id, n1[0].kind, n1[0].reason], n2: n2[0] && [n2[0].book.id, n2[0].reason] };
   }, [S, L, D]);
   ok('salta i volumi letti', r.a === 'v5', r.a);
   ok('usa il seguito del volume posseduto più alto', r.b && r.b.title === 'Tigri vere' && r.b.no === '3' && !r.b.book, JSON.stringify(r.b));
   ok('numeri 2.5 in ordine', r.c === 'c25', r.c);
   ok('seguito già posseduto con sottotitolo: non riproposto', r.d === null, JSON.stringify(r.d));
+  ok('volume mancante: #3 non ce l\'hai prima di #4 in pila', r.g && r.g.title === 'Tigri vere' && r.g.no === '3' && !r.g.book, JSON.stringify(r.g));
+  ok('nessun buco: #3 con titolo diverso resta in pila', r.h === 'k3', r.h);
+  ok('Cosa leggo adesso?: con #3 mancante non propone #4 come affine', !r.n3.includes('m4:affine') && r.n3.length === 2, JSON.stringify(r.n3));
+  ok('«dopo il #N» usa il volume appena prima', r.n4 === 'Il #5 di Slough House, dopo il #4', r.n4);
   ok('senza serie o numero: nessun seguito', r.e === null && r.f === null);
   ok('Cosa leggo adesso?: Il #4 di Slough House, dopo il #3', r.n1 && r.n1[0] === 'p4' && r.n1[1] === 'affine' && r.n1[2] === 'Il #4 di Slough House, dopo il #3', JSON.stringify(r.n1));
   ok('senza numeri: Il seguito di «Titolo»', r.n2 && r.n2[0] === 't' && r.n2[1] === 'Il seguito di «Leoni morti»', JSON.stringify(r.n2));
@@ -435,7 +445,7 @@ async function prossimo(browser) {
   await p.locator('#s-close').click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await open('n1');
   const t3 = await row(), wb = p.locator('.sheet button[data-wish-next]'), wbb = await wb.boundingBox().catch(() => null);
-  ok("non ce l'hai: riga e pulsante «Lista dei desideri»", /#4 Quarto volume/.test(t3) && /· non ce l'hai/.test(t3) && (await wb.innerText()).trim() === 'Lista dei desideri' && wbb && wbb.height >= 44, t3);
+  ok("non ce l'hai: riga e pulsante «Lista dei desideri»", /#4 Quarto volume/.test(t3) && /· non ce l'hai/.test(t3) && (await wb.innerText()).trim() === 'Lista dei desideri' && await wb.getAttribute('aria-label') === 'Aggiungi «Quarto volume» alla lista dei desideri' && wbb && wbb.height >= 44, t3);
   await wb.click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'Quarto volume'), null, { timeout: 4000 }).catch(() => {});
   const nb = (await localBooks(p)).find(x => x.title === 'Quarto volume') || {};

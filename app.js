@@ -983,33 +983,36 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
 
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");
-  // Il prossimo libro: fino a tre proposte dalla pila (affine all'ultimo letto, la più vecchia, a caso). Funzione pura.
-  // Prossimo volume: il primo non letto dopo b, altrimenti il seguito (confermato) del volume più alto, se non posseduto. Funzione pura.
+  // Prossimo volume dopo b (pura): il primo non letto, o il seguito confermato se manca; after = volume precedente.
   function nextInSeries(b, books) {
     const no = x => parseFloat(x.seriesNo), n = no(b), key = seriesKey(b.series);
     if (!key || isNaN(n)) return null;
     const vols = books.filter(x => seriesKey(x.series) === key && no(x) >= n).sort((x, y) => no(x) - no(y));
-    const nx = vols.find(x => no(x) > n && x.status !== "letto");
-    if (nx) return { book: nx };
-    const top = vols.pop() || b, t = no(top);
-    if (!top.seriesNext || books.some(x => sameTitle(x.title, top.seriesNext))) return null;
-    return { title: top.seriesNext, ...(Number.isInteger(t) ? { no: String(t + 1) } : {}) };
+    const nx = vols.find(x => no(x) > n && x.status !== "letto"), i = nx ? vols.indexOf(nx) : vols.length;
+    const top = vols[i - 1] || b, t = no(top); // ultimo prima di nx (o il più alto)
+    if (nx && no(nx) - t <= 1) return { book: nx, after: top }; // nessun buco
+    if (top.seriesNext && !books.some(x => sameTitle(x.title, top.seriesNext))) return { title: top.seriesNext, after: top, ...(Number.isInteger(t) ? { no: String(t + 1) } : {}) };
+    return nx ? { book: nx, after: top } : null;
   }
+  // Il prossimo libro: fino a tre proposte dalla pila (affine all'ultimo letto, la più vecchia, a caso). Funzione pura.
   function nextBooks(books, exclude = [], rnd = Math.random) {
     const add = b => { const n = Number(b.added); return isFinite(n) && n > 0 ? n : 0; };
     const pile = books.filter(b => b.status === "da-leggere" && !exclude.includes(b.id)).sort((a, b) => add(a) - add(b));
     const out = [], take = (b, kind, reason) => { out.push({ book: b, kind, reason }); pile.splice(pile.indexOf(b), 1); };
     const k = (b, f) => String(b[f] || "").trim().toLowerCase(); // mai abbinare valori vuoti
     const last = books.filter(b => b.status === "letto").sort((a, b) => String(b.finished || "").localeCompare(String(a.finished || "")) || (b.updated || 0) - (a.updated || 0)).slice(0, 3);
-    for (const r of last) { // prima il seguito di una serie (anche solo per titolo del seguito)
-      const s = nextInSeries(r, books), nb = s && s.book || r.seriesNext && pile.find(b => sameTitle(b.title, r.seriesNext));
-      if (nb && pile.includes(nb)) { take(nb, "affine", r.seriesNo && nb.seriesNo ? `Il #${nb.seriesNo} di ${r.series}, dopo il #${r.seriesNo}` : `Il seguito di «${r.title}»`); break; }
+    const gap = []; // serie con un volume mancante: i successivi non sono «affini»
+    for (const r of last) { // prima il seguito di una serie (anche solo per titolo)
+      const s = nextInSeries(r, books), nb = s ? s.book : r.seriesNext && pile.find(b => sameTitle(b.title, r.seriesNext));
+      if (s && s.title) gap.push(b => seriesKey(b.series) === seriesKey(r.series) && parseFloat(b.seriesNo) > parseFloat(s.after.seriesNo));
+      if (nb && pile.includes(nb)) { take(nb, "affine", s ? `Il #${nb.seriesNo} di ${r.series}, dopo il #${s.after.seriesNo}` : `Il seguito di «${r.title}»`); break; }
     }
+    const aff = pile.filter(b => !gap.some(g => g(b)));
     if (!out.length) for (const f of ["author", "genre"]) {
-      const r = last.find(r => k(r, f) && pile.some(b => k(b, f) === k(r, f)));
+      const r = last.find(r => k(r, f) && aff.some(b => k(b, f) === k(r, f)));
       if (r) {
         const v = String(r[f]).trim(), who = /,| e |\bvari\b/i.test(v) ? v : v.split(/\s+/).pop(); // più autori: il nome intero, non l'ultima parola
-        take(pile.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${who}` : `Stesso genere di «${r.title}»: ${v}`); break;
+        take(aff.find(b => k(b, f) === k(r, f)), "affine", f === "author" ? `Dopo «${r.title}», ancora ${who}` : `Stesso genere di «${r.title}»: ${v}`); break;
       }
     }
     if (pile.length) { const b = pile[0], d = new Date(add(b)); take(b, "vecchio", add(b) ? `In pila da ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Da più tempo in pila"); }
@@ -1629,18 +1632,13 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     });
   }
 
-  // Riga «Prossimo della serie» nella scheda di un libro letto.
+  // «Prossimo della serie» nella scheda di un libro letto.
   const NEXT_ST = { "da-leggere": "in pila", desiderato: "nella lista dei desideri", "in-lettura": "in lettura" };
   function snextHTML(b) {
     const r = b.status === "letto" && nextInSeries(b, state.books), x = r && r.book, no = x ? x.seriesNo : r && r.no;
     if (!r) return "";
     const t = `<b>${no ? "#" + esc(no) + " " : ""}${esc(x ? x.title : r.title)}</b>`;
-    return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} ›</span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next>Lista dei desideri</button>`}</div>`;
-  }
-  // Nuovo libro desiderato: autore, copertina e dati in sottofondo.
-  function infoLater(id) {
-    const b = state.books.find(x => x.id === id);
-    if (b && navigator.onLine) fetchInfo(b).then(h => { const cur = state.books.find(x => x.id === id); if (h && cur) { fillInfo(cur, h); schedulePersist(); } }).catch(() => {});
+    return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} <span aria-hidden="true">›</span></span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next="${esc(r.title)}"${r.no ? ` data-no="${esc(r.no)}"` : ""} aria-label="Aggiungi «${esc(r.title)}» alla lista dei desideri">Lista dei desideri</button>`}</div>`;
   }
   function openBook(book) {
     const b = { ...book };
@@ -1771,10 +1769,11 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     if (ser) ser.onclick = () => dismissSheet(() => searchFor(book.series));
     const nxo = $("[data-next-open]", sheet), wn = $("[data-wish-next]", sheet);
     if (nxo) nxo.onclick = () => dismissSheet(() => { const x = state.books.find(y => y.id === nxo.dataset.nextOpen); if (x) openBook(x); });
-    if (wn) wn.onclick = () => dismissSheet(() => {
-      const r = nextInSeries(book, state.books); if (!r || r.book) return;
-      const id = upsert({ title: r.title, author: book.author, series: book.series, seriesNo: r.no, status: "desiderato", rating: 0 });
-      infoLater(id); toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
+    if (wn) wn.onclick = () => dismissSheet(() => { // desiderato, poi copertina e dati in sottofondo
+      const cur = state.books.find(x => x.id === book.id) || book, get = id => state.books.find(x => x.id === id);
+      const id = upsert({ title: wn.dataset.wishNext, author: cur.author, series: cur.series, seriesNo: wn.dataset.no, status: "desiderato", rating: 0 });
+      fetchInfo(get(id)).then(h => { const x = get(id); if (x && h && (h.author || h.cover)) { fillInfo(x, h); schedulePersist(); } }).catch(() => {});
+      toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
     });
     $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
@@ -1835,7 +1834,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     // La fotocamera può partire solo da un tocco dell'utente: la pressione prolungata apre la scheda con il pulsante ISBN in evidenza.
     if (sb && !sb.hidden) loadZXing().catch(() => {}); // libreria del lettore pronta prima del tocco
     if (scan && sb && !sb.hidden) toast("Tocca ▥ ISBN per inquadrare il codice");
-    if (!scan) setTimeout(() => $("#s-q", sheet).focus(), 50);
+    if (!scan) setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || !sheet.contains(a)) $("#s-q", sheet).focus(); }, 50); // non rubo il cursore a un campo già scelto
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
       if (badYear(sheet) || badDates(sheet)) return;
