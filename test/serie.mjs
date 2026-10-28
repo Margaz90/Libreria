@@ -316,6 +316,76 @@ async function usoRicerca(browser) {
   await p.close2();
 }
 
+// --- «Cerca le serie» in sottofondo (Altro → Backup) ---
+async function cercaSerie(browser) {
+  const p = await fonti(browser);
+  const base = { added: 1, rating: 0, status: 'da-leggere', author: 'Mick Herron' };
+  const toasts = () => p.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
+  const backup = async () => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-series'); };
+  const waitToast = (re, ms = 10000) => p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll('.toast')].map(t => t.textContent).join(' ')), re.source, { timeout: ms }).catch(() => {});
+  const run = async () => { await backup(); await p.locator('#i-series').click(); };
+  const lib = [
+    { ...base, id: 't1', title: 'Tigri vere' },
+    { ...base, id: 't2', title: 'Leoni morti', series: 'Mia serie', seriesNo: '9', seriesManual: true },
+    { ...base, id: 't3', title: 'Spook Street', status: 'letto', finishedYear: 2020, series: 'Slough House', seriesNo: '4' },
+    { ...base, id: 't4', title: 'Libro ignoto' },
+  ];
+  await load(p, lib);
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere|Leoni morti', 'Slough House', '3'), W('Q12', 'Spook Street', 'Slough House', '4', 'La strada degli spettri')];
+  p.cfg.apple = ['La strada degli spettri'];
+  await run();
+  await p.waitForFunction(() => /Ricerca delle serie: \d di 3/.test(document.querySelector('#enrich').textContent), null, { timeout: 5000 }).catch(() => {});
+  const line = await p.locator('#enrich').innerText();
+  await waitToast(/Serie trovate/);
+  const msg = await toasts();
+  ok('riga di avanzamento e messaggio finale «Serie trovate per 2 libri su 3»', /Ricerca delle serie: \d di 3/.test(line) && /Serie trovate per 2 libri su 3/.test(msg), line + ' / ' + msg);
+  await until(p, 't1', { series: 'Slough House' }); await until(p, 't3', { seriesNext: 'La strada degli spettri' });
+  const [b1, b2, b3] = [await book(p, 't1'), await book(p, 't2'), await book(p, 't3')];
+  ok('salta i libri con seriesManual', b2.series === 'Mia serie' && b2.seriesNo === '9' && !b2.seriesNext, JSON.stringify(b2));
+  ok('trova la serie del libro senza serie', b1.series === 'Slough House' && b1.seriesNo === '3' && b1.seriesManual === undefined, JSON.stringify(b1));
+  ok('controlla il seguito dei letti senza seriesNext', b3.seriesNext === 'La strada degli spettri' && b3.series === 'Slough House', JSON.stringify(b3));
+  ok('riga di avanzamento nascosta alla fine', await p.locator('#enrich').isHidden());
+  await backup();
+  ok('Cerca le serie crea una copia «Prima di «Cerca le serie»»', /Prima di «Cerca le serie»/.test(await p.locator('#u-list .urow').first().innerText().catch(() => '')));
+  await p.locator('#i-close').click();
+  // niente da fare: nessuna copia nuova
+  await p.evaluate(() => { document.querySelectorAll('.toast').forEach(t => t.remove()); });
+  await load(p, [{ ...base, id: 'z1', title: 'Manuale', seriesManual: true, series: 'X' }]);
+  await run(); await waitToast(/Nessun libro da cercare/, 4000);
+  ok('nessun libro da cercare: messaggio', /Nessun libro da cercare\./.test(await toasts()), await toasts());
+  await p.locator('#i-close').click().catch(() => {});
+
+  // Wikidata 503: il messaggio lo dice
+  await load(p, [{ ...base, id: 'e1', title: 'Tigri vere' }]);
+  p.cfg.fail = 503; await run(); await waitToast(/Serie trovate/);
+  const em = await toasts();
+  ok('Wikidata 503 a metà: prosegue e il messaggio lo dice', /Serie trovate per 0 libri su 1/.test(em) && /Wikidata non risponde ×1/.test(em), em);
+  p.cfg.fail = null;
+
+  // Il ripristino ferma la ricerca
+  await load(p, Array.from({ length: 8 }, (_, i) => ({ ...base, id: 'r' + i, title: 'Tigri vere ' + i })));
+  p.cfg.works = [W('Q10', 'Tigri vere 0|Tigri vere 1|Tigri vere 2|Tigri vere 3|Tigri vere 4|Tigri vere 5|Tigri vere 6|Tigri vere 7', 'Slough House', '3')];
+  await p.route(/query\.wikidata\.org/, async r => { await new Promise(x => setTimeout(x, 400)); r.fallback(); });
+  await run();
+  await p.waitForFunction(() => /Ricerca delle serie: 1 di 8/.test(document.querySelector('#enrich').textContent), null, { timeout: 5000 }).catch(() => {});
+  await backup();
+  await p.locator('#u-list button[data-restore]').first().click(); await p.locator('#u-list button[data-restore]').first().click();
+  await p.waitForFunction(() => document.querySelector('#enrich').hidden, null, { timeout: 4000 }).catch(() => {});
+  await p.waitForTimeout(2500);
+  const rb = await localBooks(p);
+  ok('il ripristino ferma la ricerca', await p.locator('#enrich').isHidden() && rb.every(b => !b.series) && !/Serie trovate/.test(await toasts()), JSON.stringify(rb.map(b => b.series)));
+
+  // Non parte durante «Completa autori e copertine»
+  await load(p, Array.from({ length: 8 }, (_, i) => ({ ...base, id: 'k' + i, title: 'Tigri vere ' + i, author: '' })));
+  await backup(); await p.locator('#i-authors').click();
+  await p.waitForFunction(() => !document.querySelector('#enrich').hidden, null, { timeout: 5000 }).catch(() => {});
+  await backup(); await p.locator('#i-series').click();
+  const busy = await toasts();
+  ok('non parte durante Completa autori e copertine', /Aggiornamento già in corso\./.test(busy) && !/Ricerca delle serie/.test(await p.locator('#enrich').innerText()), busy);
+  ok('Cerca le serie: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await ricerca(browser);
   await usoRicerca(browser);
@@ -324,4 +394,5 @@ export default async function ({ browser }) {
   await scheda(browser);
   await bollino(browser);
   await ordine(browser);
+  await cercaSerie(browser);
 }

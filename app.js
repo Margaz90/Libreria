@@ -287,6 +287,37 @@
     toast(`Informazioni aggiornate per ${fixed} libri su ${ids.length}.` + (missed ? ` Non trovati: ${missed}${err ? " (" + err + ")" : ""}.` : ""));
   }
 
+  // «Cerca le serie»: un libro alla volta; un errore di Wikidata si conta e il giro prosegue.
+  async function seriesJob() {
+    if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
+    const ids = state.books.filter(b => (b.title || b.author) && (b.series ? b.status === "letto" && !b.seriesNext : !b.seriesManual)).map(b => b.id);
+    if (!ids.length) { toast("Nessun libro da cercare."); return; }
+    enrich.busy = true;
+    await snapshot("Prima di «Cerca le serie»");
+    const gen = dataGen, line = $("#enrich"), cache = new Map(), errs = {}; let found = 0;
+    for (let k = 0; k < ids.length; k++) {
+      if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length}`; }
+      const b = state.books.find(x => x.id === ids[k]);
+      const r = b && await findSeries(b, cache).catch(e => { const c = /^wikidata/.test(e && e.code) ? "Wikidata non risponde" : "errore"; errs[c] = (errs[c] || 0) + 1; return null; });
+      if (gen !== dataGen) return; // copia ripristinata nel frattempo
+      if (r) {
+        const nb = clean(applySeries(b, r)), keys = ["series", "seriesNo", "seriesNext"];
+        if (keys.some(x => nb[x] !== b[x])) {
+          keys.forEach(x => { if (nb[x] === undefined) delete b[x]; else b[x] = nb[x]; });
+          b.updated = Date.now(); found++; cloudHook("changed", b.id); patchBook(b.id);
+        }
+      }
+      if (k % 5 === 4) schedulePersist();
+      await sleep(300);
+      if (gen !== dataGen) return;
+    }
+    enrich.busy = false;
+    if (line) line.hidden = true;
+    schedulePersist(); render();
+    const err = Object.entries(errs).map(([c, n]) => `${c} ×${n}`).join(", ");
+    toast(`Serie trovate per ${found} libri su ${ids.length}.` + (err ? ` Errori: ${err}.` : ""));
+  }
+
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
@@ -2004,7 +2035,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
         <span class="label">Copertine</span>
         <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
         <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
-        <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button></div>
+        <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button><button class="btn" id="i-series" type="button">Cerca le serie</button></div>
         <div class="status-line" id="v-status" aria-live="polite"></div>
         ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore o copertina: li cerco per ISBN, titolo e autore (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
         <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
@@ -2073,6 +2104,11 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       if (!navigator.onLine) { st.textContent = "Connettiti per completare autori e copertine."; return; }
       const ids = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).map(b => b.id);
       closeSheet(); snapshot("Prima di «Completa autori e copertine»").then(() => enrichBooks(ids)); // in sottofondo: la scheda si chiude e l'app resta usabile
+    };
+    $("#i-series", sheet).onclick = () => {
+      if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
+      if (!navigator.onLine) { st.textContent = "Connettiti per cercare le serie."; return; }
+      closeSheet(); toast("Cerco le serie…"); seriesJob(); // in sottofondo: la scheda si chiude
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
