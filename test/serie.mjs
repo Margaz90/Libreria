@@ -173,7 +173,22 @@ async function ordine(browser) {
 
 // --- Ricerca della serie (Wikidata, Open Library, conferma del seguito italiano), con fonti simulate ---
 const E = id => ({ value: 'http://www.wikidata.org/entity/' + id });
-const W = (id, names, s, n, it, ed) => ({ work: E(id), names: { value: names }, ...(s ? { s: { value: s } } : {}), ...(n ? { n: { value: n } } : {}), ...(it ? { it: { value: it } } : {}), ...(ed ? { e: E(ed) } : {}) });
+// Opera simulata: W(opera, titoli separati da |, serie, numero, seguito italiano, edizione dell'ISBN).
+// Il finto Wikidata la trasforma nelle righe di C1 (opere e dichiarazioni) e C2 (etichette).
+const W = (id, names, s, n, it, ed) => ({ id, names, s, n, it, ed });
+const QN = new Map(), qn = t => { if (!QN.has(t)) QN.set(t, 'Q' + (9000 + QN.size)); return QN.get(t); }; // elementi finti per serie e seguiti
+const c1Rows = ws => ws.map(w => ({ work: E(w.id), ...(w.ed ? { ed: E(w.ed) } : {}),
+  ...(w.s ? { st: { value: 'http://www.wikidata.org/entity/statement/' + w.id + '-' + qn('s:' + w.s) }, ser: E(qn('s:' + w.s)) } : {}),
+  ...(w.n ? { no: { value: w.n } } : {}), ...(w.it ? { nx: E(qn('n:' + w.it)) } : {}) }));
+const c2Rows = (q, ws) => {
+  const ids = ((q.match(/VALUES \?x \{([^}]*)\}/) || [])[1] || '').match(/Q\d+/g) || [], out = [];
+  const L = (x, nm, lg) => out.push({ x: E(x), nm: { type: 'literal', value: nm, 'xml:lang': lg }, lg: { value: lg } });
+  for (const x of ids) {
+    for (const w of ws) if (w.id === x) for (const nm of String(w.names || '').split('|').filter(Boolean)) L(x, nm, 'en');
+    for (const [t, q2] of QN) if (q2 === x) L(x, t.slice(2), 'it');
+  }
+  return out;
+};
 async function fonti(browser) {
   const p = await newPage(browser, { external: 'allow' });
   // failIf(q): stato HTTP per una sola interrogazione; idsBy(nome): candidati per autore; delay: risposta lenta (ms)
@@ -187,9 +202,10 @@ async function fonti(browser) {
     const q = decodeURIComponent(new URL(r.request().url()).searchParams.get('query') || ''); p.q.push(q);
     if (p.cfg.hangIf && p.cfg.hangIf(q)) return; // risposta che non arriva mai
     const st = p.cfg.failIf && p.cfg.failIf(q); if (st) return json(r, {}, st);
+    if (/\?nm/.test(q) && /VALUES \?x/.test(q)) return json(r, { results: { bindings: c2Rows(q, [...p.cfg.isbn, ...p.cfg.works]) } });
     const serie = /P179/.test(q), isbn = /P212/.test(q), autore = /P50/.test(q);
     if (isbn) p.n.isbn++; if (autore) p.n.autore++;
-    json(r, { results: { bindings: !serie ? [] : isbn ? p.cfg.isbn : autore ? p.cfg.works : [] } });
+    json(r, { results: { bindings: !serie ? [] : c1Rows(isbn ? p.cfg.isbn : autore ? p.cfg.works : []) } });
   });
   await p.route(/www\.wikidata\.org\/w\/api\.php/, r => { p.n.cerca++; if (p.cfg.fail === 'rete') return r.abort(); const a = new URL(r.request().url()).searchParams.get('search'); json(r, { search: (p.cfg.idsBy ? p.cfg.idsBy(a) : p.cfg.ids).map(id => ({ id })) }); });
   await p.route(/openlibrary\.org\/isbn\//, r => p.cfg.ol ? json(r, p.cfg.ol) : json(r, {}, 404));
@@ -215,7 +231,7 @@ async function ricerca(browser) {
   const q1 = p.q.find(q => /P212/.test(q)) || '';
   ok('passo 1: numero anche da P1545 diretta, seguito anche da P156 diretta', /pq:P1545/.test(q1) && /wdt:P1545/.test(q1) && /pq:P156/.test(q1) && /wdt:P156/.test(q1) && /P629/.test(q1), q1.slice(0, 300));
   ok('passo 1: ISBN con i trattini come su Wikidata (P212 e P957)', q1.includes('"978-88-452-9999-7"') && q1.includes('"88-452-9999-6"') && /wdt:P212\|wdt:P957/.test(q1), q1.slice(0, 300));
-  ok('edizioni escluse dalle opere (collana editoriale), rango migliore, etichetta mul', /FILTER NOT EXISTS \{ \?work wdt:P629 \[\] \}/.test(q1) && /wikibase:BestRank/.test(q1) && /"mul"/.test(q1) && /GROUP BY \?work \?st/.test(q1));
+  ok('edizioni escluse dalle opere (collana editoriale), rango migliore, etichetta mul', /FILTER NOT EXISTS \{ \?work wdt:P629 \?e0 \}/.test(q1) && /wikibase:BestRank/.test(q1) && p.q.some(q => /VALUES \?x/.test(q) && /"mul"/.test(q)) && !p.q.some(q => /GROUP BY/.test(q)));
   // Opera in due serie: il numero è quello della sua serie
   p.cfg.isbn = []; p.cfg.works = [W('Q20', 'Guards! Guards!|A me le guardie!', 'City Watch'), W('Q20', 'Guards! Guards!|A me le guardie!', 'Discworld', '8')];
   r = await find(p, { author: 'Terry Pratchett', title: 'A me le guardie!' });
@@ -228,6 +244,8 @@ async function ricerca(browser) {
   p.cfg.isbn = []; p.cfg.works = [W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
   r = await find(p, { ...MH, title: 'Tigri vere' });
   ok('passo 2: titolo italiano contro alias inglese dell\'opera', r && r.series === 'Slough House' && r.no === '3', JSON.stringify(r));
+  const qa = p.q.filter(q => /P50/.test(q)).pop() || '';
+  ok('passo 2: interrogazione per autore veloce (ordine fissato, senza GROUP_CONCAT né rdfs:label|skos:altLabel)', qa.includes('hint:Query hint:optimizer "None"') && !qa.includes('GROUP_CONCAT') && !qa.includes('rdfs:label|skos:altLabel'), qa.slice(0, 300));
   // Passo 3: titolo originale da Open Library
   p.cfg.works = [W('Q12', 'Spook Street', 'Slough House', '4')]; p.cfg.ol = { translation_of: 'Spook Street' };
   r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });

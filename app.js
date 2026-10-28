@@ -500,16 +500,40 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
   }
   const wdSparql = q => wdGet("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q)).then(j => j.results.bindings || []);
   const wv = x => x && !/^Q\d+$/.test(x.value) ? x.value : undefined; // niente codici Q
-  // Opere (non edizioni) con serie, una riga per serie; any: anche le opere senza serie (ed = edizione dell'ISBN).
-  const wdWorks = (where, any) => { const ser = `?work p:P179 ?st. ?st a wikibase:BestRank; ps:P179 ?ser.
-OPTIONAL { ?st pq:P1545 ?n1 } OPTIONAL { ?work wdt:P1545 ?n2 } BIND(COALESCE(?n1, ?n2) AS ?no)
-OPTIONAL { ?st pq:P156 ?x1 } OPTIONAL { ?work wdt:P156 ?x2 } BIND(COALESCE(?x1, ?x2) AS ?nx)
-OPTIONAL { ?nx rdfs:label ?ni FILTER(LANG(?ni) = "it") }
-OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } OPTIONAL { ?ser rdfs:label ?sm FILTER(LANG(?sm) = "mul") } BIND(COALESCE(?si, ?se, ?sm) AS ?sl)`;
-    return wdSparql(`SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) (SAMPLE(?ed) AS ?e) WHERE {
-${where} FILTER NOT EXISTS { ?work wdt:P629 [] } ${any ? `OPTIONAL { ${ser} }` : ser}
-OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs")) }
-} GROUP BY ?work ?st LIMIT 500`).then(rs => rs.map(r => ({ id: r.work.value, ed: r.e && r.e.value, names: String(wv(r.names) || "").split("|"), series: wv(r.s), no: wv(r.n), it: wv(r.it) }))); };
+  // Serie in due passi (una sola interrogazione con etichette e GROUP BY va oltre i 30 s di Wikidata):
+  // C1 = opere e dichiarazioni di serie (ordine dei join fissato), C2 = etichette degli elementi trovati.
+  const WDL = `"it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs"`;
+  const qid = x => { const m = x && /\/(Q\d+)$/.exec(x.value); return m ? m[1] : ""; };
+  const wdSer = `?st a wikibase:BestRank. ?st ps:P179 ?ser.
+OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } OPTIONAL { ?work wdt:P1545 ?n2 } OPTIONAL { ?work wdt:P156 ?x2 }`;
+  // Etichette (tutte le lingue di WDL) per gli elementi: Map Q → [[testo, lingua], ...].
+  async function wdLabels(ids) {
+    const m = new Map();
+    for (let i = 0; i < ids.length; i += 300) {
+      for (const r of await wdSparql(`SELECT ?x ?nm (LANG(?nm) AS ?lg) WHERE { VALUES ?x { ${ids.slice(i, i + 300).map(x => "wd:" + x).join(" ")} } { ?x rdfs:label ?nm } UNION { ?x skos:altLabel ?nm } FILTER(LANG(?nm) IN (${WDL})) }`)) {
+        const k = qid(r.x), v = r.nm && r.nm.value; if (!k || !v) continue;
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push([v, (r.lg && r.lg.value) || r.nm["xml:lang"] || ""]);
+      }
+    }
+    return m;
+  }
+  // Righe di C1 → opere { id, ed, names, series, no, it }, una per (opera, dichiarazione); names: con le etichette delle opere.
+  async function wdWorks(q, names) {
+    const by = new Map();
+    for (const r of await wdSparql(q)) {
+      const k = r.work.value + " " + (r.st ? r.st.value : ""), o = by.get(k), no = wv(r.no) || wv(r.n2);
+      if (!o || (!o.no && no)) by.set(k, { id: r.work.value, ed: r.ed && r.ed.value, w: qid(r.work), ser: qid(r.ser), no, nx: qid(r.nx) || qid(r.x2) });
+    }
+    const ws = [...by.values()];
+    if (!ws.length) return [];
+    const ids = [...new Set(ws.flatMap(w => [names ? w.w : "", w.ser, w.nx]).filter(Boolean))];
+    const L = ids.length ? await wdLabels(ids) : new Map(), lab = (k, ...lg) => { const l = L.get(k) || []; for (const g of lg) { const x = l.find(y => y[1] === g); if (x) return x[0]; } };
+    return ws.map(w => ({ id: w.id, ed: w.ed, names: names ? [...new Set((L.get(w.w) || []).map(x => x[0]))] : [], series: w.ser ? lab(w.ser, "it", "en", "mul") : undefined, no: w.no, it: w.nx ? lab(w.nx, "it") : undefined }));
+  }
+  const isbnWorks = isbn => wdWorks(`SELECT ?ed ?work ?st ?ser ?no ?nx ?n2 ?x2 WHERE { hint:Query hint:optimizer "None".
+${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) FILTER NOT EXISTS { ?work wdt:P629 ?e0 }
+OPTIONAL { ?work p:P179 ?st. ${wdSer} } } LIMIT 500`, false);
   // Una sola opera: 0 = nessuna, null = più d'una; t = null: senza titolo (ISBN); ser: serie già del libro (preferita).
   const pickWork = (ws, t, ser) => {
     if (t !== null && !String(t || "").trim()) return 0;
@@ -525,7 +549,9 @@ OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mu
     if (!cache.has(k)) {
       const j = await wdGet("https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=it&uselang=it&type=item&limit=7&origin=*&search=" + encodeURIComponent(a));
       const ids = (j.search || []).map(x => x.id).filter(x => /^Q\d+$/.test(x)).slice(0, 3);
-      cache.set(k, ids.length ? await wdWorks(`VALUES ?a { ${ids.map(x => "wd:" + x).join(" ")} } ?work wdt:P50 ?a.`) : []);
+      cache.set(k, ids.length ? await wdWorks(`SELECT ?work ?st ?ser ?no ?nx ?n2 ?x2 WHERE { hint:Query hint:optimizer "None".
+VALUES ?a { ${ids.map(x => "wd:" + x).join(" ")} } ?work wdt:P50 ?a. ?work p:P179 ?st. ${wdSer}
+FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     return cache.get(k);
   }
@@ -548,7 +574,7 @@ OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mu
     const isbn = parseIsbn(b.isbn), a = String(b.author || "").split(",")[0].trim();
     let w = 0;
     if (isbn) {
-      const ws = await wdWorks(`{ SELECT ?work ?ed WHERE { ${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) } }`, true);
+      const ws = await isbnWorks(isbn);
       if (ws.length && !ws.some(x => x.series) && ws.some(x => x.ed && x.ed !== x.id)) return null; // l'ISBN porta a un'opera senza serie
       w = pickWork(ws, null, b.series);
     }
