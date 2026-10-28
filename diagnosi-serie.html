@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnosi serie</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 16px; font: 15px/1.4 -apple-system, system-ui, sans-serif; background: #F7F3EC; color: #1f2a2b; }
+  @media (prefers-color-scheme: dark) { body { background: #151b1c; color: #eee; } input { background: #222; color: #eee; } }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 6px 0 12px; }
+  button { min-height: 44px; padding: 8px 14px; border-radius: 10px; border: 1px solid #999; background: #2F5457; color: #fff; font-size: 15px; margin: 4px 6px 4px 0; }
+  button.alt { background: transparent; color: inherit; }
+  input { min-height: 40px; width: 100%; box-sizing: border-box; margin: 4px 0; padding: 6px 10px; border-radius: 8px; border: 1px solid #999; font-size: 15px; }
+  pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, Menlo, monospace; background: rgba(127,127,127,.12); padding: 10px; border-radius: 10px; }
+  iframe { width: 1px; height: 1px; border: 0; position: absolute; left: -10px; }
+</style>
+</head>
+<body>
+<h1>Diagnosi della ricerca delle serie</h1>
+<p>Prova la ricerca su alcuni libri di serie note e mostra cosa risponde ogni fonte. Non modifica i tuoi libri. Alla fine tocca «Copia il risultato» e incollalo a Claude.</p>
+<button id="go" disabled>Avvio…</button>
+<button id="copy" class="alt">Copia il risultato</button>
+<details><summary>Prova un altro libro</summary>
+  <input id="t" placeholder="Titolo"><input id="a" placeholder="Autore"><input id="i" placeholder="ISBN (facoltativo)">
+  <button id="one" class="alt">Prova questo libro</button>
+</details>
+<pre id="out"></pre>
+<iframe id="app" src="index.html"></iframe>
+<script>
+(function () {
+  const out = document.getElementById("out"), go = document.getElementById("go");
+  const log = s => { out.textContent += s + "\n"; };
+  const BOOKS = [
+    { title: "Un covo di bastardi", author: "Mick Herron" },
+    { title: "Leoni morti", author: "Mick Herron" },
+    { title: "La forma dell'acqua", author: "Andrea Camilleri" },
+    { title: "Uomini che odiano le donne", author: "Stieg Larsson" },
+    { title: "Harry Potter e la pietra filosofale", author: "J.K. Rowling" },
+    { title: "Il trono di spade", author: "George R.R. Martin" }
+  ];
+  const kind = u => /query\.wikidata/.test(u) ? (/P212/.test(u) ? "Wikidata ISBN" : /P50/.test(u) ? "Wikidata opere dell'autore" : "Wikidata") : /wbsearchentities/.test(u) ? "Wikidata cerca autore" : /openlibrary/.test(u) ? "Open Library" : /googleapis/.test(u) ? "Google" : u.slice(0, 60);
+  let S = null, cur = "";
+  const frame = document.getElementById("app");
+  frame.onload = () => {
+    const w = frame.contentWindow, real = w.fetch.bind(w);
+    w.fetch = async (url, opts) => {
+      const u = String(url), t0 = Date.now(), k = kind(decodeURIComponent(u));
+      try {
+        const r = await real(url, opts), ms = Date.now() - t0;
+        let info = "";
+        try {
+          const j = await r.clone().json();
+          if (j.results && j.results.bindings) {
+            const b = j.results.bindings;
+            const key = cur.toLowerCase().replace(/^((il|lo|la|i|gli|le|un|uno|una)\s+|l'|un')/, "").slice(0, 6);
+            const sim = b.filter(x => x.names && x.names.value.toLowerCase().includes(key));
+            info = b.length + " righe" + (sim.length ? `; simili a «${key}»: ` + sim.slice(0, 3).map(x => [x.s, x.n, x.names].map(v => v && v.value ? String(v.value).slice(0, 80) : "").filter(Boolean).join(" / ")).join(" | ") : `; nessuna simile a «${key}»`) + (b.length ? " — prime: " + b.slice(0, 2).map(x => [x.s, x.n, x.names].map(v => v && v.value ? String(v.value).slice(0, 60) : "").filter(Boolean).join(" / ")).join(" | ") : "");
+          } else if (j.search) info = j.search.length + " candidati: " + j.search.slice(0, 3).map(x => x.id + " " + (x.label || "") + (x.description ? " (" + x.description.slice(0, 30) + ")" : "")).join("; ");
+          else if (j.title) info = "titolo: " + j.title;
+          else if (j.items) info = j.items.length + " risultati";
+        } catch { info = "(risposta non JSON)"; }
+        log(`   · ${k}: ${r.status} in ${ms} ms — ${info}`);
+        return r;
+      } catch (e) { log(`   · ${k}: ERRORE ${e && e.name || e} dopo ${Date.now() - t0} ms`); throw e; }
+    };
+    const wait = () => { S = w.libreriaSeries; if (S && S.findSeries) { go.disabled = false; go.textContent = "Avvia la diagnosi"; } else setTimeout(wait, 300); };
+    wait();
+  };
+  async function test(b) {
+    cur = b.title; log(`\n▶ ${b.title} — ${b.author}${b.isbn ? " — ISBN " + b.isbn : ""}`);
+    try {
+      const r = await S.findSeries(b, new Map());
+      log(r ? `  = serie «${r.series || "?"}» n. ${r.no || "?"}${r.next ? ", seguito «" + r.next + "»" : ""}` : "  = nessuna serie");
+    } catch (e) { log("  = errore " + (e && e.code || e)); }
+  }
+  go.onclick = async () => {
+    go.disabled = true; out.textContent = `Diagnosi del ${new Date().toLocaleString("it-IT")} · ${navigator.userAgent.slice(0, 80)}\n`;
+    for (const b of BOOKS) await test(b);
+    log("\nFine."); go.disabled = false;
+  };
+  document.getElementById("one").onclick = async () => {
+    const b = { title: document.getElementById("t").value.trim(), author: document.getElementById("a").value.trim(), isbn: document.getElementById("i").value.replace(/[^\dXx]/g, "") || undefined };
+    if (S && b.title) await test(b);
+  };
+  document.getElementById("copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Copiato"; }
+    catch { const r = document.createRange(); r.selectNodeContents(out); getSelection().removeAllRanges(); getSelection().addRange(r); }
+  };
+})();
+</script>
+</body>
+</html>
