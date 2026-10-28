@@ -309,7 +309,7 @@ async function usoRicerca(browser) {
   await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
   await p.fill('#d-title', 'La strada degli spettri'); await p.fill('#d-author', 'Mick Herron');
   await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
-  await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 6000 }).catch(() => {});
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 12000 }).catch(() => {});
   b = (await localBooks(p)).find(x => x.title === 'La strada degli spettri') || {};
   ok('nuovo libro: serie trovata in sottofondo', b.series === 'Slough House' && b.seriesNo === '4' && b.seriesManual === undefined, JSON.stringify(b));
   ok('uso della ricerca: nessun errore in console', !p.errs.length, p.errs.join(' / '));

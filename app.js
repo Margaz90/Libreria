@@ -134,7 +134,7 @@
     if (i >= 0) state.books[i] = { ...data, id }; else state.books.push({ ...data, id });
     schedulePersist();
     // Se cambiano solo dati che non spostano il libro, aggiorno solo il suo dorso/copertina.
-    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages", "series", "seriesNo"];
+    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages", ...(state.sort === "autore" ? ["series", "seriesNo"] : [])]; // la serie sposta il libro solo nell'ordine Autore
     if (prev && state.view !== "stats" && data.status !== "in-lettura" && keep.every(k => prev[k] === state.books.find(x => x.id === id)[k])) {
       patchBook(id); renderTally();
     } else render();
@@ -302,13 +302,13 @@
       const r = b && await findSeries(b, cache).catch(() => { bad++; return null; });
       if (gen !== dataGen) return; // copia ripristinata nel frattempo
       const cur = r && state.books.find(x => x.id === ids[k]);
-      if (cur && applySeriesTo(cur, r)) found++;
+      if (cur && applySeriesTo(cur, r, true)) found++;
       await sleep(300);
       if (gen !== dataGen) return;
     }
     enrich.busy = false;
     if (line) line.hidden = true;
-    renderTally();
+    if (found) render(); else renderTally(); // un solo ridisegno: l'ordine Autore può cambiare
     toast(`Serie trovate per ${found} libri su ${ids.length}.` + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
@@ -559,10 +559,12 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     return o;
   }
   // Salva la serie trovata (upsert: un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
-  function applySeriesTo(b, r) {
+  function applySeriesTo(b, r, quiet) { // quiet: niente ridisegno completo, lo fa chi chiama alla fine
     const nb = applySeries(b, r);
-    if (["series", "seriesNo", "seriesNext"].some(k => nb[k] !== b[k])) { upsert(nb); return true; }
-    return false;
+    if (!["series", "seriesNo", "seriesNext"].some(k => nb[k] !== b[k])) return false;
+    if (!quiet) { upsert(nb); return true; }
+    state.books[state.books.indexOf(b)] = { ...clean(nb), id: b.id, updated: Date.now() };
+    schedulePersist(); patchBook(b.id); cloudHook("changed", b.id); return true;
   }
   // Nuovo libro: serie in sottofondo.
   function seriesLater(id) {
