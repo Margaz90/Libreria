@@ -156,7 +156,7 @@
     const apply = (page, pageStep, undo) => {
       const k = state.books.findIndex(x => x.id === id); if (k < 0) return;
       if (undo && state.books[k].status !== "in-lettura") return; // già finito o spostato: Annulla non tocca la pagina
-      const ae = document.activeElement, fk = ae && ae.closest && ae.closest("#hero") ? ["data-add", "data-repeat", "data-save"].find(a => ae.hasAttribute(a)) : null;
+      const ae = document.activeElement, fk = ae && ae.closest && ae.closest("#hero") ? ["data-add", "data-repeat"].find(a => ae.hasAttribute(a)) : null;
       state.books[k] = { ...clean({ ...state.books[k], page, pageStep }), id, updated: Date.now() };
       schedulePersist(); renderHero(); renderTally(); cloudHook("changed", id);
       if (fk) { const sel = fk === "data-add" ? `[data-add][data-id-add="${CSS.escape(id)}"]` : `[${fk}="${CSS.escape(id)}"]`; const nb = $("#hero " + sel); if (nb) nb.focus({ preventScroll: true }); }
@@ -913,11 +913,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
   // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
-  function pquickHTML(b, tot, pg) {
+  function pquickHTML(b) {
     const id = esc(b.id), t = esc(b.title), step = Number(b.pageStep) || 0;
-    return `<div class="pquick">${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" data-range="${id}" aria-label="Avanzamento di ${t}" aria-valuetext="pagina ${Math.min(pg, tot)} di ${tot}">` : `<span class="grow"></span>`}<button class="btn" type="button" data-add="10" data-id-add="${id}" aria-label="Aggiungi 10 pagine a ${t}">+10</button>${step ? `<button class="btn" type="button" data-repeat="${id}" aria-label="Aggiungi ${step} pagine a ${t}">+${step}</button>` : ""}</div>`;
+    return `<span class="pquick"><button class="btn" type="button" data-add="10" data-id-add="${id}" aria-label="Aggiungi 10 pagine a ${t}">+10</button>${step ? `<button class="btn" type="button" data-repeat="${id}" aria-label="Aggiungi ${step} pagine a ${t}">+${step}</button>` : ""}</span>`;
   }
-  // Libro in lettura in primo piano: etichetta, pagina modificabile, pulsanti Aggiorna e Dettagli.
+  // Libro in lettura in primo piano: copertina (apre la scheda), titolo, serie e autore; sotto, a tutta larghezza, cursore e pagina (si salvano da soli).
   function readingCards(books) {
     if (!books.length) return "";
     return `<div class="reading">${books.map(b => {
@@ -926,16 +926,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b)}</button>
         <div class="rbody">
           <span class="rlabel">In lettura adesso</span>
-          <h3>${esc(b.title)}</h3>${b.series ? `<p class="rser">${esc(serLabel(b))}</p>` : ""}<p class="hint">${esc(b.author || "")}${b.callNo ? ` · <span class="callno">${esc(b.callNo)}</span>` : ""}</p>
-          <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
-          ${pquickHTML(b, tot, pg)}
+          <h3>${esc(b.title)}</h3><p class="rmeta">${b.series ? `<b>${esc(serLabel(b))}</b>${b.author ? " · " : ""}` : ""}${esc(b.author || "")}</p>
+        </div>
+        <div class="rctl">
+          ${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" style="--pct:${100 * Math.min(pg, tot) / tot}%" data-range="${esc(b.id)}" aria-label="Avanzamento di ${esc(b.title)}" aria-valuetext="pagina ${Math.min(pg, tot)} di ${tot}">` : ""}
           <div class="prow">
             <label class="pin">pag. <input type="number" inputmode="numeric" min="0" ${tot ? `max="${tot}"` : ""} value="${pg || ""}" placeholder="0" data-page="${esc(b.id)}" aria-label="Pagina attuale di ${esc(b.title)}"></label>
             <span class="hint">${tot ? `di ${tot} · ${pct}%` : "pagine totali non note"}</span>
-          </div>
-          <div class="ractions">
-            <button class="btn primary" type="button" data-save="${esc(b.id)}">Aggiorna</button>
-            <button class="btn" type="button" data-id="${esc(b.id)}">Dettagli</button>
+            ${pquickHTML(b)}
           </div>
           ${tot && pg >= tot ? `<button class="btn primary" data-finish="${esc(b.id)}">Finito! Segna come letto</button>` : ""}
         </div></article>`;
@@ -1261,12 +1259,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     root.querySelectorAll("[data-repeat]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.repeat); if (b && b.pageStep) pageQuick(b.id, { add: b.pageStep }); });
     root.querySelectorAll("[data-range]").forEach(r => {
       // Durante il trascinamento cambio solo il numero mostrato; salvo al rilascio.
-      r.oninput = () => { const n = root.querySelector(`[data-page="${CSS.escape(r.dataset.range)}"]`); if (n) n.value = r.value; r.setAttribute("aria-valuetext", `pagina ${r.value} di ${r.max}`); };
+      r.oninput = () => { const n = root.querySelector(`[data-page="${CSS.escape(r.dataset.range)}"]`); if (n) n.value = r.value; r.setAttribute("aria-valuetext", `pagina ${r.value} di ${r.max}`); r.style.setProperty("--pct", 100 * r.value / r.max + "%"); };
       r.onchange = () => pageQuick(r.dataset.range, { to: Number(r.value), manual: true });
-    });
-    root.querySelectorAll("[data-save]").forEach(btn => btn.onclick = () => {
-      const inp = root.querySelector(`[data-page="${CSS.escape(btn.dataset.save)}"]`);
-      if (inp) inp.dispatchEvent(new Event("change")); // stesso salvataggio della pagina attuale
     });
     root.querySelectorAll("[data-finish]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.finish); if (b) setStatus(b, "letto"); });
   }

@@ -145,7 +145,7 @@ async function bollino(browser) {
   ok('bollino 12 dentro un dorso con foto di 16 px, cifre intere', fs && fw && Math.round(fs.width) === 16 && fw.x >= fs.x - 0.5 && fw.x + fw.width <= fs.x + fs.width + 0.5 && fit, JSON.stringify([fs, fw, fit]));
   ok('classe long per 12.5 e 100, non per 3', await p.locator('#main [data-id="w1"] .sno.long').count() === 1 && await p.locator('#main [data-id="c1"] .sno.long').count() === 1 && await p.locator('#main [data-id="d1"] .sno.long').count() === 0);
   const rc = p.locator('#hero .rcard');
-  ok('scheda In lettura: «Slough House · 4», senza bollino', /Slough House · 4/.test(await rc.innerText()) && await rc.locator('.sno').count() === 0);
+  ok('scheda In lettura: «Slough House · 4 · autore» su una riga, senza bollino', /Slough House · 4 · \S/.test(await rc.locator('.rmeta').innerText().catch(() => '')) && await rc.locator('.sno').count() === 0);
   await p.locator('.viewsw [data-mode="copertine"]').first().click();
   await p.waitForSelector('#main .card[data-id="d1"] .sno');
   ok('bollino su copertina', (await sno('d1').innerText().catch(() => '')).trim() === '3' && await sno('n1').count() === 0);

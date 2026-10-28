@@ -41,7 +41,7 @@ async function paginaRapida(browser) {
   ok('Annulla torna a 100', (await book(p, 'p1')).page === 100 && (await book(p, 'p1')).pageStep === undefined);
 
   await card('p1').locator('[data-page]').fill('130');
-  await card('p1').locator('[data-save]').click(); await until(p, 'p1', { page: 130 });
+  await card('p1').locator('[data-page]').press('Enter'); await until(p, 'p1', { page: 130 });
   ok('pagina scritta a mano: salto ricordato', (await book(p, 'p1')).pageStep === 30, (await book(p, 'p1')).pageStep);
   const rep = card('p1').locator('button[data-repeat]');
   ok('ripeti mostra +30', (await rep.innerText()).trim() === '+30' && await rep.getAttribute('aria-label') === 'Aggiungi 30 pagine a Con totale');
@@ -52,7 +52,7 @@ async function paginaRapida(browser) {
 
   // Annulla dopo un salto a mano ripristina anche il salto precedente.
   await card('p1').locator('[data-page]').fill('175');
-  await card('p1').locator('[data-save]').click(); await until(p, 'p1', { page: 175 });
+  await card('p1').locator('[data-page]').press('Enter'); await until(p, 'p1', { page: 175 });
   ok('salto aggiornato a 5', (await book(p, 'p1')).pageStep === 5);
   await toastBtn().click(); await until(p, 'p1', { page: 170 });
   ok('Annulla ripristina pagina e salto', (await book(p, 'p1')).page === 170 && (await book(p, 'p1')).pageStep === 30);
@@ -86,8 +86,15 @@ async function paginaRapida(browser) {
   // Salvataggio manuale senza cambiamenti: niente toast.
   await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 100, pageStep: 30 }]);
   const upd0 = (await book(p, 'p1')).updated;
-  await card('p1').locator('[data-save]').click(); await wait(p);
-  ok('stessa pagina + Aggiorna: niente salvataggio né toast', await p.locator('.toast').count() === 0 && (await book(p, 'p1')).updated === upd0 && (await book(p, 'p1')).pageStep === 30);
+  await card('p1').locator('[data-page]').dispatchEvent('change'); await wait(p);
+  ok('stessa pagina confermata di nuovo: niente salvataggio né toast', await p.locator('.toast').count() === 0 && (await book(p, 'p1')).updated === upd0 && (await book(p, 'p1')).pageStep === 30);
+  ok('scheda di lettura: niente Aggiorna, Dettagli né barra doppia', await p.locator('#hero [data-save], #hero .ractions, #hero .pbar').count() === 0 && await card('p1').locator('.rcover').count() === 1);
+  const pct = await card('p1').locator('input[type=range]').evaluate(r => r.style.getPropertyValue('--pct'));
+  await card('p1').locator('input[type=range]').fill('150');
+  const pct2 = await card('p1').locator('input[type=range]').evaluate(r => r.style.getPropertyValue('--pct'));
+  ok('cursore colorato fino alla pagina attuale, anche mentre si trascina', /^33(\.\d+)?%$/.test(pct) && pct2 === '50%', pct + ' / ' + pct2);
+  const ctl = await card('p1').locator('.rctl').boundingBox(), cov = await card('p1').locator('.rcover').boundingBox();
+  ok('cursore e pagina a tutta larghezza, sotto la copertina', ctl && cov && ctl.x <= cov.x + 1 && ctl.y >= cov.y + cov.height - 1, JSON.stringify([ctl, cov]));
   ok('pagina rapida: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
