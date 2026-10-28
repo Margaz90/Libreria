@@ -292,30 +292,24 @@
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
     const ids = state.books.filter(b => (b.title || b.author) && (b.series ? b.status === "letto" && !b.seriesNext : !b.seriesManual)).map(b => b.id);
     if (!ids.length) { toast("Nessun libro da cercare."); return; }
+    const gen = dataGen, line = $("#enrich"), cache = new Map(); let found = 0, bad = 0;
     enrich.busy = true;
     await snapshot("Prima di «Cerca le serie»");
-    const gen = dataGen, line = $("#enrich"), cache = new Map(), errs = {}; let found = 0;
+    if (gen !== dataGen) return; // copia ripristinata durante la copia
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length}`; }
       const b = state.books.find(x => x.id === ids[k]);
-      const r = b && await findSeries(b, cache).catch(e => { const c = /^wikidata/.test(e && e.code) ? "Wikidata non risponde" : "errore"; errs[c] = (errs[c] || 0) + 1; return null; });
+      const r = b && await findSeries(b, cache).catch(() => { bad++; return null; });
       if (gen !== dataGen) return; // copia ripristinata nel frattempo
-      if (r) {
-        const nb = clean(applySeries(b, r)), keys = ["series", "seriesNo", "seriesNext"];
-        if (keys.some(x => nb[x] !== b[x])) {
-          keys.forEach(x => { if (nb[x] === undefined) delete b[x]; else b[x] = nb[x]; });
-          b.updated = Date.now(); found++; cloudHook("changed", b.id); patchBook(b.id);
-        }
-      }
-      if (k % 5 === 4) schedulePersist();
+      const cur = r && state.books.find(x => x.id === ids[k]);
+      if (cur && applySeriesTo(cur, r)) found++;
       await sleep(300);
       if (gen !== dataGen) return;
     }
     enrich.busy = false;
     if (line) line.hidden = true;
-    schedulePersist(); render();
-    const err = Object.entries(errs).map(([c, n]) => `${c} ×${n}`).join(", ");
-    toast(`Serie trovate per ${found} libri su ${ids.length}.` + (err ? ` Errori: ${err}.` : ""));
+    renderTally();
+    toast(`Serie trovate per ${found} libri su ${ids.length}.` + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
   function removeBook(id) {
@@ -564,13 +558,18 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     if (r.next && seriesKey(o.series) === seriesKey(r.series)) o.seriesNext = r.next;
     return o;
   }
+  // Salva la serie trovata (upsert: un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
+  function applySeriesTo(b, r) {
+    const nb = applySeries(b, r);
+    if (["series", "seriesNo", "seriesNext"].some(k => nb[k] !== b[k])) { upsert(nb); return true; }
+    return false;
+  }
   // Nuovo libro: serie in sottofondo.
   function seriesLater(id) {
     const b = state.books.find(x => x.id === id);
     if (b && navigator.onLine) findSeries(b).then(r => {
-      const cur = state.books.find(x => x.id === id); if (!r || !cur) return;
-      const nb = applySeries(cur, r);
-      if (["series", "seriesNo", "seriesNext"].some(k => nb[k] !== cur[k])) upsert(nb);
+      const cur = state.books.find(x => x.id === id);
+      if (r && cur) applySeriesTo(cur, r);
     }).catch(() => {});
   }
   async function searchBooks(q) {
@@ -2106,9 +2105,8 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       closeSheet(); snapshot("Prima di «Completa autori e copertine»").then(() => enrichBooks(ids)); // in sottofondo: la scheda si chiude e l'app resta usabile
     };
     $("#i-series", sheet).onclick = () => {
-      if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
       if (!navigator.onLine) { st.textContent = "Connettiti per cercare le serie."; return; }
-      closeSheet(); toast("Cerco le serie…"); seriesJob(); // in sottofondo: la scheda si chiude
+      closeSheet(); seriesJob(); // in sottofondo: la scheda si chiude
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
     $("#i-file", sheet).onchange = e => {
