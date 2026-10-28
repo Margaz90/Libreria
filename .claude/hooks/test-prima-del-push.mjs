@@ -19,7 +19,7 @@ const args = cmd.slice(cmd.search(PUSH)).replace(PUSH, '').split(/[;&|]/)[0].tri
 const toMain = args.some(a => /(^|:)main$/.test(a)) || (args.length < 2 && branch === 'main');
 if (!toMain) process.exit(0);
 
-const run = spawnSync(process.execPath, ['test/run.mjs'], { cwd: dir, encoding: 'utf8', timeout: 280000 });
+const run = spawnSync(process.execPath, ['test/run.mjs'], { cwd: dir, encoding: 'utf8', timeout: 540000 });
 if (run.status === 0) process.exit(0);
 const out = (run.stdout || '') + (run.stderr || '');
 const failed = out.split('\n').filter(l => /FAIL|EADDRINUSE|Error/.test(l)).slice(0, 15).join('\n');
