@@ -29,6 +29,7 @@
   const newId = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Serie: chiave dei nomi, riga «Serie · N», etichetta, bollino.
+  const SER = ["series", "seriesNo", "seriesNext"], volNo = x => parseFloat(x.seriesNo);
   const seriesKey = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const serLabel = b => b.series ? b.series + (b.seriesNo ? " · " + b.seriesNo : "") : "";
   const serAria = b => b.seriesNo ? `, ${esc(b.series)} numero ${esc(b.seriesNo)}` : "";
@@ -284,23 +285,26 @@
     if (line) line.hidden = true;
     schedulePersist(); if (ser) render(); else renderTally();
     const err = Object.entries(errors).map(([k, n]) => `${k} ×${n}`).join(", ");
-    toast(`Informazioni aggiornate per ${fixed} libri su ${ids.length}.` + (missed ? ` Non trovati: ${missed}${err ? " (" + err + ")" : ""}.` : ""));
+    toast(`Informazioni aggiornate per ${fixed} libri su ${ids.length}.` + (missed ? ` Non trovati: ${missed}${err ? " (" + err + ")" : ""}.` : "") + (wdOff ? " Serie non cercate: Wikidata non risponde." : ""));
   }
 
   // «Cerca le serie»: un libro alla volta; un errore di Wikidata si conta e il giro prosegue.
   async function seriesJob() {
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
-    const ids = state.books.filter(b => (b.title || b.author) && (b.series ? b.status === "letto" && !b.seriesNext : !b.seriesManual)).map(b => b.id);
+    const ids = state.books.filter(b => b.title && (b.series ? b.status === "letto" && !b.seriesNext : !b.seriesManual)).map(b => b.id);
     if (!ids.length) { toast("Nessun libro da cercare."); return; }
-    const gen = dataGen, line = $("#enrich"), cache = new Map(); let found = 0, bad = 0;
+    const gen = dataGen, line = $("#enrich"), cache = new Map(); let found = 0, bad = 0, down = 0; // down: errori 429/503 di fila
     enrich.busy = true;
     await snapshot("Prima di «Cerca le serie»");
     if (gen !== dataGen) return; // copia ripristinata durante la copia
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length}`; }
       const b = state.books.find(x => x.id === ids[k]);
-      const r = b && await findSeries(b, cache).catch(() => { bad++; return null; });
+      let err = false;
+      const r = b && await findSeries(b, cache).catch(e => { bad++; err = /wikidata-(429|503)/.test(e && e.code); return null; });
       if (gen !== dataGen) return; // copia ripristinata nel frattempo
+      down = err ? down + 1 : 0;
+      if (down >= 2) break; // Wikidata giù: inutile insistere
       const cur = r && state.books.find(x => x.id === ids[k]);
       if (cur && applySeriesTo(cur, r, true)) found++;
       await sleep(300);
@@ -309,7 +313,8 @@
     enrich.busy = false;
     if (line) line.hidden = true;
     if (found) render(); else renderTally(); // un solo ridisegno: l'ordine Autore può cambiare
-    toast(`Serie trovate per ${found} libri su ${ids.length}.` + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
+    const msg = `Serie trovate per ${found} libri su ${ids.length}.`;
+    toast(down >= 2 ? `Wikidata non risponde: ricerca interrotta, riprova più tardi. ${msg}` : msg + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
   function removeBook(id) {
@@ -490,20 +495,24 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
   }
   const wdSparql = q => wdGet("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q)).then(j => j.results.bindings || []);
   const wv = x => x && !/^Q\d+$/.test(x.value) ? x.value : undefined; // niente codici Q
-  // Opere (non edizioni) con serie, una riga per serie.
-  const wdWorks = where => wdSparql(`SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) WHERE {
-${where} FILTER NOT EXISTS { ?work wdt:P629 [] } ?work p:P179 ?st. ?st a wikibase:BestRank; ps:P179 ?ser.
-OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs")) }
+  // Opere (non edizioni) con serie, una riga per serie; any: anche le opere senza serie (ed = edizione dell'ISBN).
+  const wdWorks = (where, any) => { const ser = `?work p:P179 ?st. ?st a wikibase:BestRank; ps:P179 ?ser.
 OPTIONAL { ?st pq:P1545 ?n1 } OPTIONAL { ?work wdt:P1545 ?n2 } BIND(COALESCE(?n1, ?n2) AS ?no)
 OPTIONAL { ?st pq:P156 ?x1 } OPTIONAL { ?work wdt:P156 ?x2 } BIND(COALESCE(?x1, ?x2) AS ?nx)
 OPTIONAL { ?nx rdfs:label ?ni FILTER(LANG(?ni) = "it") }
-OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } OPTIONAL { ?ser rdfs:label ?sm FILTER(LANG(?sm) = "mul") } BIND(COALESCE(?si, ?se, ?sm) AS ?sl)
-} GROUP BY ?work ?st LIMIT 500`).then(rs => rs.map(r => ({ id: r.work.value, names: String(wv(r.names) || "").split("|"), series: wv(r.s), no: wv(r.n), it: wv(r.it) })));
-  // Una sola opera: 0 = nessuna, null = più d'una.
-  const pickWork = (ws, t) => {
-    let h = ws.filter(w => w.series && (!t || w.names.some(n => sameTitle(n, t))));
-    const ex = t ? h.filter(w => w.names.some(n => titleCore(n) === titleCore(t))) : [];
+OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:label ?se FILTER(LANG(?se) = "en") } OPTIONAL { ?ser rdfs:label ?sm FILTER(LANG(?sm) = "mul") } BIND(COALESCE(?si, ?se, ?sm) AS ?sl)`;
+    return wdSparql(`SELECT ?work ?st (GROUP_CONCAT(DISTINCT ?nm; separator="|") AS ?names) (SAMPLE(?sl) AS ?s) (SAMPLE(?no) AS ?n) (SAMPLE(?ni) AS ?it) (SAMPLE(?ed) AS ?e) WHERE {
+${where} FILTER NOT EXISTS { ?work wdt:P629 [] } ${any ? `OPTIONAL { ${ser} }` : ser}
+OPTIONAL { ?work rdfs:label|skos:altLabel ?nm FILTER(LANG(?nm) IN ("it","en","mul","fr","de","es","pt","nl","sv","da","nb","fi","pl","cs")) }
+} GROUP BY ?work ?st LIMIT 500`).then(rs => rs.map(r => ({ id: r.work.value, ed: r.e && r.e.value, names: String(wv(r.names) || "").split("|"), series: wv(r.s), no: wv(r.n), it: wv(r.it) }))); };
+  // Una sola opera: 0 = nessuna, null = più d'una; t = null: senza titolo (ISBN); ser: serie già del libro (preferita).
+  const pickWork = (ws, t, ser) => {
+    if (t !== null && !String(t || "").trim()) return 0;
+    let h = ws.filter(w => w.series && (t === null || w.names.some(n => sameTitle(n, t))));
+    const ex = t === null ? [] : h.filter(w => w.names.some(n => titleCore(n) === titleCore(t)));
     if (ex.length) h = ex;
+    const same = h.filter(w => ser && seriesKey(w.series) === seriesKey(ser));
+    if (same.length) h = same;
     return new Set(h.map(w => w.id)).size > 1 ? null : h.find(w => w.no) || h[0] || 0;
   };
   async function authorWorks(a, cache) {
@@ -525,7 +534,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
   // Seguito solo con un'edizione italiana.
   async function itEdition(t, a) {
     for (const f of [() => appleSearch(t + " " + a, 5), () => googleSearch(t + " " + a, { max: 5 })]) {
-      try { if ((await f()).some(x => sameTitle(x.title, t))) return true; } catch {}
+      try { if ((await f()).some(x => sameTitle(x.title, t) && sameAuthor(a, x.author || ""))) return true; } catch {}
     }
     return false;
   }
@@ -534,12 +543,14 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     const isbn = parseIsbn(b.isbn), a = String(b.author || "").split(",")[0].trim();
     let w = 0;
     if (isbn) {
-      w = pickWork(await wdWorks(`{ SELECT ?work WHERE { ${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) } }`));
+      const ws = await wdWorks(`{ SELECT ?work ?ed WHERE { ${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) } }`, true);
+      if (ws.length && !ws.some(x => x.series) && ws.some(x => x.ed && x.ed !== x.id)) return null; // l'ISBN porta a un'opera senza serie
+      w = pickWork(ws, null, b.series);
     }
-    if (w === 0 && a) {
+    if (w === 0 && a && b.title) {
       const ws = await authorWorks(a, cache);
-      w = pickWork(ws, b.title);
-      if (w === 0 && isbn && ws.length) { const t = await olTitle(isbn); if (t) w = pickWork(ws, t); }
+      w = pickWork(ws, b.title, b.series);
+      if (w === 0 && isbn && ws.length) { const t = await olTitle(isbn); if (t) w = pickWork(ws, t, b.series); }
     }
     if (!w) return null;
     const r = { series: w.series };
@@ -547,10 +558,10 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     if (w.it && await itEdition(w.it, a)) r.next = w.it;
     return r;
   }
-  // Copia con la serie trovata, rispettando seriesManual.
-  function applySeries(b, r) {
+  // Copia con la serie trovata, rispettando seriesManual; onlyNext: solo il seguito (libro che ha già la serie).
+  function applySeries(b, r, onlyNext) {
     const o = { ...b };
-    if (!b.seriesManual && r.series) {
+    if (!onlyNext && !b.seriesManual && r.series) {
       const s = seriesName(r.series);
       if (seriesKey(s) !== seriesKey(b.series)) { delete o.seriesNo; delete o.seriesNext; }
       o.series = s; if (r.no) o.seriesNo = r.no;
@@ -560,10 +571,10 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
   }
   // Salva la serie trovata (upsert: un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
   function applySeriesTo(b, r, quiet) { // quiet: niente ridisegno completo, lo fa chi chiama alla fine
-    const nb = applySeries(b, r);
-    if (!["series", "seriesNo", "seriesNext"].some(k => nb[k] !== b[k])) return false;
-    if (!quiet) { upsert(nb); return true; }
-    state.books[state.books.indexOf(b)] = { ...clean(nb), id: b.id, updated: Date.now() };
+    const nb = clean(applySeries(b, r, !!b.series)), ob = clean(b); // confronto dopo clean(): un numero che clean() toglie non è un cambio
+    if (!SER.some(k => nb[k] !== ob[k])) return false;
+    if (!quiet) { upsert({ ...nb, id: b.id }); return true; }
+    state.books[state.books.indexOf(b)] = { ...nb, id: b.id, updated: Date.now() };
     schedulePersist(); patchBook(b.id); cloudHook("changed", b.id); return true;
   }
   // Nuovo libro: serie in sottofondo.
@@ -704,7 +715,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     const recenti = (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0);
     const rank = st => shelfOrder().indexOf(st);
     // Stesso autore: prima le serie (nome, numero), poi gli altri per titolo.
-    const no = x => x.seriesNo ? +x.seriesNo : 1e9;
+    const no = x => x.seriesNo ? volNo(x) : 1e9;
     const bySeries = (a, b) => (!!b.series - !!a.series) || (a.series ? seriesKey(a.series).localeCompare(seriesKey(b.series), "it") || no(a) - no(b) : 0);
     const by = {
       recenti,
@@ -985,7 +996,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
   const num = n => Number(n).toLocaleString("it-IT");
   // Prossimo volume dopo b (pura): il primo non letto, o il seguito confermato se manca; after = volume precedente.
   function nextInSeries(b, books) {
-    const no = x => parseFloat(x.seriesNo), n = no(b), key = seriesKey(b.series);
+    const no = volNo, n = no(b), key = seriesKey(b.series);
     if (!key || isNaN(n)) return null;
     const vols = books.filter(x => seriesKey(x.series) === key && no(x) >= n).sort((x, y) => no(x) - no(y));
     const nx = vols.find(x => no(x) > n && x.status !== "letto"), i = nx ? vols.indexOf(nx) : vols.length;
@@ -1004,7 +1015,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     const gap = []; // serie con un volume mancante: i successivi non sono «affini»
     for (const r of last) { // prima il seguito di una serie (anche solo per titolo)
       const s = nextInSeries(r, books), nb = s ? s.book : r.seriesNext && pile.find(b => sameTitle(b.title, r.seriesNext));
-      if (s && s.title) gap.push(b => seriesKey(b.series) === seriesKey(r.series) && parseFloat(b.seriesNo) > parseFloat(s.after.seriesNo));
+      if (s && (s.title || !pile.includes(s.book))) gap.push(b => seriesKey(b.series) === seriesKey(r.series) && volNo(b) > volNo(s.after));
       if (nb && pile.includes(nb)) { take(nb, "affine", s ? `Il #${nb.seriesNo} di ${r.series}, dopo il #${s.after.seriesNo}` : `Il seguito di «${r.title}»`); break; }
     }
     const aff = pile.filter(b => !gap.some(g => g(b)));
@@ -1380,7 +1391,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
         <div class="field"><label for="d-series">Serie</label><input id="d-series" list="series-list" maxlength="80" value="${esc(b.series || "")}" autocomplete="off"></div>
         <div class="field"><label for="d-series-no">N.</label><input id="d-series-no" inputmode="decimal" maxlength="6" value="${esc(b.seriesNo || "")}" autocomplete="off"></div>
       </div>
-      <datalist id="series-list">${[...seriesNames().values()].sort().map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+      <datalist id="series-list">${[...seriesNames().values()].sort((x, y) => x.localeCompare(y, "it")).map(s => `<option value="${esc(s)}">`).join("")}</datalist>
       <div class="grid2">
         <div class="field"><label for="d-year">Anno</label><input id="d-year" inputmode="numeric" value="${esc(b.year || "")}"></div>
         <div class="field"><label for="d-pages">Pagine</label><input id="d-pages" inputmode="numeric" value="${esc(b.pages || "")}"></div>
@@ -1641,7 +1652,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} <span aria-hidden="true">›</span></span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next="${esc(r.title)}"${r.no ? ` data-no="${esc(r.no)}"` : ""} aria-label="Aggiungi «${esc(r.title)}» alla lista dei desideri">Lista dei desideri</button>`}</div>`;
   }
   function openBook(book) {
-    const b = { ...book };
+    const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
     const sheet = openSheet(`
       <div class="sheet-top">${coverHTML(b)}<div>
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
@@ -1725,11 +1736,13 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       refBtn.disabled = true; refSt.textContent = "Cerco le informazioni…";
       const errors = {};
       const info0 = await fetchInfo(cur, errors).catch(() => null), info = info0 || {};
-      const sr = await findSeries({ ...cur, isbn: cur.isbn || info.isbn }).catch(() => null);
+      let wdDown = false; // serie scritta a mano con il seguito: niente da cercare
+      const sr = cur.seriesManual && cur.seriesNext ? null : await findSeries({ ...cur, author: cur.author || info.author, isbn: cur.isbn || info.isbn }).catch(e => { wdDown = /^wikidata-/.test(e && e.code); return null; });
+      const wdNote = wdDown ? " Wikidata non risponde: serie non cercata." : "";
       refBtn.disabled = false;
       if (!info0 && !sr) {
         const err = Object.keys(errors).join(", ");
-        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.`;
+        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.` + wdNote;
         return;
       }
       const got = [];
@@ -1759,7 +1772,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       $(".sheet-top .sub", sheet).textContent = $("#d-author", sheet).value || "Autore sconosciuto";
       spSync();
       if (got.some(g => ["autore", "anno", "pagine", "genere", "segnatura", "serie"].includes(g))) $("details.edit", sheet).open = true;
-      refSt.textContent = got.length ? `Aggiornati: ${got.join(", ")}. Tocca Salva per tenerli.` : "Le informazioni sono già aggiornate.";
+      refSt.textContent = (got.length ? `Aggiornati: ${got.join(", ")}. Tocca Salva per tenerli.` : "Le informazioni sono già aggiornate.") + wdNote;
     };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
@@ -1775,7 +1788,13 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       fetchInfo(get(id)).then(h => { const x = get(id); if (x && h && (h.author || h.cover)) { fillInfo(x, h); schedulePersist(); } }).catch(() => {});
       toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
     });
-    $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
+    $("#s-save", sheet).onclick = () => {
+      if (badYear(sheet) || badDates(sheet)) return;
+      readReading(sheet, b); readData(sheet, b);
+      const live = state.books.find(x => x.id === b.id); // serie arrivata in sottofondo a scheda aperta: si tiene
+      if (live && SER.every(k => (b[k] || "") === (ser0[k] || ""))) SER.forEach(k => { b[k] = live[k]; });
+      upsert(b); closeSheet(); toast("Salvato");
+    };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
     const del = $("#s-del", sheet);

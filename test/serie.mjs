@@ -12,6 +12,11 @@ const until = (p, id, o) => p.waitForFunction(([id, o]) => {
   const b = JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').find(x => x.id === id);
   return b && Object.entries(o).every(([k, v]) => b[k] === (v === null ? undefined : v));
 }, [id, o], { timeout: 4000 }).catch(() => {});
+// Aspetta il salvataggio del libro (updated cambia) dopo Salva.
+const saved = (p, id, prev) => p.waitForFunction(([id, prev]) => {
+  const b = JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').find(x => x.id === id);
+  return b && b.updated !== prev;
+}, [id, prev], { timeout: 4000 }).catch(() => {});
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 async function pulizia(browser) {
@@ -91,7 +96,8 @@ async function scheda(browser) {
   await p.locator('#q').fill(''); await p.waitForSelector('#main [data-id="s4"]');
 
   // Salvare senza toccare Serie e N. non imposta seriesManual
-  await open('s2'); await save(); await p.waitForTimeout(900);
+  const u2 = (await book(p, 's2')).updated;
+  await open('s2'); await save(); await saved(p, 's2', u2);
   ok('salvare senza cambiare la serie: seriesManual assente', (await book(p, 's2')).seriesManual === undefined);
 
   // Datalist senza doppioni; forma già usata al salvataggio
@@ -125,6 +131,7 @@ async function bollino(browser) {
     { ...base, id: 'w1', title: 'Sottile', seriesNo: '12.5', pages: 60 },
     { ...base, id: 'c1', title: 'Centesimo', seriesNo: '100' },
     { ...base, id: 'r1', title: 'In lettura', seriesNo: '4', status: 'in-lettura' },
+    { ...base, id: 'f2', title: 'Foto sottile', seriesNo: '12', spine: PNG, spineRatio: 0.01 },
   ]);
   const sno = id => p.locator(`#main [data-id="${id}"] .sno`);
   ok('bollino su dorso disegnato', (await sno('d1').innerText().catch(() => '')).trim() === '3');
@@ -133,11 +140,14 @@ async function bollino(browser) {
   ok('etichetta del dorso con serie e numero', /, Slough House numero 3$/.test(await p.locator('#main [data-id="d1"]').getAttribute('aria-label')));
   const [s, w] = [await p.locator('#main [data-id="w1"]').boundingBox(), await sno('w1').boundingBox()];
   ok('bollino 12.5 dentro un dorso sottile', s && w && w.x >= s.x - 0.5 && w.x + w.width <= s.x + s.width + 0.5 && w.y >= s.y && w.y + w.height <= s.y + s.height, JSON.stringify([s, w]));
+  const [fs, fw] = [await p.locator('#main [data-id="f2"]').boundingBox(), await sno('f2').boundingBox()];
+  const fit = await sno('f2').evaluate(e => e.scrollWidth <= e.clientWidth).catch(() => false);
+  ok('bollino 12 dentro un dorso con foto di 16 px, cifre intere', fs && fw && Math.round(fs.width) === 16 && fw.x >= fs.x - 0.5 && fw.x + fw.width <= fs.x + fs.width + 0.5 && fit, JSON.stringify([fs, fw, fit]));
   ok('classe long per 12.5 e 100, non per 3', await p.locator('#main [data-id="w1"] .sno.long').count() === 1 && await p.locator('#main [data-id="c1"] .sno.long').count() === 1 && await p.locator('#main [data-id="d1"] .sno.long').count() === 0);
   const rc = p.locator('#hero .rcard');
   ok('scheda In lettura: «Slough House · 4», senza bollino', /Slough House · 4/.test(await rc.innerText()) && await rc.locator('.sno').count() === 0);
   await p.locator('.viewsw [data-mode="copertine"]').first().click();
-  await p.waitForSelector('#main .card');
+  await p.waitForSelector('#main .card[data-id="d1"] .sno');
   ok('bollino su copertina', (await sno('d1').innerText().catch(() => '')).trim() === '3' && await sno('n1').count() === 0);
   ok('etichetta della copertina con serie e numero', /Slough House numero 3/.test(await p.locator('#main [data-id="d1"]').getAttribute('aria-label')));
   ok('bollino: nessun errore in console', !p.errs.length, p.errs.join(' / '));
@@ -162,25 +172,29 @@ async function ordine(browser) {
 }
 
 // --- Ricerca della serie (Wikidata, Open Library, conferma del seguito italiano), con fonti simulate ---
-const W = (id, names, s, n, it) => ({ work: { value: 'http://www.wikidata.org/entity/' + id }, names: { value: names }, ...(s ? { s: { value: s } } : {}), ...(n ? { n: { value: n } } : {}), ...(it ? { it: { value: it } } : {}) });
+const E = id => ({ value: 'http://www.wikidata.org/entity/' + id });
+const W = (id, names, s, n, it, ed) => ({ work: E(id), names: { value: names }, ...(s ? { s: { value: s } } : {}), ...(n ? { n: { value: n } } : {}), ...(it ? { it: { value: it } } : {}), ...(ed ? { e: E(ed) } : {}) });
 async function fonti(browser) {
   const p = await newPage(browser, { external: 'allow' });
-  p.cfg = { isbn: [], works: [], ids: ['Q1'], ol: null, olWork: null, apple: [], google: [], fail: null };
+  // failIf(q): stato HTTP per una sola interrogazione; idsBy(nome): candidati per autore; delay: risposta lenta (ms)
+  p.cfg = { isbn: [], works: [], ids: ['Q1'], ol: null, olWork: null, apple: [], appleAuthor: 'Mick Herron', google: [], fail: null, failIf: null, idsBy: null, delay: 0 };
   p.n = { isbn: 0, autore: 0, cerca: 0 }; p.q = [];
   const json = (r, body, status = 200) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-  await p.route(/query\.wikidata\.org/, r => {
+  await p.route(/query\.wikidata\.org/, async r => {
+    if (p.cfg.delay) await new Promise(x => setTimeout(x, p.cfg.delay));
     if (p.cfg.fail === 'rete') return r.abort();
     if (p.cfg.fail) return json(r, {}, p.cfg.fail);
     const q = decodeURIComponent(new URL(r.request().url()).searchParams.get('query') || ''); p.q.push(q);
+    const st = p.cfg.failIf && p.cfg.failIf(q); if (st) return json(r, {}, st);
     const serie = /P179/.test(q), isbn = /P212/.test(q), autore = /P50/.test(q);
     if (isbn) p.n.isbn++; if (autore) p.n.autore++;
     json(r, { results: { bindings: !serie ? [] : isbn ? p.cfg.isbn : autore ? p.cfg.works : [] } });
   });
-  await p.route(/www\.wikidata\.org\/w\/api\.php/, r => { p.n.cerca++; if (p.cfg.fail === 'rete') return r.abort(); json(r, { search: p.cfg.ids.map(id => ({ id })) }); });
+  await p.route(/www\.wikidata\.org\/w\/api\.php/, r => { p.n.cerca++; if (p.cfg.fail === 'rete') return r.abort(); const a = new URL(r.request().url()).searchParams.get('search'); json(r, { search: (p.cfg.idsBy ? p.cfg.idsBy(a) : p.cfg.ids).map(id => ({ id })) }); });
   await p.route(/openlibrary\.org\/isbn\//, r => p.cfg.ol ? json(r, p.cfg.ol) : json(r, {}, 404));
   await p.route(/openlibrary\.org\/works\//, r => p.cfg.olWork ? json(r, p.cfg.olWork) : json(r, {}, 404));
   await p.route(/openlibrary\.org\/search/, r => json(r, { docs: [] }));
-  await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}(${JSON.stringify({ results: p.cfg.apple.map(t => ({ trackName: t, artistName: 'Mick Herron' })) })})` }); });
+  await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}(${JSON.stringify({ results: p.cfg.apple.map(t => ({ trackName: t, artistName: p.cfg.appleAuthor })) })})` }); });
   await p.route(/www\.googleapis\.com\/books/, r => json(r, { items: p.cfg.google.map(t => ({ volumeInfo: { title: t, authors: ['Mick Herron'], language: 'it' } })) }));
   return p;
 }
@@ -244,6 +258,34 @@ async function ricerca(browser) {
   r = await find(p, { ...MH, title: 'Tigri vere' });
   ok('edizione trovata su Google Books: titolo italiano', r && r.next === 'La strada degli spettri', JSON.stringify(r));
   p.cfg.google = [];
+  // Stesso titolo ma di un altro autore: non è il seguito
+  p.cfg.apple = ['La strada degli spettri']; p.cfg.appleAuthor = 'Altro Scrittore';
+  r = await find(p, { ...MH, title: 'Tigri vere' });
+  ok('seguito: titolo uguale di un altro autore non conta', r && r.series === 'Slough House' && r.next === undefined, JSON.stringify(r));
+  p.cfg.apple = []; p.cfg.appleAuthor = 'Mick Herron';
+  // Libro con la sua serie: in un'opera di due serie vale la riga della sua serie
+  p.cfg.works = [W('Q20', 'Guards! Guards!|A me le guardie!', 'City Watch', '1'), W('Q20', 'Guards! Guards!|A me le guardie!', 'Discworld', '8')];
+  r = await find(p, { author: 'Terry Pratchett', title: 'A me le guardie!', series: 'discworld' });
+  ok('opera in due serie: preferita la serie che il libro ha già', r && r.series === 'Discworld' && r.no === '8', JSON.stringify(r));
+  // Senza titolo: nessuna opera
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  r = await find(p, { ...MH, title: '' });
+  ok('senza titolo: nessuna serie', r === null, JSON.stringify(r));
+  // Omonimi: due autori candidati con opere dal titolo simile → mai indovinare
+  p.cfg.ids = ['Q1', 'Q2']; p.cfg.works = [W('Q80', 'La torre', 'Serie del primo', '1'), W('Q81', 'La torre: romanzo', 'Serie del secondo', '2')];
+  r = await find(p, { author: 'Mario Rossi', title: 'La torre' });
+  ok('omonimi con opere dal titolo simile: nessuna serie', r === null, JSON.stringify(r));
+  p.cfg.ids = ['Q1'];
+  // ISBN trovato ma l'opera non ha serie: niente ricerca per autore
+  p.cfg.isbn = [W('Q60', 'Tigri vere', null, null, null, 'Q61')]; p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  p.n.autore = 0; p.n.cerca = 0;
+  r = await find(p, { ...MH, title: 'Tigri vere', isbn: '9788845299997' });
+  ok('ISBN di un libro senza serie: si ferma, niente passo per autore', r === null && p.n.autore === 0 && p.n.cerca === 0, JSON.stringify(r) + ' ' + JSON.stringify(p.n));
+  p.cfg.isbn = [W('Q61', 'Tigri vere', null, null, null, 'Q61')]; // edizione senza opera collegata: si prova per autore
+  p.n.autore = 0;
+  r = await find(p, { ...MH, title: 'Tigri vere', isbn: '9788845299997' });
+  ok('ISBN di un\'edizione senza opera: prosegue per autore', r && r.series === 'Slough House' && p.n.autore === 1, JSON.stringify(r) + ' ' + JSON.stringify(p.n));
+  p.cfg.isbn = [];
   // Errori di Wikidata
   p.cfg.fail = 'rete'; r = await find(p, { ...MH, title: 'Altro', isbn: '9788845299997' });
   ok('errore di rete: codice wikidata-rete', r && r.err === 'wikidata-rete', JSON.stringify(r));
@@ -263,6 +305,8 @@ async function usoRicerca(browser) {
     { ...base, id: 'a3', title: 'Leoni morti', series: 'Vecchia', seriesNo: '7', seriesNext: 'Seguito' },
     { ...base, id: 'a4', title: 'Libro HTML' },
     { ...base, id: 'a5', title: 'Senza numero', series: 'Vecchia', seriesNo: '7', seriesNext: 'Seguito' },
+    { ...base, id: 'a6', title: 'Tigri vere', author: '' },
+    { ...base, id: 'a7', title: 'Leoni morti', series: 'Mia', seriesNo: '1', seriesNext: 'Dopo', seriesManual: true },
   ]);
   p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere|Tigri vere bis', 'Slough House', '3', 'La strada degli spettri'), W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q12', 'Spook Street|La strada degli spettri', 'Slough House', '4'),
     W('Q14', 'Senza numero', 'Slough House'), W('Q13', 'Libro HTML', '<img src=x onerror="window.__x=1">', '1')];
@@ -277,9 +321,10 @@ async function usoRicerca(browser) {
   let b = await book(p, 'a1');
   ok('Aggiorna informazioni: salvati serie, numero e seguito, senza seriesManual', b.series === 'Slough House' && b.seriesNo === '3' && b.seriesNext === 'La strada degli spettri' && b.seriesManual === undefined, JSON.stringify(b));
 
+  const ua2 = (await book(p, 'a2')).updated;
   await open('a2'); await refresh();
   const manual = await p.inputValue('#d-series') === 'Mia serie' && await p.inputValue('#d-series-no') === '9';
-  await save(); await p.waitForTimeout(900); b = await book(p, 'a2');
+  await save(); await saved(p, 'a2', ua2); b = await book(p, 'a2');
   ok('Aggiorna informazioni rispetta seriesManual', manual && b.series === 'Mia serie' && b.seriesNo === '9' && b.seriesManual === true, JSON.stringify(b));
 
   await open('a4'); await refresh(); await save();
@@ -298,11 +343,28 @@ async function usoRicerca(browser) {
 
   // Errore di rete: i campi restano
   p.cfg.fail = 'rete';
+  const ua3 = (await book(p, 'a3')).updated;
   await open('a3'); await refresh();
   const kept = await p.inputValue('#d-series') === 'Vecchia' && await p.inputValue('#d-series-no') === '7';
-  await save(); await p.waitForTimeout(900); b = await book(p, 'a3');
+  await save(); await saved(p, 'a3', ua3); b = await book(p, 'a3');
   ok('errore di rete: i campi restano', kept && b.series === 'Vecchia' && b.seriesNo === '7' && b.seriesNext === 'Seguito', JSON.stringify(b));
+  // Wikidata 503: la riga di stato lo dice
+  p.cfg.fail = 503; p.cfg.apple = ['Tigri vere', 'La strada degli spettri'];
+  await open('a6'); await refresh();
+  const st503 = await p.locator('#s-ref-status').innerText();
+  ok('Aggiorna informazioni con Wikidata giù: «Wikidata non risponde»', /Wikidata non risponde/.test(st503), st503);
+  await p.locator('#s-close').click(); await p.locator('[data-u="drop"]').click({ timeout: 1000 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' });
   p.cfg.fail = null;
+  // Autore vuoto: la serie si cerca con l'autore appena trovato
+  await open('a6'); await refresh();
+  ok('Aggiorna informazioni senza autore: serie con l\'autore trovato', await p.inputValue('#d-author') === 'Mick Herron' && await p.inputValue('#d-series') === 'Slough House', await p.locator('#s-ref-status').innerText());
+  await p.locator('#s-close').click(); await p.locator('[data-u="drop"]').click({ timeout: 1000 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' });
+  p.cfg.apple = ['La strada degli spettri'];
+  // Serie scritta a mano e seguito già noto: niente Wikidata
+  const n0 = p.n.cerca + p.n.autore + p.q.length;
+  await open('a7'); await refresh();
+  ok('serie a mano con seguito: Aggiorna informazioni non interroga Wikidata', p.n.cerca + p.n.autore + p.q.length === n0, JSON.stringify(p.n));
+  await p.locator('#s-close').click(); await p.locator('[data-u="drop"]').click({ timeout: 1000 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' });
 
   // Nuovo libro: ricerca in sottofondo dopo il salvataggio
   await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
@@ -313,6 +375,22 @@ async function usoRicerca(browser) {
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 12000 }).catch(() => {});
   b = (await localBooks(p)).find(x => x.title === 'La strada degli spettri') || {};
   ok('nuovo libro: serie trovata in sottofondo', b.series === 'Slough House' && b.seriesNo === '4' && b.seriesManual === undefined, 'autore: ' + b.author + ' · ' + JSON.stringify(b));
+  // Nuovo libro aperto prima che arrivi la serie: Salva non la cancella
+  p.cfg.delay = 1500;
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+  await p.fill('#d-title', 'Dead Lions'); await p.fill('#d-author', 'Mick Herron');
+  await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'Dead Lions'), null, { timeout: 4000 }).catch(() => {});
+  const dl = (await localBooks(p)).find(x => x.title === 'Dead Lions') || {};
+  await p.locator(`#main [data-id="${dl.id}"]`).first().click(); await p.waitForSelector('.sheet');
+  await until(p, dl.id, { series: 'Slough House' });
+  const udl = (await book(p, dl.id) || {}).updated;
+  await p.locator('#f-notes').fill('nota'); await save(); await saved(p, dl.id, udl);
+  b = await book(p, dl.id) || {};
+  ok('scheda aperta durante la ricerca in sottofondo: Salva tiene la serie', b.series === 'Slough House' && b.seriesNo === '2' && b.notes === 'nota', JSON.stringify(b));
+  p.cfg.delay = 0;
   ok('uso della ricerca: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
@@ -356,12 +434,69 @@ async function cercaSerie(browser) {
   ok('nessun libro da cercare: messaggio', /Nessun libro da cercare\./.test(await toasts()), await toasts());
   await p.locator('#i-close').click().catch(() => {});
 
-  // Wikidata 503: il messaggio lo dice
-  await load(p, [{ ...base, id: 'e1', title: 'Tigri vere' }]);
-  p.cfg.fail = 503; await run(); await waitToast(/Serie trovate/);
+  const clear = () => p.evaluate(() => { document.querySelectorAll('.toast').forEach(t => t.remove()); });
+  // Wikidata 503 solo sul libro di mezzo: prosegue, il terzo si cerca, il messaggio lo dice
+  await clear();
+  await load(p, [{ ...base, id: 'e1', title: 'Tigri vere' }, { ...base, id: 'e2', title: 'Libro due', author: 'Autore Due' }, { ...base, id: 'e3', title: 'Leoni morti', author: 'Terza Autrice' }]);
+  p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3'), W('Q11', 'Dead Lions|Leoni morti', 'Slough House', '2'), W('Q15', 'Libro due', 'Altra', '1')];
+  p.cfg.idsBy = a => [{ 'Autore Due': 'Q2', 'Terza Autrice': 'Q3' }[a] || 'Q1'];
+  p.cfg.failIf = q => /wd:Q2 /.test(q) && 503;
+  await run(); await waitToast(/Serie trovate/);
   const em = await toasts();
-  ok('Wikidata 503 a metà: prosegue e il messaggio lo dice', /Serie trovate per 0 libri su 1/.test(em) && /Wikidata non risponde ×1/.test(em), em);
+  await until(p, 'e3', { series: 'Slough House' });
+  const e3 = await book(p, 'e3');
+  ok('Wikidata 503 a metà: prosegue e il messaggio lo dice', /Serie trovate per 2 libri su 3/.test(em) && /Wikidata non risponde ×1/.test(em), em);
+  ok('Wikidata 503 a metà: il terzo libro si cerca lo stesso', e3.series === 'Slough House' && e3.seriesNo === '2', JSON.stringify(e3));
+  p.cfg.idsBy = null; p.cfg.failIf = null;
+
+  // Wikidata sempre giù: dopo due errori di fila la ricerca si ferma
+  await clear();
+  await load(p, [{ ...base, id: 'g1', title: 'Uno' }, { ...base, id: 'g2', title: 'Due' }, { ...base, id: 'g3', title: 'Tre' }]);
+  p.cfg.fail = 503; p.n.cerca = 0;
+  await run(); await waitToast(/Serie trovate|interrotta/);
+  await p.waitForTimeout(800);
+  const gm = await toasts();
+  ok('Wikidata giù: ricerca interrotta dopo due errori', /Wikidata non risponde: ricerca interrotta, riprova più tardi\./.test(gm) && /Serie trovate per 0 libri su 3/.test(gm) && p.n.cerca === 2 && await p.locator('#enrich').isHidden(), gm + ' · cerca ' + p.n.cerca);
   p.cfg.fail = null;
+
+  // Completa autori e copertine con Wikidata giù: il messaggio dice che le serie non sono state cercate
+  await clear();
+  await load(p, [1, 2, 3].map(i => ({ ...base, id: 'h' + i, title: 'Libro ' + i, author: '', isbn: '978884529999' + [7, 7, 7][i - 1] })));
+  p.cfg.fail = 503;
+  await backup(); await p.locator('#i-authors').click();
+  await waitToast(/Informazioni aggiornate/, 15000);
+  const hm = await toasts();
+  ok('Completa autori con Wikidata giù: «Serie non cercate: Wikidata non risponde.»', /Serie non cercate: Wikidata non risponde\./.test(hm), hm);
+  p.cfg.fail = null;
+
+  // Letti con la serie: solo il seguito, mai serie o numero
+  await clear();
+  const L = { status: 'letto', finishedYear: 2020 };
+  await load(p, [
+    { ...base, ...L, id: 'dw', title: 'A me le guardie!', author: 'Terry Pratchett', series: 'Discworld', seriesNo: '8' },
+    { ...base, ...L, id: 'dx', title: 'Altro letto', isbn: '9788845299997', series: 'Mia saga', seriesNo: '2' },
+  ]);
+  p.cfg.works = [W('Q20', 'Guards! Guards!|A me le guardie!', 'City Watch', '1', "Uomini d'arme"), W('Q20', 'Guards! Guards!|A me le guardie!', 'Discworld', '8', 'Eric')];
+  p.cfg.isbn = [W('Q50', 'Altro letto', 'Altra serie', '3', 'Seguito X')];
+  p.cfg.apple = ['Eric', "Uomini d'arme", 'Seguito X']; p.cfg.appleAuthor = 'Terry Pratchett';
+  await run(); await waitToast(/Serie trovate/);
+  await until(p, 'dw', { seriesNext: 'Eric' });
+  const [dw, dx] = [await book(p, 'dw'), await book(p, 'dx')];
+  ok('letto con serie in un\'opera di due serie: serie e numero invariati, solo il seguito', dw.series === 'Discworld' && dw.seriesNo === '8' && dw.seriesNext === 'Eric', JSON.stringify(dw));
+  ok('letto con serie e risultato di un\'altra serie: nulla cambia', dx.series === 'Mia saga' && dx.seriesNo === '2' && dx.seriesNext === undefined && /Serie trovate per 1 libri su 2/.test(await toasts()), JSON.stringify(dx) + ' / ' + await toasts());
+  p.cfg.isbn = []; p.cfg.appleAuthor = 'Mick Herron';
+
+  // Numero non valido da Wikidata (P1545 «1a»): nessuna scrittura
+  await clear();
+  await load(p, [{ ...base, ...L, id: 'iv', title: 'Tigri vere', series: 'Slough House', updated: 5 }, { ...base, id: 'iw', title: 'Leoni morti', updated: 5 }]);
+  p.cfg.works = [W('Q10', 'Tigri vere', 'Slough House', '1a'), W('Q11', 'Leoni morti', 'Slough House', '2x')];
+  p.cfg.apple = [];
+  await run(); await waitToast(/Serie trovate/);
+  await p.waitForTimeout(500);
+  const iv = await book(p, 'iv'), iw = await book(p, 'iw');
+  ok('numero non valido: il letto non si riscrive', iv.updated === 5 && iv.seriesNo === undefined && /Serie trovate per 1 libri su 2/.test(await toasts()), JSON.stringify(iv) + ' / ' + await toasts());
+  ok('numero non valido: serie sì, numero no', iw.series === 'Slough House' && iw.seriesNo === undefined, JSON.stringify(iw));
+  p.cfg.apple = ['La strada degli spettri'];
 
   // Il ripristino ferma la ricerca
   await load(p, Array.from({ length: 8 }, (_, i) => ({ ...base, id: 'r' + i, title: 'Tigri vere ' + i })));
@@ -406,7 +541,8 @@ async function prossimo(browser) {
     const sg = N(g[0], g), sh = N(h[0], h);
     const n3 = X([v('m2', '2', { ...L, finished: '2026-01-01', seriesNext: 'Tigri vere' }), v('m4', '4', { ...D, added: 5 }), { id: 'o', title: 'Altro', author: 'Altro', ...D, added: 1 }], [], () => 0);
     const n4 = X([v('q3', '3', { ...L, finished: '2026-02-01' }), v('q4', '4', { ...L, finished: '2025-01-01' }), v('q5', '5', D)], [], () => 0);
-    return { g: sg, h: sh && sh.book && sh.book.id, n3: n3.map(x => x.book.id + ':' + x.kind), n4: n4[0] && n4[0].reason, a: s1 && s1.book && s1.book.id, b: s2, c: s3 && s3.book && s3.book.id, d: N(d[0], d), e: N({ id: 'z', title: 'Z', ...L }, a), f: N({ ...a[0], seriesNo: undefined }, a),
+    const n5 = X([v('u1', '1', { ...L, finished: '2026-01-01' }), v('u2', '2', { status: 'desiderato' }), v('u3', '3', { ...D, added: 5 }), { id: 'uo', title: 'Altro', author: 'Altro', ...D, added: 1 }], [], () => 0);
+    return { g: sg, h: sh && sh.book && sh.book.id, n3: n3.map(x => x.book.id + ':' + x.kind), n4: n4[0] && n4[0].reason, n5: n5.map(x => x.book.id + ':' + x.kind), a: s1 && s1.book && s1.book.id, b: s2, c: s3 && s3.book && s3.book.id, d: N(d[0], d), e: N({ id: 'z', title: 'Z', ...L }, a), f: N({ ...a[0], seriesNo: undefined }, a),
       n1: n1[0] && [n1[0].book.id, n1[0].kind, n1[0].reason], n2: n2[0] && [n2[0].book.id, n2[0].reason] };
   }, [S, L, D]);
   ok('salta i volumi letti', r.a === 'v5', r.a);
@@ -416,6 +552,7 @@ async function prossimo(browser) {
   ok('volume mancante: #3 non ce l\'hai prima di #4 in pila', r.g && r.g.title === 'Tigri vere' && r.g.no === '3' && !r.g.book, JSON.stringify(r.g));
   ok('nessun buco: #3 con titolo diverso resta in pila', r.h === 'k3', r.h);
   ok('Cosa leggo adesso?: con #3 mancante non propone #4 come affine', !r.n3.includes('m4:affine') && r.n3.length === 2, JSON.stringify(r.n3));
+  ok('Cosa leggo adesso?: con #2 nella lista dei desideri non propone #3 come affine', !r.n5.includes('u3:affine'), JSON.stringify(r.n5));
   ok('«dopo il #N» usa il volume appena prima', r.n4 === 'Il #5 di Slough House, dopo il #4', r.n4);
   ok('senza serie o numero: nessun seguito', r.e === null && r.f === null);
   ok('Cosa leggo adesso?: Il #4 di Slough House, dopo il #3', r.n1 && r.n1[0] === 'p4' && r.n1[1] === 'affine' && r.n1[2] === 'Il #4 di Slough House, dopo il #3', JSON.stringify(r.n1));
