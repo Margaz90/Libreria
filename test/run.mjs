@@ -2,7 +2,7 @@
 // Servono Node e Playwright con Chromium; i server dell'app e del finto Firestore partono da soli (porte 8765 e 8766).
 import { chromium, startServers, results } from './lib.mjs';
 
-const ALL = ['interfaccia', 'ricerche', 'accesso', 'sincronizzazione', 'aggiornamento', 'statistiche', 'schede', 'sicurezza', 'isbn', 'isbn-verifica', 'funzioni'];
+const ALL = ['interfaccia', 'ricerche', 'accesso', 'sincronizzazione', 'aggiornamento', 'statistiche', 'schede', 'sicurezza', 'isbn', 'isbn-verifica', 'funzioni', 'serie'];
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : ALL;
 const unknown = chosen.filter(n => !ALL.includes(n));
 if (unknown.length) { console.error('Test sconosciuti: ' + unknown.join(', ') + '. Disponibili: ' + ALL.join(', ')); process.exit(2); }

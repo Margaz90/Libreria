@@ -9,7 +9,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt", "series", "seriesNo", "seriesNext", "seriesManual"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -28,6 +28,11 @@
   const keyOf = b => (String(b.title || "") + "|" + String(b.author || "")).toLowerCase().trim();
   const newId = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // Serie: chiave per confrontare i nomi (maiuscole e spazi non contano), riga «Serie · N», etichetta e bollino col numero.
+  const seriesKey = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const serLabel = b => b.series ? b.series + (b.seriesNo ? " · " + b.seriesNo : "") : "";
+  const serAria = b => b.series ? ", " + esc(b.series) + (b.seriesNo ? " numero " + esc(b.seriesNo) : "") : "";
+  const snoHTML = b => b.series && b.seriesNo ? `<span class="sno${String(b.seriesNo).includes(".") ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
   const surname3 = a => { const p = String(a || "").trim().split(/\s+/); return (p[p.length - 1] || "").replace(/[^A-Za-zÀ-ÿ]/g, "").slice(0, 3).toUpperCase(); };
 
   function toast(msg, action) {
@@ -110,6 +115,11 @@
     // Salto dell'ultima pagina scritta (per «+N»): intero tra 1 e 2000.
     if (out.pageStep !== undefined) { const n = Number(out.pageStep); if (!Number.isInteger(n) || n < 1 || n > 2000) delete out.pageStep; else out.pageStep = n; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
+    // Serie: nome fino a 80 caratteri, numero ≥ 0 (virgola → punto, max 6 caratteri), seguito fino a 200; senza serie niente numero né seguito.
+    for (const [k, n] of [["series", 80], ["seriesNext", 200]]) if (out[k] !== undefined) { const v = String(out[k]).replace(/\s+/g, " ").trim().slice(0, n); if (v) out[k] = v; else delete out[k]; }
+    if (out.seriesNo !== undefined) { const v = String(out.seriesNo).trim().replace(",", "."); if (v.length <= 6 && /^\d+(\.\d+)?$/.test(v)) out.seriesNo = v; else delete out.seriesNo; }
+    if (!out.series) { delete out.seriesNo; delete out.seriesNext; }
+    if (out.seriesManual !== true) delete out.seriesManual;
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
     return out;
@@ -124,7 +134,7 @@
     if (i >= 0) state.books[i] = { ...data, id }; else state.books.push({ ...data, id });
     schedulePersist();
     // Se cambiano solo dati che non spostano il libro, aggiorno solo il suo dorso/copertina.
-    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages"];
+    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages", "series", "seriesNo"];
     if (prev && state.view !== "stats" && data.status !== "in-lettura" && keep.every(k => prev[k] === state.books.find(x => x.id === id)[k])) {
       patchBook(id); renderTally();
     } else render();
@@ -577,10 +587,13 @@
   function sorted(list) {
     const recenti = (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0);
     const rank = st => shelfOrder().indexOf(st);
+    // Stesso autore: prima i libri in una serie (per nome, poi numero), poi gli altri.
+    const no = x => { const n = parseFloat(x.seriesNo); return isNaN(n) ? 1e9 : n; };
+    const bySeries = (a, b) => (!!b.series - !!a.series) || (a.series ? seriesKey(a.series).localeCompare(seriesKey(b.series), "it") || no(a) - no(b) : 0);
     const by = {
       recenti,
       daleggere: (a, b) => rank(a.status) - rank(b.status) || recenti(a, b),
-      autore: (a, b) => (surname3(a.author) + a.author).localeCompare(surname3(b.author) + b.author, "it") || (a.year || 0) - (b.year || 0),
+      autore: (a, b) => (surname3(a.author) + a.author).localeCompare(surname3(b.author) + b.author, "it") || bySeries(a, b) || (a.year || 0) - (b.year || 0),
       titolo: (a, b) => a.title.localeCompare(b.title, "it"),
       voto: (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, "it")
     }[state.sort];
@@ -589,7 +602,7 @@
   }
   function visible() {
     const q = norm(state.q);
-    return q ? state.books.filter(b => norm(b.title + " " + (b.author || "") + " " + (b.genre || "")).includes(q)) : state.books;
+    return q ? state.books.filter(b => norm(b.title + " " + (b.author || "") + " " + (b.genre || "") + " " + (b.series || "")).includes(q)) : state.books;
   }
 
   // Le copertine scaricate sono grandi (fino a 600x900): per dorsi e griglia ne chiedo una versione piccola.
@@ -599,7 +612,7 @@
     if (/covers\.openlibrary\.org/.test(url)) return url.replace(/-L\.jpg/, w <= 180 ? "-M.jpg" : "-L.jpg");
     return url;
   }
-  function coverHTML(b, w = 300) {
+  function coverHTML(b, w = 300, sno = false) {
     const c = colorOf(b);
     const pat = ["repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 2px, transparent 2px 12px)",
                  "radial-gradient(circle at 70% 30%, rgba(255,255,255,.14) 0 18%, transparent 19%)",
@@ -607,7 +620,7 @@
                  "linear-gradient(160deg, rgba(255,255,255,.12), transparent 55%)"][hash(b.genre || b.title) % 4];
     const img = b.cover ? `<img src="${esc(thumb(b.cover, w))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.remove()">` : "";
     return `<div class="cover${b.cover ? " photo" : ""}" style="background:${c}"><div class="pat" style="background:${pat}"></div>
-      <div class="ct">${esc(b.title)}</div><div class="ca">${esc(b.author || "")}</div>${img}</div>`;
+      <div class="ct">${esc(b.title)}</div><div class="ca">${esc(b.author || "")}</div>${img}${sno ? snoHTML(b) : ""}</div>`;
   }
 
   function renderTally() {
@@ -674,19 +687,19 @@
     const p = Math.min(Number(b.pages) || 280, 900);
     const h = Math.round(132 + p / 900 * 72);
     let w = Math.round(26 + p / 900 * 24);
-    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
-    const stale = tag === "button" && needsDates(b), bd = stale ? badgeHTML(b) : "";
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
+    const stale = tag === "button" && needsDates(b), bd = (stale ? badgeHTML(b) : "") + snoHTML(b), ser = b.series && b.seriesNo ? " ser" : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
       if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
-      return `<${tag} class="spine photo${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
+      return `<${tag} class="spine photo${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
     }
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
-      return `<${tag} class="spine fromcover${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+      return `<${tag} class="spine fromcover${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
         <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}${bd}</${tag}>`;
     }
-    return `<${tag} class="spine${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+    return `<${tag} class="spine${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
       <span class="band a"></span>${text}<span class="band b"></span>${bd}</${tag}>`;
   }
 
@@ -745,7 +758,7 @@
         <button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b)}</button>
         <div class="rbody">
           <span class="rlabel">In lettura adesso</span>
-          <h3>${esc(b.title)}</h3><p class="hint">${esc(b.author || "")}${b.callNo ? ` · <span class="callno">${esc(b.callNo)}</span>` : ""}</p>
+          <h3>${esc(b.title)}</h3>${b.series ? `<p class="rser">${esc(serLabel(b))}</p>` : ""}<p class="hint">${esc(b.author || "")}${b.callNo ? ` · <span class="callno">${esc(b.callNo)}</span>` : ""}</p>
           <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
           ${pquickHTML(b, tot, pg)}
           <div class="prow">
@@ -790,7 +803,7 @@
   }
 
   function cardHTML(b) {
-    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${needsDates(b) ? ", " + STALE : ""}">${coverHTML(b, 300)}${badgeHTML(b)}
+    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}">${coverHTML(b, 300, true)}${badgeHTML(b)}
       <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
   }
   function renderCovers(list) {
@@ -873,6 +886,15 @@
     return out;
   }
   window.libreriaNext = Object.freeze({ next: nextBooks });
+  window.libreriaSeries = Object.freeze({ sameTitle, seriesKey });
+  // Titoli dello stesso libro: senza articolo iniziale né sottotitolo (dopo «:» o « - »); per inizio solo se il più corto ha almeno 8 caratteri.
+  const titleCore = t => norm(String(t || "").split(/:| - /)[0]).replace(/^(il|lo|la|i|gli|le|l|un|uno|una|the|a|an) /, "");
+  function sameTitle(a, b) {
+    let x = titleCore(a), y = titleCore(b);
+    if (!x || !y) return false;
+    if (x.length > y.length) [x, y] = [y, x];
+    return x === y || (x.length >= 8 && y.startsWith(x + " "));
+  }
 
   const dec = n => n == null ? "–" : n.toFixed(1).replace(".", ",");
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
@@ -1219,6 +1241,11 @@
     return `
       <div class="field"><label for="d-title">Titolo</label><input id="d-title" value="${esc(b.title || "")}" autocomplete="off"></div>
       <div class="field"><label for="d-author">Autore</label><input id="d-author" value="${esc(b.author || "")}" autocomplete="off"></div>
+      <div class="grid-serie">
+        <div class="field"><label for="d-series">Serie</label><input id="d-series" list="series-list" maxlength="80" value="${esc(b.series || "")}" autocomplete="off"></div>
+        <div class="field"><label for="d-series-no">N.</label><input id="d-series-no" inputmode="decimal" maxlength="6" value="${esc(b.seriesNo || "")}" autocomplete="off"></div>
+      </div>
+      <datalist id="series-list">${[...seriesNames().values()].sort((x, y) => x.localeCompare(y, "it")).map(s => `<option value="${esc(s)}">`).join("")}</datalist>
       <div class="grid2">
         <div class="field"><label for="d-year">Anno</label><input id="d-year" inputmode="numeric" value="${esc(b.year || "")}"></div>
         <div class="field"><label for="d-pages">Pagine</label><input id="d-pages" inputmode="numeric" value="${esc(b.pages || "")}"></div>
@@ -1324,7 +1351,20 @@
     b.pages = parseInt($("#d-pages", sheet).value, 10) || undefined;
     b.genre = $("#d-genre", sheet).value.trim();
     b.callNo = $("#d-call", sheet).value.trim().toUpperCase();
+    // Serie o N. cambiati a mano: da ora nessuna ricerca li modifica; il seguito trovato prima non vale più.
+    const se = $("#d-series", sheet); if (!se) return;
+    const name = seriesName(se.value), no = $("#d-series-no", sheet).value.trim().replace(",", ".");
+    if (seriesKey(name) !== seriesKey(b.series) || no !== String(b.seriesNo || "")) {
+      b.series = name; b.seriesNo = name ? no : ""; b.seriesNext = ""; b.seriesManual = true;
+    }
   }
+  // Nomi delle serie già usati, uno per chiave (la prima forma trovata); un nome scritto che coincide prende quella forma.
+  function seriesNames() {
+    const m = new Map();
+    for (const b of state.books) { const s = String(b.series || "").replace(/\s+/g, " ").trim(); if (s && !m.has(seriesKey(s))) m.set(seriesKey(s), s); }
+    return m;
+  }
+  const seriesName = v => { const s = String(v || "").replace(/\s+/g, " ").trim(); return seriesNames().get(seriesKey(s)) || s; };
   function fillData(sheet, hit, b, { keepYear = false } = {}) {
     if (hit.title) $("#d-title", sheet).value = hit.title;
     if (hit.author) $("#d-author", sheet).value = hit.author;
@@ -1463,6 +1503,7 @@
     const sheet = openSheet(`
       <div class="sheet-top">${coverHTML(b)}<div>
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
+        ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
         <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
         ${b.finished ? `<p class="hint">Finito il ${esc(fmtDate(b.finished))}</p>` : ""}
         ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
@@ -1576,6 +1617,8 @@
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
     $("#s-close", sheet).onclick = dismissSheet;
+    const ser = $("[data-series]", sheet); // serie → ricerca della libreria con tutti i volumi
+    if (ser) ser.onclick = () => { if (sheetGuard && sheetGuard.dirty()) { dismissSheet(); return; } closeSheet(); searchFor(book.series); };
     $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
@@ -1982,6 +2025,10 @@
   /* ---------- avvio ---------- */
   function swapIn() { const main = $("#main"); main.classList.remove("swap"); void main.offsetWidth; main.classList.add("swap"); }
   function setView(v) { state.view = v; resetLimits(); document.body.classList.remove("bars-off"); swapIn(); render(); window.scrollTo({ top: 0 }); }
+  function searchFor(s) {
+    $("#q").value = s; state.q = s; state.filter = "tutti"; resetLimits();
+    if (state.view !== "libreria") setView("libreria"); else { render(); window.scrollTo({ top: 0 }); }
+  }
   function goSearch() {
     if (state.view !== "libreria") setView("libreria");
     document.body.classList.remove("bars-off");
