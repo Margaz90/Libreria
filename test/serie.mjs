@@ -386,6 +386,75 @@ async function cercaSerie(browser) {
   await p.close2();
 }
 
+// --- Prossimo volume: funzione pura, riga nella scheda, «Cosa leggo adesso?» ---
+async function prossimo(browser) {
+  const p = await newPage(browser);
+  await p.goto(APP + '/'); await p.waitForSelector('#main');
+  const S = 'Slough House', L = { status: 'letto', finishedYear: 2020 }, D = { status: 'da-leggere' };
+  const r = await p.evaluate(([S, L, D]) => { const N = window.libreriaSeries.next, X = window.libreriaNext.next;
+    const v = (id, no, o, t) => ({ id, title: t || 'Vol ' + id, author: 'Mick Herron', series: S, seriesNo: no, ...o });
+    const a = [v('v3', '3', L), v('v4', '4', { ...L, seriesNext: 'Quinto' }), v('v5', '5', D)];
+    const b = [v('v1', '1', L), v('v2', '2', { ...L, seriesNext: 'Tigri vere' })];
+    const c = [v('c2', '2', L), v('c3', '3', D), v('c25', '2.5', D), v('c10', '10', D)];
+    const d = [...b, { id: 'x', title: 'Tigri vere: un romanzo', author: 'Mick Herron', status: 'da-leggere' }];
+    const s1 = N(a[0], a), s2 = N(b[0], b), s3 = N(c[0], c);
+    const n1 = X([v('r3', '3', { ...L, finished: '2026-01-01' }, 'Spook Street'), v('p4', '4', { ...D, added: 5 }), { id: 'h', title: 'Altro', author: 'Mick Herron', ...D, added: 1 }], [], () => 0);
+    const n2 = X([{ id: 'r', title: 'Leoni morti', author: 'A', series: S, seriesNext: 'Tigri vere', ...L }, { id: 't', title: 'Tigri vere', author: 'B', ...D }], [], () => 0);
+    return { a: s1 && s1.book && s1.book.id, b: s2, c: s3 && s3.book && s3.book.id, d: N(d[0], d), e: N({ id: 'z', title: 'Z', ...L }, a), f: N({ ...a[0], seriesNo: undefined }, a),
+      n1: n1[0] && [n1[0].book.id, n1[0].kind, n1[0].reason], n2: n2[0] && [n2[0].book.id, n2[0].reason] };
+  }, [S, L, D]);
+  ok('salta i volumi letti', r.a === 'v5', r.a);
+  ok('usa il seguito del volume posseduto più alto', r.b && r.b.title === 'Tigri vere' && r.b.no === '3' && !r.b.book, JSON.stringify(r.b));
+  ok('numeri 2.5 in ordine', r.c === 'c25', r.c);
+  ok('seguito già posseduto con sottotitolo: non riproposto', r.d === null, JSON.stringify(r.d));
+  ok('senza serie o numero: nessun seguito', r.e === null && r.f === null);
+  ok('Cosa leggo adesso?: Il #4 di Slough House, dopo il #3', r.n1 && r.n1[0] === 'p4' && r.n1[1] === 'affine' && r.n1[2] === 'Il #4 di Slough House, dopo il #3', JSON.stringify(r.n1));
+  ok('senza numeri: Il seguito di «Titolo»', r.n2 && r.n2[0] === 't' && r.n2[1] === 'Il seguito di «Leoni morti»', JSON.stringify(r.n2));
+
+  const base = { added: 1, rating: 0, author: 'Mick Herron' };
+  await load(p, [
+    { ...base, ...L, id: 'h1', title: 'Un covo di bastardi', series: S, seriesNo: '1' },
+    { ...base, ...D, id: 'h2', title: 'Leoni morti', series: S, seriesNo: '2' },
+    { ...base, ...L, id: 'w1', title: 'Libro A', series: 'Serie W', seriesNo: '1' },
+    { ...base, status: 'desiderato', id: 'w2', title: 'Libro B', series: 'Serie W', seriesNo: '2' },
+    { ...base, ...L, id: 'n1', title: 'Primo <b>', series: 'Serie N', seriesNo: '3', seriesNext: 'Quarto volume' },
+    { ...base, ...L, id: 'z1', title: 'Solitario', series: 'Serie Z', seriesNo: '1' },
+  ]);
+  const open = async id => { await p.locator(`#main [data-id="${id}"]`).first().click(); await p.waitForSelector('.sheet'); };
+  const row = () => p.locator('.sheet .snext').innerText().catch(() => '');
+  await open('h1');
+  const t1 = await row(), lk = p.locator('.sheet .snext [data-next-open]'), bb = await lk.boundingBox().catch(() => null);
+  const before = await p.evaluate(() => { const s = document.querySelector('.sheet .snext'), r = document.querySelector('.sheet .refresh'); return !!(s && r && s.nextElementSibling === r); });
+  ok('in pila: riga «Prossimo della serie» prima di Aggiorna informazioni', /Prossimo della serie/i.test(t1) && /#2 Leoni morti/.test(t1) && /· in pila/.test(t1) && before, t1);
+  await lk.click(); await p.waitForFunction(() => /Leoni morti/.test((document.querySelector('.sheet h2') || {}).textContent || ''), null, { timeout: 3000 }).catch(() => {});
+  ok('in pila: tocco apre la scheda (≥ 44 px)', await p.locator('.sheet h2').innerText() === 'Leoni morti' && bb && bb.height >= 44, bb && bb.height);
+  ok('nessuna riga nella scheda di un libro non letto', await p.locator('.sheet .snext').count() === 0);
+  await p.locator('#s-close').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  await open('w1');
+  ok('nella lista dei desideri', /#2 Libro B/.test(await row()) && /· nella lista dei desideri/.test(await row()), await row());
+  await p.locator('#s-close').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  await open('n1');
+  const t3 = await row(), wb = p.locator('.sheet button[data-wish-next]'), wbb = await wb.boundingBox().catch(() => null);
+  ok("non ce l'hai: riga e pulsante «Lista dei desideri»", /#4 Quarto volume/.test(t3) && /· non ce l'hai/.test(t3) && (await wb.innerText()).trim() === 'Lista dei desideri' && wbb && wbb.height >= 44, t3);
+  await wb.click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'Quarto volume'), null, { timeout: 4000 }).catch(() => {});
+  const nb = (await localBooks(p)).find(x => x.title === 'Quarto volume') || {};
+  const tt = await p.locator('.toast').innerText().catch(() => '');
+  ok("non ce l'hai: pulsante crea desiderato con serie e numero 4", nb.status === 'desiderato' && nb.series === 'Serie N' && nb.seriesNo === '4' && nb.author === 'Mick Herron' && /Aggiunto alla lista dei desideri/.test(tt), JSON.stringify(nb) + ' / ' + tt);
+  await p.locator('.toast button').click();
+  await p.waitForFunction(() => !JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'Quarto volume'), null, { timeout: 4000 }).catch(() => {});
+  ok('Annulla rimuove il libro aggiunto', !(await localBooks(p)).some(x => x.title === 'Quarto volume') && await p.locator(`#main [data-id="${nb.id}"]`).count() === 0);
+  await open('z1');
+  ok('nessun seguito: nessuna riga', await p.locator('.sheet .snext').count() === 0);
+  await p.locator('#s-close').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  // Hero: la proposta del seguito
+  await load(p, [{ ...base, ...L, finished: '2026-01-01', id: 'r3', title: 'Spook Street', series: S, seriesNo: '3' }, { ...base, ...D, id: 'p4', title: 'La strada degli spettri', series: S, seriesNo: '4' }]);
+  const why = await p.locator('#hero .ncard[data-next="p4"] .why').textContent().catch(() => '');
+  ok('hero: proposta «Il #4 di Slough House, dopo il #3»', why === 'Il #4 di Slough House, dopo il #3', why);
+  ok('prossimo volume: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await ricerca(browser);
   await usoRicerca(browser);
@@ -395,4 +464,5 @@ export default async function ({ browser }) {
   await bollino(browser);
   await ordine(browser);
   await cercaSerie(browser);
+  await prossimo(browser);
 }

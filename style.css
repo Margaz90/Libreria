@@ -605,5 +605,12 @@ html { scroll-behavior: smooth; }
 .cover .sno { left: auto; right: 8px; bottom: 8px; transform: none; }
 .spine.ser:not(.photo) { padding-bottom: 34px; }
 .sserie { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; min-height: 44px; padding: 0 12px; border-radius: 22px; border: 1px solid var(--rule); background: var(--surface); color: var(--accent); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
+/* Prossimo della serie (scheda di un libro letto) */
+.snext { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--rule); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; }
+.snext .lab { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; width: 100%; }
+.snext b { font-family: var(--display); font-weight: var(--dw); color: var(--title); }
+.snext .st { color: var(--muted); }
+.snext .btn { min-height: 44px; margin-left: auto; }
+.snext .snb { min-height: 44px; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .rser { margin: 0; color: var(--accent); font-weight: 600; font-size: 13px; }
 .grid-serie { display: grid; grid-template-columns: 1fr 84px; gap: 10px; }

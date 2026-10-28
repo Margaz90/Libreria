@@ -243,6 +243,18 @@
   const enrich = { busy: false };
   // Generazione dei dati: il ripristino di una copia la incrementa e i lavori in sottofondo partiti prima si fermano.
   let dataGen = 0;
+  // Riempie i campi vuoti con quanto trovato da fetchInfo; il dorso o la copertina compaiono subito.
+  function fillInfo(b, hit) {
+    if (!b.author && hit.author) b.author = hit.author;
+    if (!b.year && hit.edYear) b.year = hit.edYear;
+    if (!b.pages && hit.pages) b.pages = hit.pages;
+    if (!b.genre && hit.genre) b.genre = hit.genre;
+    if (!b.synopsis && hit.synopsis) b.synopsis = hit.synopsis;
+    if (!b.isbn && hit.isbn) b.isbn = hit.isbn;
+    if (!b.callNo && b.author) b.callNo = surname3(b.author);
+    if (!b.cover && !b.noCover && hit.cover) b.cover = hit.cover;
+    b.updated = Date.now(); cloudHook("changed", b.id); patchBook(b.id);
+  }
   async function enrichBooks(ids) {
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
     enrich.busy = true;
@@ -255,19 +267,7 @@
         const errs = {};
         const hit = await fetchInfo(b, errs).catch(() => null);
         if (gen !== dataGen) return; // copia ripristinata nel frattempo
-        if (hit && (hit.author || hit.cover)) {
-          if (!b.author && hit.author) b.author = hit.author;
-          if (!b.year && hit.edYear) b.year = hit.edYear;
-          if (!b.pages && hit.pages) b.pages = hit.pages;
-          if (!b.genre && hit.genre) b.genre = hit.genre;
-          if (!b.synopsis && hit.synopsis) b.synopsis = hit.synopsis;
-          if (!b.isbn && hit.isbn) b.isbn = hit.isbn;
-          if (!b.callNo && b.author) b.callNo = surname3(b.author);
-          if (!b.cover && !b.noCover && hit.cover) b.cover = hit.cover;
-          b.updated = Date.now(); fixed++;
-          cloudHook("changed", b.id);
-          patchBook(b.id); // il dorso o la copertina compaiono subito
-        } else {
+        if (hit && (hit.author || hit.cover)) { fillInfo(b, hit); fixed++; } else {
           missed++;
           Object.entries(errs).forEach(([c, n]) => { errors[c] = (errors[c] || 0) + n; });
         }
@@ -984,13 +984,28 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");
   // Il prossimo libro: fino a tre proposte dalla pila (affine all'ultimo letto, la più vecchia, a caso). Funzione pura.
+  // Prossimo volume: il primo non letto dopo b, altrimenti il seguito (confermato) del volume più alto, se non posseduto. Funzione pura.
+  function nextInSeries(b, books) {
+    const no = x => parseFloat(x.seriesNo), n = no(b), key = seriesKey(b.series);
+    if (!key || isNaN(n)) return null;
+    const vols = books.filter(x => seriesKey(x.series) === key && no(x) >= n).sort((x, y) => no(x) - no(y));
+    const nx = vols.find(x => no(x) > n && x.status !== "letto");
+    if (nx) return { book: nx };
+    const top = vols.pop() || b, t = no(top);
+    if (!top.seriesNext || books.some(x => sameTitle(x.title, top.seriesNext))) return null;
+    return { title: top.seriesNext, ...(Number.isInteger(t) ? { no: String(t + 1) } : {}) };
+  }
   function nextBooks(books, exclude = [], rnd = Math.random) {
     const add = b => { const n = Number(b.added); return isFinite(n) && n > 0 ? n : 0; };
     const pile = books.filter(b => b.status === "da-leggere" && !exclude.includes(b.id)).sort((a, b) => add(a) - add(b));
     const out = [], take = (b, kind, reason) => { out.push({ book: b, kind, reason }); pile.splice(pile.indexOf(b), 1); };
     const k = (b, f) => String(b[f] || "").trim().toLowerCase(); // mai abbinare valori vuoti
     const last = books.filter(b => b.status === "letto").sort((a, b) => String(b.finished || "").localeCompare(String(a.finished || "")) || (b.updated || 0) - (a.updated || 0)).slice(0, 3);
-    for (const f of ["author", "genre"]) {
+    for (const r of last) { // prima il seguito di una serie (anche solo per titolo del seguito)
+      const s = nextInSeries(r, books), nb = s && s.book || r.seriesNext && pile.find(b => sameTitle(b.title, r.seriesNext));
+      if (nb && pile.includes(nb)) { take(nb, "affine", r.seriesNo && nb.seriesNo ? `Il #${nb.seriesNo} di ${r.series}, dopo il #${r.seriesNo}` : `Il seguito di «${r.title}»`); break; }
+    }
+    if (!out.length) for (const f of ["author", "genre"]) {
       const r = last.find(r => k(r, f) && pile.some(b => k(b, f) === k(r, f)));
       if (r) {
         const v = String(r[f]).trim(), who = /,| e |\bvari\b/i.test(v) ? v : v.split(/\s+/).pop(); // più autori: il nome intero, non l'ultima parola
@@ -1614,6 +1629,19 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     });
   }
 
+  // Riga «Prossimo della serie» nella scheda di un libro letto.
+  const NEXT_ST = { "da-leggere": "in pila", desiderato: "nella lista dei desideri", "in-lettura": "in lettura" };
+  function snextHTML(b) {
+    const r = b.status === "letto" && nextInSeries(b, state.books), x = r && r.book, no = x ? x.seriesNo : r && r.no;
+    if (!r) return "";
+    const t = `<b>${no ? "#" + esc(no) + " " : ""}${esc(x ? x.title : r.title)}</b>`;
+    return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} ›</span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next>Lista dei desideri</button>`}</div>`;
+  }
+  // Nuovo libro desiderato: autore, copertina e dati in sottofondo.
+  function infoLater(id) {
+    const b = state.books.find(x => x.id === id);
+    if (b && navigator.onLine) fetchInfo(b).then(h => { const cur = state.books.find(x => x.id === id); if (h && cur) { fillInfo(cur, h); schedulePersist(); } }).catch(() => {});
+  }
   function openBook(book) {
     const b = { ...book };
     const sheet = openSheet(`
@@ -1625,7 +1653,7 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
         ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div></div>
       <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
-      <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
+      ${snextHTML(b)}<div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
       ${b.status === "desiderato" ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>` : readingFields(b)}
       <div class="cover-edit">
         <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
@@ -1741,6 +1769,13 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
     $("#s-close", sheet).onclick = dismissSheet;
     const ser = $("[data-series]", sheet); // serie → ricerca nella libreria
     if (ser) ser.onclick = () => dismissSheet(() => searchFor(book.series));
+    const nxo = $("[data-next-open]", sheet), wn = $("[data-wish-next]", sheet);
+    if (nxo) nxo.onclick = () => dismissSheet(() => { const x = state.books.find(y => y.id === nxo.dataset.nextOpen); if (x) openBook(x); });
+    if (wn) wn.onclick = () => dismissSheet(() => {
+      const r = nextInSeries(book, state.books); if (!r || r.book) return;
+      const id = upsert({ title: r.title, author: book.author, series: book.series, seriesNo: r.no, status: "desiderato", rating: 0 });
+      infoLater(id); toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
+    });
     $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
@@ -2295,5 +2330,5 @@ OPTIONAL { ?ser rdfs:label ?si FILTER(LANG(?si) = "it") } OPTIONAL { ?ser rdfs:l
       navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
     });
   }
-  window.libreriaSeries = Object.freeze({ sameTitle, seriesKey, findSeries });
+  window.libreriaSeries = Object.freeze({ sameTitle, seriesKey, findSeries, next: nextInSeries });
 })();
