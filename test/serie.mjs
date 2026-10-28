@@ -82,6 +82,13 @@ async function scheda(browser) {
     && await p.locator('#main [data-id="s1"]').count() === 1 && await p.locator('#main [data-id="s2"]').count() === 1
     && await p.locator('#main [data-id="s3"]').count() === 0 && await p.locator('#main [data-id="s4"]').count() === 0);
   await p.locator('#q').fill(''); await p.waitForSelector('#main [data-id="s4"]');
+  // Con modifiche non salvate: prima Salva/Scarta/Continua, poi (Scarta) la ricerca
+  await open('s1'); await p.locator('#f-notes').fill('nota');
+  await p.locator('.sheet-top button[data-series]').click();
+  const bar = await p.locator('.unsaved').isVisible().catch(() => false);
+  await p.locator('[data-u="drop"]').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+  ok('pulsante serie con modifiche: chiede, poi Scarta e cerca', bar && await p.locator('#q').inputValue() === 'Slough House' && (await book(p, 's1')).notes === undefined);
+  await p.locator('#q').fill(''); await p.waitForSelector('#main [data-id="s4"]');
 
   // Salvare senza toccare Serie e N. non imposta seriesManual
   await open('s2'); await save(); await p.waitForTimeout(900);
@@ -116,6 +123,7 @@ async function bollino(browser) {
     { ...base, id: 'f1', title: 'Con foto', seriesNo: '3', spine: PNG, spineRatio: 0.2 },
     { ...base, id: 'n1', title: 'Senza numero' },
     { ...base, id: 'w1', title: 'Sottile', seriesNo: '12.5', pages: 60 },
+    { ...base, id: 'c1', title: 'Centesimo', seriesNo: '100' },
     { ...base, id: 'r1', title: 'In lettura', seriesNo: '4', status: 'in-lettura' },
   ]);
   const sno = id => p.locator(`#main [data-id="${id}"] .sno`);
@@ -125,6 +133,7 @@ async function bollino(browser) {
   ok('etichetta del dorso con serie e numero', /, Slough House numero 3$/.test(await p.locator('#main [data-id="d1"]').getAttribute('aria-label')));
   const [s, w] = [await p.locator('#main [data-id="w1"]').boundingBox(), await sno('w1').boundingBox()];
   ok('bollino 12.5 dentro un dorso sottile', s && w && w.x >= s.x - 0.5 && w.x + w.width <= s.x + s.width + 0.5 && w.y >= s.y && w.y + w.height <= s.y + s.height, JSON.stringify([s, w]));
+  ok('classe long per 12.5 e 100, non per 3', await p.locator('#main [data-id="w1"] .sno.long').count() === 1 && await p.locator('#main [data-id="c1"] .sno.long').count() === 1 && await p.locator('#main [data-id="d1"] .sno.long').count() === 0);
   const rc = p.locator('#hero .rcard');
   ok('scheda In lettura: «Slough House · 4», senza bollino', /Slough House · 4/.test(await rc.innerText()) && await rc.locator('.sno').count() === 0);
   await p.locator('.viewsw [data-mode="copertine"]').first().click();
@@ -141,13 +150,14 @@ async function ordine(browser) {
   await load(p, [
     { ...base, id: 'v10', title: 'Decimo', series: 'Slough House', seriesNo: '10', year: 2022 },
     { ...base, id: 'nos', title: 'Abbazia', year: 1990 },
+    { ...base, id: 'nos2', title: 'Zattera', year: 1980 },
     { ...base, id: 'v2', title: 'Secondo', series: 'Slough House', seriesNo: '2', year: 2011 },
     { ...base, id: 'v1', title: 'Primo', series: 'Slough House', seriesNo: '1', year: 2010 },
     { ...base, id: 'alt', title: 'Altro', author: 'Zeno Zanetti', series: 'Altra', seriesNo: '1' },
   ], { sort: 'autore' });
   await p.locator('#sort-btn').click(); await p.locator('#sort-menu [data-v="autore"]').click();
   const ids = await p.locator('[data-shelf="da-leggere"] .spine').evaluateAll(s => s.map(x => x.dataset.id));
-  ok('ordine Autore: #1, #2, #10 della serie prima del libro senza serie', JSON.stringify(ids) === JSON.stringify(['v1', 'v2', 'v10', 'nos', 'alt']), JSON.stringify(ids));
+  ok('ordine Autore: #1, #2, #10 della serie, poi i libri senza serie per titolo', JSON.stringify(ids) === JSON.stringify(['v1', 'v2', 'v10', 'nos', 'nos2', 'alt']), JSON.stringify(ids));
   await p.close2();
 }
 

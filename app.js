@@ -28,11 +28,11 @@
   const keyOf = b => (String(b.title || "") + "|" + String(b.author || "")).toLowerCase().trim();
   const newId = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  // Serie: chiave per confrontare i nomi (maiuscole e spazi non contano), riga «Serie · N», etichetta e bollino col numero.
+  // Serie: chiave dei nomi, riga «Serie · N», etichetta, bollino.
   const seriesKey = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const serLabel = b => b.series ? b.series + (b.seriesNo ? " · " + b.seriesNo : "") : "";
-  const serAria = b => b.series ? ", " + esc(b.series) + (b.seriesNo ? " numero " + esc(b.seriesNo) : "") : "";
-  const snoHTML = b => b.series && b.seriesNo ? `<span class="sno${String(b.seriesNo).includes(".") ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
+  const serAria = b => b.seriesNo ? `, ${esc(b.series)} numero ${esc(b.seriesNo)}` : "";
+  const snoHTML = b => b.seriesNo ? `<span class="sno${/\.|.../.test(b.seriesNo) ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
   const surname3 = a => { const p = String(a || "").trim().split(/\s+/); return (p[p.length - 1] || "").replace(/[^A-Za-zÀ-ÿ]/g, "").slice(0, 3).toUpperCase(); };
 
   function toast(msg, action) {
@@ -115,7 +115,7 @@
     // Salto dell'ultima pagina scritta (per «+N»): intero tra 1 e 2000.
     if (out.pageStep !== undefined) { const n = Number(out.pageStep); if (!Number.isInteger(n) || n < 1 || n > 2000) delete out.pageStep; else out.pageStep = n; }
     if (out.spine && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(out.spine)) { delete out.spine; delete out.spineRatio; }
-    // Serie: nome fino a 80 caratteri, numero ≥ 0 (virgola → punto, max 6 caratteri), seguito fino a 200; senza serie niente numero né seguito.
+    // Serie ≤ 80, seguito ≤ 200, numero ≥ 0 (max 6 caratteri); senza serie niente numero né seguito.
     for (const [k, n] of [["series", 80], ["seriesNext", 200]]) if (out[k] !== undefined) { const v = String(out[k]).replace(/\s+/g, " ").trim().slice(0, n); if (v) out[k] = v; else delete out[k]; }
     if (out.seriesNo !== undefined) { const v = String(out.seriesNo).trim().replace(",", "."); if (v.length <= 6 && /^\d+(\.\d+)?$/.test(v)) out.seriesNo = v; else delete out.seriesNo; }
     if (!out.series) { delete out.seriesNo; delete out.seriesNext; }
@@ -587,13 +587,13 @@
   function sorted(list) {
     const recenti = (a, b) => (b.finished || b.started || "").localeCompare(a.finished || a.started || "") || (b.added || 0) - (a.added || 0);
     const rank = st => shelfOrder().indexOf(st);
-    // Stesso autore: prima i libri in una serie (per nome, poi numero), poi gli altri.
-    const no = x => { const n = parseFloat(x.seriesNo); return isNaN(n) ? 1e9 : n; };
+    // Stesso autore: prima le serie (nome, numero), poi gli altri per titolo.
+    const no = x => x.seriesNo ? +x.seriesNo : 1e9;
     const bySeries = (a, b) => (!!b.series - !!a.series) || (a.series ? seriesKey(a.series).localeCompare(seriesKey(b.series), "it") || no(a) - no(b) : 0);
     const by = {
       recenti,
       daleggere: (a, b) => rank(a.status) - rank(b.status) || recenti(a, b),
-      autore: (a, b) => (surname3(a.author) + a.author).localeCompare(surname3(b.author) + b.author, "it") || bySeries(a, b) || (a.year || 0) - (b.year || 0),
+      autore: (a, b) => (surname3(a.author) + a.author).localeCompare(surname3(b.author) + b.author, "it") || bySeries(a, b) || a.title.localeCompare(b.title, "it"),
       titolo: (a, b) => a.title.localeCompare(b.title, "it"),
       voto: (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, "it")
     }[state.sort];
@@ -688,7 +688,7 @@
     const h = Math.round(132 + p / 900 * 72);
     let w = Math.round(26 + p / 900 * 24);
     const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
-    const stale = tag === "button" && needsDates(b), bd = (stale ? badgeHTML(b) : "") + snoHTML(b), ser = b.series && b.seriesNo ? " ser" : "";
+    const stale = tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
       if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
@@ -886,8 +886,7 @@
     return out;
   }
   window.libreriaNext = Object.freeze({ next: nextBooks });
-  window.libreriaSeries = Object.freeze({ sameTitle, seriesKey });
-  // Titoli dello stesso libro: senza articolo iniziale né sottotitolo (dopo «:» o « - »); per inizio solo se il più corto ha almeno 8 caratteri.
+  // Stesso libro: senza articolo né sottotitolo; per inizio solo da 8 caratteri.
   const titleCore = t => norm(String(t || "").split(/:| - /)[0]).replace(/^(il|lo|la|i|gli|le|l|un|uno|una|the|a|an) /, "");
   function sameTitle(a, b) {
     let x = titleCore(a), y = titleCore(b);
@@ -1190,21 +1189,23 @@
     const first = snap();
     sheetGuard = { dirty: () => snap() !== first, save };
   }
-  function dismissSheet() {
-    const sheet = $("#layer .sheet");
-    if (!sheet || !sheetGuard || !sheetGuard.dirty()) { closeSheet(); return; }
+  // then: dopo la chiusura, anche con Salva o Scarta.
+  function dismissSheet(then) {
+    const sheet = $("#layer .sheet"), go = typeof then == "function" && then;
+    if (!sheet || !sheetGuard || !sheetGuard.dirty()) { closeSheet(); go && go(); return; }
     let bar = $(".unsaved", sheet);
     if (!bar) {
       bar = document.createElement("div"); bar.className = "unsaved"; bar.setAttribute("role", "alert");
       bar.innerHTML = `<span>Hai modifiche non salvate.</span><span class="actions"><button class="btn primary" type="button" data-u="save">Salva</button><button class="btn danger" type="button" data-u="drop">Scarta</button><button class="btn ghost" type="button" data-u="back">Continua</button></span>`;
       bar.onclick = e => {
         const u = e.target.dataset && e.target.dataset.u; if (!u) return;
-        if (u === "drop") closeSheet();
+        if (u === "drop") { closeSheet(); bar.go && bar.go(); }
         else if (u === "back") bar.remove();
-        else { bar.remove(); sheetGuard.save(); }
+        else { bar.remove(); sheetGuard.save(); sheetGuard || bar.go && bar.go(); }
       };
       sheet.append(bar);
     }
+    bar.go = go;
     bar.querySelector("button").focus();
   }
   function closeSheet() {
@@ -1245,7 +1246,7 @@
         <div class="field"><label for="d-series">Serie</label><input id="d-series" list="series-list" maxlength="80" value="${esc(b.series || "")}" autocomplete="off"></div>
         <div class="field"><label for="d-series-no">N.</label><input id="d-series-no" inputmode="decimal" maxlength="6" value="${esc(b.seriesNo || "")}" autocomplete="off"></div>
       </div>
-      <datalist id="series-list">${[...seriesNames().values()].sort((x, y) => x.localeCompare(y, "it")).map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+      <datalist id="series-list">${[...seriesNames().values()].sort().map(s => `<option value="${esc(s)}">`).join("")}</datalist>
       <div class="grid2">
         <div class="field"><label for="d-year">Anno</label><input id="d-year" inputmode="numeric" value="${esc(b.year || "")}"></div>
         <div class="field"><label for="d-pages">Pagine</label><input id="d-pages" inputmode="numeric" value="${esc(b.pages || "")}"></div>
@@ -1351,20 +1352,19 @@
     b.pages = parseInt($("#d-pages", sheet).value, 10) || undefined;
     b.genre = $("#d-genre", sheet).value.trim();
     b.callNo = $("#d-call", sheet).value.trim().toUpperCase();
-    // Serie o N. cambiati a mano: da ora nessuna ricerca li modifica; il seguito trovato prima non vale più.
-    const se = $("#d-series", sheet); if (!se) return;
-    const name = seriesName(se.value), no = $("#d-series-no", sheet).value.trim().replace(",", ".");
+    // Serie o N. cambiati a mano: niente più ricerche, seguito da rifare.
+    const name = seriesName($("#d-series", sheet).value), no = $("#d-series-no", sheet).value.trim().replace(",", ".");
     if (seriesKey(name) !== seriesKey(b.series) || no !== String(b.seriesNo || "")) {
-      b.series = name; b.seriesNo = name ? no : ""; b.seriesNext = ""; b.seriesManual = true;
+      b.series = name; b.seriesNo = no; b.seriesNext = ""; b.seriesManual = true;
     }
   }
-  // Nomi delle serie già usati, uno per chiave (la prima forma trovata); un nome scritto che coincide prende quella forma.
+  // Nomi già usati (prima forma trovata): un nome uguale prende quella forma.
   function seriesNames() {
     const m = new Map();
-    for (const b of state.books) { const s = String(b.series || "").replace(/\s+/g, " ").trim(); if (s && !m.has(seriesKey(s))) m.set(seriesKey(s), s); }
+    for (const b of state.books) if (b.series && !m.has(seriesKey(b.series))) m.set(seriesKey(b.series), b.series);
     return m;
   }
-  const seriesName = v => { const s = String(v || "").replace(/\s+/g, " ").trim(); return seriesNames().get(seriesKey(s)) || s; };
+  const seriesName = v => seriesNames().get(seriesKey(v)) || v.trim();
   function fillData(sheet, hit, b, { keepYear = false } = {}) {
     if (hit.title) $("#d-title", sheet).value = hit.title;
     if (hit.author) $("#d-author", sheet).value = hit.author;
@@ -1617,8 +1617,8 @@
     cvc.disabled = !b.cover;
     cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
     $("#s-close", sheet).onclick = dismissSheet;
-    const ser = $("[data-series]", sheet); // serie → ricerca della libreria con tutti i volumi
-    if (ser) ser.onclick = () => { if (sheetGuard && sheetGuard.dirty()) { dismissSheet(); return; } closeSheet(); searchFor(book.series); };
+    const ser = $("[data-series]", sheet); // serie → ricerca nella libreria
+    if (ser) ser.onclick = () => dismissSheet(() => searchFor(book.series));
     $("#s-save", sheet).onclick = () => { if (badYear(sheet) || badDates(sheet)) return; readReading(sheet, b); readData(sheet, b); upsert(b); closeSheet(); toast("Salvato"); };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
@@ -2169,4 +2169,5 @@
       navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
     });
   }
+  window.libreriaSeries = Object.freeze({ sameTitle, seriesKey });
 })();

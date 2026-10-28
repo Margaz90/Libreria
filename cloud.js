@@ -148,7 +148,7 @@
     H.info(`Modifiche non ancora inviate: ${info.pending ? "sì" : "no"} · libri nel cloud: ${info.count} · aggiornato alle ${t}${info.fromCache ? " (copia locale: nessuna rete)" : ""}`);
   }
 
-  const MOVES = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages"];
+  const MOVES = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages", "series", "seriesNo"];
   const nz = v => (v === undefined || v === null || v === "" ? null : v);
   function listen() {
     if (unsub) unsub();
