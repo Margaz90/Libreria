@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Statistiche, tre proposte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&display=swap" rel="stylesheet">
+<style>
+/* Token dell'app (style.css, v72) + pochi token delle proposte */
+:root {
+  --bg: #ECEEE7; --surface: #F8F8F3; --ink: #1C2A2B; --muted: #5B6866; --rule: #CDD2C9;
+  --accent: #B03A30; --accent-ink: #FFF8F2; --title: #2F5457; --coral: #F06A5C;
+  --shelf: #B1603F; --shelf-hi: #D68F66; --shelf-lo: #8A4429;
+  --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23D68F66'/%3E%3Cstop offset='.25' stop-color='%23B1603F'/%3E%3Cstop offset='1' stop-color='%238A4429'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.24'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+  --paper: #F3EAD6; --paper-line: #DCCDB0; --stamp: #B03A30; --tint: rgba(47, 84, 87, .08);
+  --bar: #2F5457; --bar-bg: #DADFD5;
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
+    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8;
+    --shelf: #92472D; --shelf-hi: #B66C4A; --shelf-lo: #6B311E; --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23B66C4A'/%3E%3Cstop offset='.25' stop-color='%2392472D'/%3E%3Cstop offset='1' stop-color='%236B311E'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.5'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+    --paper: #1F2928; --paper-line: #34423F; --stamp: #F06A5C; --tint: rgba(244, 234, 216, .06);
+    --bar: #9FC2C0; --bar-bg: #2A3434; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
+  --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8;
+  --shelf: #92472D; --shelf-hi: #B66C4A; --shelf-lo: #6B311E; --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23B66C4A'/%3E%3Cstop offset='.25' stop-color='%2392472D'/%3E%3Cstop offset='1' stop-color='%236B311E'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.5'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+  --paper: #1F2928; --paper-line: #34423F; --stamp: #F06A5C; --tint: rgba(244, 234, 216, .06);
+  --bar: #9FC2C0; --bar-bg: #2A3434; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 15px/1.5 var(--body); -webkit-text-size-adjust: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- Pagina delle proposte ---------- */
+.intro { max-width: 1240px; margin: 0 auto; padding: 28px 16px 8px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.intro h1 { font: 560 clamp(26px, 5vw, 38px)/1.1 var(--display); color: var(--title); margin: 0 0 6px; }
+.intro p { margin: 0; color: var(--muted); max-width: 64ch; }
+.theme-btn { min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--rule); background: var(--surface); }
+.gallery { max-width: 1240px; margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-wrap: wrap; gap: 36px 32px; justify-content: center; align-items: flex-start; }
+.gallery > figure { margin: 0; width: min(390px, 100%); }
+figcaption h2 { font: 560 22px/1.2 var(--display); color: var(--title); margin: 0 0 4px; }
+figcaption p { margin: 0 0 14px; color: var(--muted); font-size: 14px; min-height: 3em; }
+.frame { border: 1px solid var(--rule); border-radius: 30px; overflow: hidden; background: var(--bg); }
+.wide-frame { width: 100%; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--bg); }
+.part { max-width: 1240px; margin: 0 auto; padding: 8px 16px 40px; }
+.part > h2 { font: 560 24px/1.2 var(--display); color: var(--title); margin: 0 0 4px; }
+.part > p { margin: 0 0 16px; color: var(--muted); max-width: 70ch; }
+.stories { display: flex; flex-wrap: wrap; gap: 24px; }
+.stories > .frame { width: min(390px, 100%); }
+
+/* Ogni variante è una "schermata" che si adatta alla propria larghezza */
+.screen { container: stat / inline-size; padding: 20px 16px 36px; min-width: 0; }
+.solo .intro, .solo .gallery > figure, .solo .part, .solo figcaption { display: none; }
+.solo .gallery { padding: 0; display: block; max-width: none; }
+.solo .gallery > figure.show { display: block; width: 100%; }
+.solo .frame { border: 0; border-radius: 0; }
+.solo .screen { max-width: 1240px; margin: 0 auto; }
+.solo .story-solo { display: flex; justify-content: center; }
+
+.pg-title { font: 560 32px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: -.01em; }
+
+/* =========================================================
+   A. Scaffale degli anni
+   ========================================================= */
+.vA .lede { margin: 6px 0 0; font-size: 16px; color: var(--muted); }
+.vA .lede b { font: 600 19px var(--display); color: var(--ink); }
+.vA h3 { font: 560 21px/1.2 var(--display); color: var(--title); margin: 0; padding-bottom: 6px; border-bottom: 3px solid var(--coral); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
+.vA h3 small { font: 13px var(--body); color: var(--muted); }
+.vA .wall { margin-top: 26px; display: flex; flex-direction: column; gap: 30px; }
+.vA .year { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4px 12px; }
+.vA .year-n { font: 560 34px/1 var(--display); color: var(--title); font-variant-numeric: lining-nums; }
+.vA .year-m { grid-column: 1; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.vA .story-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; min-height: 44px; padding: 0 16px 0 14px; border-radius: 22px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.vA .story-btn::before { content: ""; width: 9px; height: 15px; background: currentColor; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%); }
+.vA .shelf { grid-column: 1 / -1; position: relative; height: 128px; display: flex; align-items: flex-end; gap: 2px; padding: 0 10px 16px; background: var(--board-img) left bottom -10px / 600px 230px repeat-x; }
+.vA .shelf.ribbon::after { content: ""; position: absolute; right: 26px; bottom: -16px; width: 12px; height: 26px; background: var(--coral); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%); }
+.sp { width: var(--w); height: var(--h); border-radius: 2px 2px 0 0; display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none;
+  box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -2px 0 0 rgba(0,0,0,.14); }
+.sp i { font: italic 500 11px/1 var(--display); writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: calc(var(--h) - 12px); }
+.c0 { background: #2F5457; color: #F4EAD8; } .c1 { background: #A8392F; color: #FFF8F2; } .c2 { background: #E8DABF; color: #1C2A2B; }
+.c3 { background: #C9A24A; color: #1C2A2B; } .c4 { background: #2B3A55; color: #F4EAD8; } .c5 { background: #93AA92; color: #1C2A2B; }
+.sp.tilt { transform: rotate(-7deg); transform-origin: bottom left; margin-left: 6px; }
+.vA .year-d { grid-column: 1 / -1; margin: 22px 0 0; font-size: 14px; color: var(--muted); }
+.vA .year-d b { color: var(--ink); font-weight: 600; }
+.vA .noyear { margin-top: 4px; border: 1.5px dashed var(--rule); border-radius: 12px; padding: 12px 14px; color: var(--muted); font-size: 14px; }
+.vA .noyear b { color: var(--ink); }
+.vA .always { margin-top: 40px; display: grid; gap: 34px; }
+.vA .block p { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.vA .rates { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.vA .rates li { display: grid; grid-template-columns: 74px 1fr 30px; align-items: center; gap: 10px; font-size: 14px; }
+.vA .stars { color: var(--accent); letter-spacing: 1px; font-size: 13px; }
+.bar { height: 8px; border-radius: 4px; background: var(--bar-bg); position: relative; overflow: hidden; }
+.bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--v) * 100%); background: var(--bar); border-radius: 4px; }
+.vA .rates b, .vA .genres b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vA .time { margin-top: 12px; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline; }
+.vA .time .big { font: 560 44px/1 var(--display); color: var(--title); grid-row: span 2; }
+.vA .time span { font-size: 14px; color: var(--muted); }
+.vA .time span b { color: var(--ink); font-weight: 600; }
+.vA .months { margin-top: 14px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; align-items: end; height: 70px; border-bottom: 2px solid var(--shelf); }
+.vA .months div { display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; padding-bottom: 2px; }
+.vA .months i { display: block; width: 88%; height: 7px; border-radius: 1.5px; background: var(--title); }
+.vA .months i:nth-child(2) { background: var(--accent); width: 76%; }
+.vA .mlab { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.vA .authors { list-style: none; padding: 0; margin: 8px 0 0; }
+.vA .authors li { padding: 10px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: end; }
+.vA .authors .who { font-weight: 600; }
+.vA .authors .meta { font-size: 13px; color: var(--muted); grid-column: 1; }
+.vA .mini { grid-row: 1 / span 2; grid-column: 2; display: flex; align-items: flex-end; gap: 1px; height: 30px; border-bottom: 2px solid var(--shelf); padding: 0 2px; }
+.vA .mini i { width: 5px; border-radius: 1px 1px 0 0; }
+.vA .genres { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.vA .genres li { display: grid; grid-template-columns: 104px 1fr 26px; gap: 10px; align-items: center; font-size: 14px; }
+
+@container stat (min-width: 860px) {
+  .vA .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+  .vA .always { margin-top: 26px; grid-template-columns: 1fr 1fr; gap: 34px 32px; }
+  .vA .always .span2 { grid-column: 1 / -1; }
+  .vA .shelf { height: 160px; gap: 3px; }
+  .vA .shelf .sp { width: calc(var(--w) * 1.45); height: calc(var(--h) * 1.3); }
+  .vA .shelf .sp i { font-size: 13px; }
+}
+
+/* =========================================================
+   B. Tessera di prestito
+   ========================================================= */
+.vB .lede { margin: 6px 0 0; color: var(--muted); }
+.vB .card { margin-top: 22px; background: var(--paper); border-radius: 6px; padding: 30px 12px 14px; position: relative;
+  box-shadow: 0 1px 0 var(--paper-line), 0 10px 24px -18px rgba(28, 42, 43, .5); }
+.vB .card::before { content: ""; position: absolute; top: 10px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 1px 2px rgba(0,0,0,.25); }
+.vB .card h3 { font: 560 20px/1.2 var(--display); color: var(--title); margin: 0 4px 2px; }
+.vB .card .sub { margin: 0 4px 12px; font-size: 13px; color: var(--muted); }
+.vB .grid { display: grid; grid-template-columns: 50px repeat(12, minmax(0, 1fr)); align-items: center; }
+.vB .head { border-bottom: 2px solid var(--accent); padding-bottom: 4px; font-size: 11.5px; color: var(--muted); text-align: center; }
+.vB .row { width: 100%; border: 0; background: none; padding: 0; text-align: left; min-height: 56px; border-bottom: 1px solid var(--paper-line); }
+.vB .row[aria-expanded="true"] { background: var(--tint); }
+.vB .row .y { font: 560 18px/1 var(--display); color: var(--title); padding-left: 4px; }
+.vB .row .y small { display: block; font: 11.5px/1.3 var(--body); color: var(--muted); margin-top: 3px; }
+.vB .cell { height: 56px; display: grid; place-items: center; position: relative; border-left: 1px dotted var(--paper-line); }
+.stamp { width: 25px; height: 25px; border: 2px solid var(--stamp); border-radius: 50%; color: var(--stamp); display: grid; place-items: center;
+  font: 600 11px/1 var(--display); transform: rotate(var(--r, -8deg)); position: absolute; background: radial-gradient(circle, transparent 55%, color-mix(in srgb, var(--stamp) 10%, transparent)); }
+.stamp.first { transform: translateY(-12px) rotate(-6deg); }
+.stamp.second { transform: translateY(12px) rotate(10deg); }
+.vB .detail { padding: 12px 6px 14px; border-bottom: 1px solid var(--paper-line); background: var(--tint); font-size: 14px; }
+.vB .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; }
+.vB .detail dt { color: var(--muted); }
+.vB .detail dd { margin: 0; font-weight: 600; }
+.vB .detail .st { color: var(--accent); font-weight: 400; }
+.vB .go { min-height: 44px; width: 100%; border: 0; border-radius: 10px; background: var(--title); color: var(--bg); font-weight: 600; font-size: 15px; }
+.vB .foot { margin: 12px 4px 0; font-size: 13px; color: var(--muted); }
+.vB .sum { margin-top: 30px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 12px; }
+.vB .sum div { border-left: 3px solid var(--coral); padding-left: 10px; }
+.vB .sum b { display: block; font: 560 30px/1.05 var(--display); color: var(--title); }
+.vB .sum span { font-size: 13.5px; color: var(--muted); }
+.vB .sec { margin-top: 34px; }
+.vB h4 { font: 560 20px/1.2 var(--display); color: var(--title); margin: 0 0 10px; }
+.vB .vote { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: end; height: 120px; }
+.vB .vote div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.vB .vote b { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+.vB .vote i { width: 100%; max-width: 46px; height: calc(var(--v) * 80px + 2px); background: var(--bar); border-radius: 4px 4px 0 0; }
+.vB .vote span { font-size: 12.5px; color: var(--accent); }
+.vB .note { font-size: 14px; color: var(--muted); margin: 10px 0 0; }
+.vB .loan { display: flex; align-items: baseline; gap: 12px; }
+.vB .loan b { font: 560 46px/1 var(--display); color: var(--title); }
+.vB .loan span { color: var(--muted); }
+.vB .rank { list-style: none; padding: 0; margin: 0; }
+.vB .rank li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+.vB .rank .n { font: 560 24px/1 var(--display); color: var(--title); grid-row: span 2; min-width: 32px; text-align: right; }
+.vB .rank .m { font-size: 13px; color: var(--muted); }
+.vB .gen { display: flex; flex-wrap: wrap; gap: 8px; }
+.vB .gen span { border: 1.5px solid var(--rule); border-radius: 18px; padding: 6px 12px; font-size: 14px; }
+.vB .gen b { color: var(--title); margin-left: 4px; }
+@container stat (min-width: 860px) {
+  .vB .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 44px; align-items: start; }
+  .vB .grid { grid-template-columns: 62px repeat(12, minmax(0, 1fr)); }
+  .vB .sum { grid-template-columns: repeat(4, 1fr); margin-top: 22px; }
+  .vB .rest { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+}
+
+/* =========================================================
+   C. Indice in fondo al libro
+   ========================================================= */
+.vC { background: var(--surface); }
+.vC .book { max-width: 520px; margin: 0 auto; }
+.vC .running { text-align: center; font: italic 400 14px var(--display); color: var(--muted); margin: 0 0 22px; }
+.vC .incipit { font: 400 20px/1.5 var(--display); margin: 0; color: var(--ink); }
+.vC .incipit::first-letter { float: left; font: 600 74px/.82 var(--display); color: var(--accent); margin: 6px 8px 0 -2px; }
+.vC .incipit em { font-style: italic; }
+.vC h3 { font: italic 500 22px/1.2 var(--display); color: var(--title); margin: 38px 0 6px; text-align: center; }
+.vC h3::after { content: ""; display: block; width: 36px; height: 3px; background: var(--coral); margin: 10px auto 0; }
+.vC .chap { margin-top: 26px; }
+.vC .chap h4 { font: 560 30px/1 var(--display); color: var(--title); margin: 0; }
+.vC .chap .m { margin: 6px 0 8px; color: var(--muted); font-size: 14px; }
+.vC .chap ol { list-style: none; margin: 0; padding: 0; }
+.vC .chap li { display: grid; grid-template-columns: 94px 1fr; gap: 10px; padding: 6px 0; font-size: 14.5px; }
+.vC .chap time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.vC .chap .t { font-style: italic; font-family: var(--display); }
+.vC .read-btn { min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
+.vC .idx { list-style: none; padding: 0; margin: 10px 0 0; }
+.vC .idx li { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; font-size: 15px; }
+.vC .idx .k { white-space: nowrap; }
+.vC .idx .k small { color: var(--muted); font-size: 13px; }
+.vC .idx .dots { flex: 1; border-bottom: 2px dotted var(--rule); min-width: 16px; transform: translateY(-4px); }
+.vC .idx .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.vC .idx .st { color: var(--accent); letter-spacing: 1px; }
+.vC .thumbs { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; margin-top: 14px; align-items: start; border-top: 2px solid var(--title); }
+.vC .thumbs span { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; height: calc(26px + var(--n) * 16px); border-radius: 0 0 6px 6px; font-size: 11.5px; color: var(--muted); padding-bottom: 4px; border: 1px solid var(--rule); border-top: 0; }
+.vC .thumbs span.on { background: var(--title); color: var(--surface); border-color: var(--title); font-weight: 600; }
+.vC .p { font-size: 14.5px; color: var(--muted); margin: 12px 0 0; }
+.vC .p b { color: var(--ink); }
+.vC .folio { text-align: center; margin-top: 36px; font: italic 13px var(--display); color: var(--muted); }
+@container stat (min-width: 860px) {
+  .vC .spread { display: grid; grid-template-columns: 1fr 1fr; max-width: 1180px; margin: 0 auto; position: relative; }
+  .vC .spread::before { content: ""; position: absolute; top: -20px; bottom: -36px; left: 50%; width: 60px; margin-left: -30px; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(0,0,0,.07) 45%, rgba(0,0,0,.12) 50%, rgba(0,0,0,.07) 55%, transparent); }
+  .vC .spread > .book { padding: 0 56px; max-width: none; margin: 0; }
+  .vC .spread > .book:last-child h3:first-child { margin-top: 30px; }
+}
+
+/* =========================================================
+   Racconto «Il tuo 2025» (variante A)
+   ========================================================= */
+.story { position: relative; height: 760px; overflow: hidden; color: #F4EAD8; font-family: var(--body);
+  background: radial-gradient(120% 70% at 20% 0%, #35585A 0%, #1E3436 55%, #142224 100%); display: flex; flex-direction: column; padding: 14px 16px 18px; }
+.story .prog { display: flex; gap: 4px; }
+.story .prog i { flex: 1; height: 3px; border-radius: 2px; background: rgba(244, 234, 216, .3); }
+.story .prog i.on { background: #F4EAD8; }
+.story .top { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.story .top span { font-size: 14px; color: #C9D6D2; }
+.story .x { width: 44px; height: 44px; margin-right: -10px; border: 0; background: none; color: #F4EAD8; font-size: 22px; }
+.story h2 { font: 560 96px/.9 var(--display); margin: 26px 0 0; letter-spacing: -.02em; }
+.story .say { font: 400 26px/1.25 var(--display); margin: 16px 0 0; max-width: 15ch; }
+.story .say b { font-weight: 600; color: #FFB3A9; }
+.story .stage { margin-top: auto; height: 250px; display: flex; align-items: flex-end; justify-content: center; gap: 6px; padding: 0 0 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23D68F66'/%3E%3Cstop offset='.25' stop-color='%23B1603F'/%3E%3Cstop offset='1' stop-color='%238A4429'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.24'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E") left bottom -10px / 600px 230px repeat-x; }
+.story .stage .sp { box-shadow: inset 3px 0 0 rgba(255,255,255,.16), inset -3px 0 0 rgba(0,0,0,.18), 0 -2px 18px rgba(0,0,0,.25); }
+.story .stage .sp i { font-size: 15px; }
+.story .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+.story .nav button { width: 48px; height: 48px; border-radius: 24px; border: 1px solid rgba(244, 234, 216, .35); background: rgba(0,0,0,.18); color: #F4EAD8; font-size: 20px; }
+.story .nav button[disabled] { opacity: .35; cursor: default; }
+.story .nav span { font-size: 13px; color: #C9D6D2; }
+.story .fav { margin-top: 26px; }
+.story .fav p { margin: 0; color: #C9D6D2; font-size: 15px; }
+.story .fav .say { color: #F4EAD8; font-size: 34px; margin: 10px 0 6px; }
+.story .fav .stars { color: #FFB3A9; letter-spacing: 3px; font-size: 20px; margin-top: 8px; }
+.story .stage .out { transform: translate(18px, -34px) rotate(9deg); transform-origin: bottom left; }
+@media (prefers-reduced-motion: no-preference) {
+  .story.anim .stage .sp { animation: drop .7s cubic-bezier(.3, 1.4, .5, 1) both; }
+  .story.anim .stage .sp:nth-child(2) { animation-delay: .18s; }
+  @keyframes drop { from { transform: translateY(-260px); } }
+}
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <div>
+    <h1>Statistiche: tre proposte</h1>
+    <p>Prototipi statici con i dati veri della libreria (108 libri importati da Goodreads). Le date di inizio non ci sono nei dati: il tempo di lettura usa valori di esempio.</p>
+  </div>
+  <button class="theme-btn" id="theme" type="button">Passa al tema scuro</button>
+</header>
+
+<main class="gallery">
+
+<!-- ===================== A ===================== -->
+<figure id="A">
+  <figcaption>
+    <h2>A. Scaffale degli anni</h2>
+    <p>Ogni anno è una mensola con i dorsi dei libri letti, larghi quanto le pagine; il racconto pende dall'asse come un segnalibro.</p>
+  </figcaption>
+  <div class="frame"><section class="screen vA" aria-label="Variante A">
+    <h2 class="pg-title">Statistiche</h2>
+    <p class="lede">Hai letto <b>83</b> libri e <b>34.285</b> pagine, con un voto medio di <b>4,2</b>.</p>
+    <div class="cols">
+      <div class="wall">
+        <div class="year">
+          <div class="year-n">2025</div>
+          <div class="year-m">2 libri, 551 pagine, ★ 5,0</div>
+          <button class="story-btn" type="button" aria-label="Guarda il racconto del 2025">Il racconto</button>
+          <div class="shelf ribbon" data-year="2025"></div>
+          <p class="year-d">Autore dell'anno <b>William Golding</b>. Genere <b>Romanzo</b>. Il preferito: <b>Le tigri sono in giro</b>, cinque stelle.</p>
+        </div>
+        <div class="year">
+          <div class="year-n">2024</div>
+          <div class="year-m">2 libri, 329 pagine, ★ 3,5</div>
+          <button class="story-btn" type="button" aria-label="Guarda il racconto del 2024">Il racconto</button>
+          <div class="shelf ribbon" data-year="2024"></div>
+        </div>
+        <div class="year">
+          <div class="year-n">2019</div>
+          <div class="year-m">3 libri, 941 pagine, ★ 4,0</div>
+          <div class="shelf" data-year="2019"></div>
+        </div>
+        <p class="noyear"><b>76 libri letti senza anno.</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</p>
+      </div>
+      <div class="always">
+        <section class="block">
+          <h3>Voti <small>65 libri votati</small></h3>
+          <ul class="rates">
+            <li><span class="stars" aria-label="5 stelle">★★★★★</span><span class="bar" style="--v:1"></span><b>28</b></li>
+            <li><span class="stars" aria-label="4 stelle">★★★★</span><span class="bar" style="--v:.93"></span><b>26</b></li>
+            <li><span class="stars" aria-label="3 stelle">★★★</span><span class="bar" style="--v:.32"></span><b>9</b></li>
+            <li><span class="stars" aria-label="2 stelle">★★</span><span class="bar" style="--v:.07"></span><b>2</b></li>
+            <li><span class="stars" aria-label="1 stella">★</span><span class="bar" style="--v:0"></span><b>0</b></li>
+          </ul>
+          <p>Cinque stelle a Le tigri sono in giro, Miami Blues, Cecità e altri 25. 18 libri senza voto.</p>
+        </section>
+        <section class="block">
+          <h3>Tempo di lettura <small>9 libri con le date</small></h3>
+          <div class="time">
+            <span class="big num">17</span>
+            <span>giorni in media per libro</span>
+            <span>Il più veloce <b>Le tigri sono in giro</b>, 6 giorni. Il più lento <b>Shantaram</b>, 64.</span>
+          </div>
+        </section>
+        <section class="block">
+          <h3>Mesi <small>7 libri con la data di fine</small></h3>
+          <div class="months" aria-hidden="true"><div><i></i></div><div><i></i></div><div><i></i></div><div></div><div></div><div></div><div></div><div><i></i></div><div></div><div><i></i></div><div></div><div><i></i><i></i></div></div>
+          <div class="mlab" aria-hidden="true"><span>G</span><span>F</span><span>M</span><span>A</span><span>M</span><span>G</span><span>L</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          <p>Leggi di più a dicembre: 2 libri.</p>
+        </section>
+        <section class="block span2">
+          <h3>Autori</h3>
+          <ul class="authors">
+            <li><span class="who">Michael Connelly</span><span class="meta">18 libri, 7.901 pagine, ★ 4,2</span><span class="mini" data-n="18"></span></li>
+            <li><span class="who">J.K. Rowling</span><span class="meta">7 libri, 3.918 pagine, ★ 4,7</span><span class="mini" data-n="7"></span></li>
+            <li><span class="who">Mick Herron</span><span class="meta">6 libri, 2.146 pagine, ★ 5,0</span><span class="mini" data-n="6"></span></li>
+            <li><span class="who">Hugh Howey</span><span class="meta">4 libri, 1.876 pagine</span><span class="mini" data-n="4"></span></li>
+            <li><span class="who">Stieg Larsson</span><span class="meta">3 libri, 1.559 pagine, ★ 5,0</span><span class="mini" data-n="3"></span></li>
+            <li><span class="who">J.R.R. Tolkien</span><span class="meta">3 libri, 1.124 pagine, ★ 4,0</span><span class="mini" data-n="3"></span></li>
+          </ul>
+        </section>
+        <section class="block span2">
+          <h3>Generi</h3>
+          <ul class="genres">
+            <li><span>Giallo</span><span class="bar" style="--v:1"></span><b>19</b></li>
+            <li><span>Thriller</span><span class="bar" style="--v:.58"></span><b>11</b></li>
+            <li><span>Fantasy</span><span class="bar" style="--v:.53"></span><b>10</b></li>
+            <li><span>Fantascienza</span><span class="bar" style="--v:.47"></span><b>9</b></li>
+            <li><span>Romanzo</span><span class="bar" style="--v:.47"></span><b>9</b></li>
+            <li><span>Noir</span><span class="bar" style="--v:.32"></span><b>6</b></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </section></div>
+</figure>
+
+<!-- ===================== B ===================== -->
+<figure id="B">
+  <figcaption>
+    <h2>B. Tessera di prestito</h2>
+    <p>Gli anni sono le righe di una vecchia scheda di biblioteca: ogni libro finito è un timbro col giorno, nel suo mese.</p>
+  </figcaption>
+  <div class="frame"><section class="screen vB" aria-label="Variante B">
+    <h2 class="pg-title">Statistiche</h2>
+    <p class="lede">Tocca un anno per vederne il riassunto e il racconto.</p>
+    <div class="layout">
+      <div>
+        <div class="card">
+          <h3>Registro delle letture</h3>
+          <p class="sub">Un timbro per ogni libro finito, col giorno.</p>
+          <div class="grid head" aria-hidden="true"><span></span><span>G</span><span>F</span><span>M</span><span>A</span><span>M</span><span>G</span><span>L</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          <button class="row grid" type="button" aria-expanded="true" aria-controls="b2025" aria-label="2025: 2 libri. Mostra il riassunto">
+            <span class="y">2025<small>2 libri</small></span>
+            <span class="cell"><span class="stamp" style="--r:-10deg">2</span></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"><span class="stamp" style="--r:7deg">28</span></span><span class="cell"></span><span class="cell"></span>
+          </button>
+          <div class="detail" id="b2025">
+            <dl>
+              <dt>Pagine</dt><dd class="num">551</dd>
+              <dt>Autore</dt><dd>William Golding</dd>
+              <dt>Genere</dt><dd>Romanzo</dd>
+              <dt>Preferito</dt><dd>Le tigri sono in giro <span class="st" aria-label="5 stelle">★★★★★</span></dd>
+            </dl>
+            <button class="go" type="button">Guarda il racconto del 2025</button>
+          </div>
+          <button class="row grid" type="button" aria-expanded="false" aria-label="2024: 2 libri. Mostra il riassunto">
+            <span class="y">2024<small>2 libri</small></span>
+            <span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"><span class="stamp first">22</span><span class="stamp second">28</span></span>
+          </button>
+          <button class="row grid" type="button" aria-expanded="false" aria-label="2019: 3 libri. Mostra il riassunto">
+            <span class="y">2019<small>3 libri</small></span>
+            <span class="cell"></span><span class="cell"><span class="stamp" style="--r:4deg">8</span></span><span class="cell"><span class="stamp" style="--r:-12deg">21</span></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"><span class="stamp" style="--r:9deg">17</span></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+          </button>
+          <p class="foot">76 libri letti non hanno la data: aggiungila dalla scheda del libro.</p>
+        </div>
+        <div class="sum">
+          <div><b class="num">83</b><span>libri letti</span></div>
+          <div><b class="num">34.285</b><span>pagine</span></div>
+          <div><b class="num">4,2</b><span>voto medio</span></div>
+          <div><b class="num">17</b><span>giorni per libro</span></div>
+        </div>
+      </div>
+      <div class="rest">
+        <section class="sec">
+          <h4>Voti</h4>
+          <div class="vote">
+            <div><b>0</b><i style="--v:0"></i><span aria-label="1 stella">1★</span></div>
+            <div><b>2</b><i style="--v:.07"></i><span aria-label="2 stelle">2★</span></div>
+            <div><b>9</b><i style="--v:.32"></i><span aria-label="3 stelle">3★</span></div>
+            <div><b>26</b><i style="--v:.93"></i><span aria-label="4 stelle">4★</span></div>
+            <div><b>28</b><i style="--v:1"></i><span aria-label="5 stelle">5★</span></div>
+          </div>
+          <p class="note">18 libri senza voto.</p>
+        </section>
+        <section class="sec">
+          <h4>Tempo di lettura</h4>
+          <div class="loan"><b class="num">17</b><span>giorni in media, su 9 libri</span></div>
+          <p class="note">Il più veloce: Le tigri sono in giro, 6 giorni. Il più lento: Shantaram, 64 giorni.</p>
+        </section>
+        <section class="sec">
+          <h4>Autori</h4>
+          <ol class="rank">
+            <li><span>Michael Connelly</span><span class="n">18</span><span class="m">7.901 pagine, ★ 4,2</span></li>
+            <li><span>J.K. Rowling</span><span class="n">7</span><span class="m">3.918 pagine, ★ 4,7</span></li>
+            <li><span>Mick Herron</span><span class="n">6</span><span class="m">2.146 pagine, ★ 5,0</span></li>
+            <li><span>Hugh Howey</span><span class="n">4</span><span class="m">1.876 pagine</span></li>
+            <li><span>Stieg Larsson</span><span class="n">3</span><span class="m">1.559 pagine, ★ 5,0</span></li>
+            <li><span>J.R.R. Tolkien</span><span class="n">3</span><span class="m">1.124 pagine, ★ 4,0</span></li>
+          </ol>
+        </section>
+        <section class="sec">
+          <h4>Generi</h4>
+          <div class="gen"><span>Giallo<b>19</b></span><span>Thriller<b>11</b></span><span>Fantasy<b>10</b></span><span>Fantascienza<b>9</b></span><span>Romanzo<b>9</b></span><span>Noir<b>6</b></span></div>
+        </section>
+      </div>
+    </div>
+  </section></div>
+</figure>
+
+<!-- ===================== C ===================== -->
+<figure id="C">
+  <figcaption>
+    <h2>C. Indice in fondo al libro</h2>
+    <p>La pagina si legge come le ultime pagine di un libro: un incipit che riassume, i capitoli degli anni, gli indici con i puntini.</p>
+  </figcaption>
+  <div class="frame"><section class="screen vC" aria-label="Variante C">
+    <div class="spread">
+      <div class="book">
+        <p class="running">Statistiche</p>
+        <p class="incipit">Hai letto 83 libri, 34.285 pagine in tutto. Il voto che dai più spesso è cinque stelle, a 28 libri; l'autore che torna di più è Michael Connelly, con 18 titoli. Il mese in cui finisci più libri è dicembre.</p>
+        <h3>Capitoli</h3>
+        <article class="chap">
+          <h4>2025</h4>
+          <p class="m">Due libri, 551 pagine, voto medio 5,0.</p>
+          <ol>
+            <li><time datetime="2025-01-02">2 gennaio</time><span><span class="t">Le tigri sono in giro</span>, Mick Herron</span></li>
+            <li><time datetime="2025-10-28">28 ottobre</time><span><span class="t">Il signore delle mosche</span>, William Golding</span></li>
+          </ol>
+          <button class="read-btn" type="button">Leggi il racconto del 2025</button>
+        </article>
+        <article class="chap">
+          <h4>2024</h4>
+          <p class="m">Due libri, 329 pagine, voto medio 3,5.</p>
+          <ol>
+            <li><time datetime="2024-12-22">22 dicembre</time><span><span class="t">Stark</span>, Edward Bunker</span></li>
+            <li><time datetime="2024-12-28">28 dicembre</time><span><span class="t">Ricorsione</span>, Blake Crouch</span></li>
+          </ol>
+          <button class="read-btn" type="button">Leggi il racconto del 2024</button>
+        </article>
+        <article class="chap">
+          <h4>2019</h4>
+          <p class="m">Tre libri, 941 pagine, voto medio 4,0.</p>
+        </article>
+        <p class="p">76 libri letti non hanno un anno: aggiungilo dalla scheda del libro.</p>
+      </div>
+      <div class="book">
+        <h3>Indice dei nomi</h3>
+        <ul class="idx">
+          <li><span class="k">Connelly, Michael <small>7.901 pp.</small></span><span class="dots"></span><span class="v">18</span></li>
+          <li><span class="k">Rowling, J.K. <small>3.918 pp.</small></span><span class="dots"></span><span class="v">7</span></li>
+          <li><span class="k">Herron, Mick <small>2.146 pp.</small></span><span class="dots"></span><span class="v">6</span></li>
+          <li><span class="k">Howey, Hugh <small>1.876 pp.</small></span><span class="dots"></span><span class="v">4</span></li>
+          <li><span class="k">Larsson, Stieg <small>1.559 pp.</small></span><span class="dots"></span><span class="v">3</span></li>
+          <li><span class="k">Tolkien, J.R.R. <small>1.124 pp.</small></span><span class="dots"></span><span class="v">3</span></li>
+        </ul>
+        <h3>Indice dei generi</h3>
+        <ul class="idx">
+          <li><span class="k">Giallo</span><span class="dots"></span><span class="v">19</span></li>
+          <li><span class="k">Thriller</span><span class="dots"></span><span class="v">11</span></li>
+          <li><span class="k">Fantasy</span><span class="dots"></span><span class="v">10</span></li>
+          <li><span class="k">Fantascienza</span><span class="dots"></span><span class="v">9</span></li>
+          <li><span class="k">Romanzo</span><span class="dots"></span><span class="v">9</span></li>
+          <li><span class="k">Noir</span><span class="dots"></span><span class="v">6</span></li>
+        </ul>
+        <h3>Stelle</h3>
+        <ul class="idx">
+          <li><span class="k st" aria-label="5 stelle">★★★★★</span><span class="dots"></span><span class="v">28</span></li>
+          <li><span class="k st" aria-label="4 stelle">★★★★</span><span class="dots"></span><span class="v">26</span></li>
+          <li><span class="k st" aria-label="3 stelle">★★★</span><span class="dots"></span><span class="v">9</span></li>
+          <li><span class="k st" aria-label="2 stelle">★★</span><span class="dots"></span><span class="v">2</span></li>
+          <li><span class="k st" aria-label="1 stella">★</span><span class="dots"></span><span class="v">0</span></li>
+        </ul>
+        <p class="p">18 libri senza voto.</p>
+        <h3>Mesi</h3>
+        <div class="thumbs" aria-label="Libri finiti per mese: gennaio 1, febbraio 1, marzo 1, agosto 1, ottobre 1, dicembre 2">
+          <span class="on" style="--n:1">G<b>1</b></span><span class="on" style="--n:1">F<b>1</b></span><span class="on" style="--n:1">M<b>1</b></span><span style="--n:0">A</span><span style="--n:0">M</span><span style="--n:0">G</span><span style="--n:0">L</span><span class="on" style="--n:1">A<b>1</b></span><span style="--n:0">S</span><span class="on" style="--n:1">O<b>1</b></span><span style="--n:0">N</span><span class="on" style="--n:2">D<b>2</b></span>
+        </div>
+        <h3>Tempo di lettura</h3>
+        <p class="p">In media <b>17 giorni</b> per libro, su 9 libri con le date. Il più veloce è <b>Le tigri sono in giro</b> (6 giorni), il più lento <b>Shantaram</b> (64).</p>
+        <p class="folio">83</p>
+      </div>
+    </div>
+  </section></div>
+</figure>
+</main>
+
+<section class="part" id="racconto">
+  <h2>Il racconto «Il tuo 2025», variante A</h2>
+  <p>I dorsi dell'anno cadono sull'asse alla prima schermata (fermi con il movimento ridotto). Nella schermata del preferito il libro esce dallo scaffale.</p>
+  <div class="stories">
+    <div class="frame"><div class="story anim" id="story1" role="dialog" aria-label="Il tuo 2025, schermata 1 di 9">
+      <div class="prog"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="top"><span>Il tuo anno da lettore</span><button class="x" type="button" aria-label="Chiudi il racconto">✕</button></div>
+      <h2>2025</h2>
+      <p class="say">Hai messo sullo scaffale <b>2 libri</b>, 551 pagine.</p>
+      <div class="stage" data-story="all"></div>
+      <div class="nav"><button type="button" disabled aria-label="Schermata precedente">‹</button><span>1 di 9</span><button type="button" aria-label="Schermata successiva">›</button></div>
+    </div></div>
+    <div class="frame"><div class="story" id="story2" role="dialog" aria-label="Il tuo 2025, schermata 5 di 9">
+      <div class="prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+      <div class="top"><span>Il tuo anno da lettore</span><button class="x" type="button" aria-label="Chiudi il racconto">✕</button></div>
+      <div class="fav">
+        <p>Il preferito del 2025</p>
+        <p class="say">Le tigri sono in giro</p>
+        <p>Mick Herron</p>
+        <p class="stars" aria-label="5 stelle">★★★★★</p>
+      </div>
+      <div class="stage" data-story="fav"></div>
+      <div class="nav"><button type="button" aria-label="Schermata precedente">‹</button><span>5 di 9</span><button type="button" aria-label="Schermata successiva">›</button></div>
+    </div></div>
+  </div>
+</section>
+
+<section class="part" id="largo">
+  <h2>Da 1024 px in su</h2>
+  <p>Stesso contenuto, due colonne. In A le mensole a sinistra e il resto a destra; in C la pagina diventa un libro aperto, con la piega al centro.</p>
+  <div class="wide-frame" id="wideA"></div>
+  <div style="height:24px"></div>
+  <div class="wide-frame" id="wideC"></div>
+</section>
+
+<script>
+(() => {
+  const root = document.documentElement, q = location.search + location.hash;
+  if (/scuro/.test(q)) root.dataset.theme = "dark"; else if (/chiaro/.test(q)) root.dataset.theme = "light";
+  const btn = document.getElementById("theme");
+  const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const label = () => { btn.textContent = isDark() ? "Passa al tema chiaro" : "Passa al tema scuro"; };
+  btn.addEventListener("click", () => { root.dataset.theme = isDark() ? "light" : "dark"; history.replaceState(null, "", "#" + (isDark() ? "scuro" : "chiaro")); label(); });
+  label();
+
+  // Dorsi: larghezza dalle pagine, altezza e colore da un hash del titolo
+  const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const spine = (t, p, k = 1, extra = "") => {
+    const h = hash(t), w = Math.round((p ? Math.min(44, Math.max(16, p / 14)) : 20) * k), hh = Math.round((78 + h % 30) * k);
+    return `<span class="sp c${h % 6} ${extra}" style="--w:${w}px;--h:${hh}px" title="${t}"><i>${t}</i></span>`;
+  };
+  const years = {
+    2025: [["Le tigri sono in giro", 369], ["Il signore delle mosche", 182]],
+    2024: [["Stark", 0], ["Ricorsione", 329]],
+    2019: [["Country Dark", 232], ["I diavoli", 397], ["Norwegian Blues", 312]],
+  };
+  document.querySelectorAll(".shelf[data-year]").forEach(s => {
+    const list = years[s.dataset.year];
+    s.innerHTML = list.map((b, i) => spine(b[0], b[1], 1, i === list.length - 1 && list.length > 2 ? "tilt" : "")).join("");
+    s.setAttribute("role", "img");
+    s.setAttribute("aria-label", "Libri del " + s.dataset.year + ": " + list.map(b => b[0]).join(", "));
+  });
+  document.querySelectorAll(".mini").forEach(m => {
+    const n = +m.dataset.n; let out = "";
+    for (let i = 0; i < n; i++) out += `<i class="c${(i * 7 + n) % 6}" style="height:${18 + (i * 37 + n * 5) % 11}px"></i>`;
+    m.innerHTML = out; m.setAttribute("aria-hidden", "true");
+  });
+  document.querySelectorAll(".stage").forEach(s => {
+    s.setAttribute("aria-hidden", "true");
+    s.innerHTML = s.dataset.story === "fav"
+      ? spine("Il signore delle mosche", 182, 1.9) + spine("Le tigri sono in giro", 369, 1.9, "out")
+      : spine("Le tigri sono in giro", 369, 1.9) + spine("Il signore delle mosche", 182, 1.9);
+  });
+
+  // B: una riga aperta alla volta
+  document.querySelectorAll(".vB .row").forEach(r => r.addEventListener("click", () => {
+    const open = r.getAttribute("aria-expanded") === "true";
+    r.closest(".card").querySelectorAll(".row").forEach(x => x.setAttribute("aria-expanded", "false"));
+    const d = r.closest(".card").querySelector(".detail");
+    if (!open) { r.setAttribute("aria-expanded", "true"); r.after(d); d.hidden = false; } else d.hidden = true;
+  }));
+
+  // Versioni larghe (copie di A e C)
+  const copy = (id, to) => { const s = document.querySelector("#" + id + " .screen").cloneNode(true); s.querySelectorAll("[id]").forEach(e => e.removeAttribute("id")); s.setAttribute("aria-label", s.getAttribute("aria-label") + ", versione larga"); document.getElementById(to).append(s); };
+  copy("A", "wideA"); copy("C", "wideC");
+
+  // ?solo=A | B | C | R (racconto): una sola schermata a tutta pagina, per gli screenshot
+  const solo = new URLSearchParams(location.search).get("solo");
+  if (solo) {
+    root.classList.add("solo");
+    if (solo === "R") { const r = document.getElementById("racconto"); r.style.display = "block"; r.querySelector("h2").remove(); r.querySelector("p").remove(); r.querySelector(".stories").classList.add("story-solo"); }
+    else document.getElementById(solo).classList.add("show");
+  }
+})();
+</script>
+</body>
+</html>
