@@ -120,7 +120,38 @@ async function struttura(browser) {
   await p.close2();
 }
 
+async function aspetto(browser) {
+  const p = await newPage(browser);
+  await load(p, [
+    { id: 'a1', title: 'Il primo volume', author: 'Autore Uno', status: 'letto', finished: '2025-01-02', started: '2024-12-10', added: 1, rating: 3, series: 'Saga', seriesNo: '1', synopsis: 'Trama ' + 'lunga '.repeat(40), pages: 300 },
+    { id: 'a2', title: 'Il secondo volume', author: 'Autore Uno', status: 'da-leggere', added: 2, rating: 0, series: 'Saga', seriesNo: '2' },
+  ]);
+  await openBook(p, 'a1');
+  const css = (sel, prop) => p.evaluate(([s, pr]) => getComputedStyle(document.querySelector(s))[pr], [sel, prop]);
+  const cb = await p.locator('.sheet-top .cover').boundingBox();
+  ok('titolo 26 px in Fraunces, autore in corsivo, copertina 120 px', await css('.sheet h2', 'fontSize') === '26px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await css('.sheet-top .sub', 'fontStyle') === 'italic' && Math.round(cb.width) === 120, JSON.stringify(cb));
+  ok('barra Elimina/Salva fissa in basso', await css('.sheet-bar', 'position') === 'sticky');
+  await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 0; });
+  const sb = await p.locator('#s-save').boundingBox();
+  ok('Salva visibile senza scorrere', sb.y >= 0 && sb.y + sb.height <= 844, JSON.stringify(sb));
+  ok('✕ fisso in alto', await css('#s-close', 'position') === 'sticky');
+  await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 99999; });
+  const xb = await p.locator('#s-close').boundingBox();
+  ok('✕ resta in alto dopo lo scorrimento', xb.y >= 0 && xb.y < 100, JSON.stringify(xb));
+  await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 0; });
+  await p.fill('#f-notes', 'una nota'); await p.keyboard.press('Escape');
+  const ub = await p.locator('.unsaved').boundingBox(), sv = await p.locator('#s-save').boundingBox();
+  ok('modifiche non salvate sopra la barra', await p.locator('.unsaved').isVisible() && ub.y <= sv.y && ub.y + ub.height >= sv.y + sv.height, JSON.stringify([ub, sv]));
+  await p.locator('[data-u="back"]').click();
+  ok('etichette: Le tue note, Citazione preferita nascosta', await p.locator('label[for="f-notes"]').textContent() === 'Le tue note' && await css('label[for="f-quote"]', 'position') === 'absolute');
+  ok('Prossimo della serie in tondo', await p.locator('.snext').count() === 1 && await css('.snext .lab', 'textTransform') === 'none');
+  ok('scheda: niente scorrimento orizzontale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth && document.documentElement.scrollWidth <= 390; }));
+  ok('aspetto: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
+  await aspetto(browser);
 }

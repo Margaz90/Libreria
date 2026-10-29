@@ -1533,8 +1533,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function readingMemo(b) {
     return `<div class="rf rf-memo">
-      <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>
-      <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
+      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">“</span><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>
+      <div class="field notes"><label for="f-notes">Le tue note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
       ${b.status !== "letto" ? rateHTML(b) : ""}
     </div>`;
   }
