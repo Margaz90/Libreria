@@ -211,7 +211,7 @@ Unica aggiunta: `sempre.authors[i].books`, i libri di quell'autore dal più rece
 | Nessun libro letto | Solo «Quando segnerai un libro come Letto, qui compariranno le tue statistiche»; niente titolo, incipit, mensole, blocchi |
 | Un solo libro letto | Incipit «Hai letto un libro, N pagine.»; una mensola con un dorso, senza riga dell'anno; blocchi con i testi al singolare |
 | Anno con 1 libro | Mensola con un dorso; «1 libro, 320 pagine»; nessuna riga `.ys-d`; racconto ridotto a 3 schermate |
-| Libro senza pagine | Dorso di larghezza minima (16 unità) e altezza 92 px; non conta nelle pagine; mini-dorso alto 20 px |
+| Libro senza pagine | Dorso di larghezza minima (20 unità) e altezza 92 px; non conta nelle pagine; mini-dorso alto 20 px |
 | Nessun voto | Incipit senza voto; «Voti» con il testo d'invito; riga dei numeri dell'anno senza ★ |
 | Libri con solo l'anno (`finishedYear`) | Sulla mensola del loro anno, in fondo; non contano nei mesi |
 | Date di fine future | Come nessuna data (regola attuale): nessuna mensola per loro, nota `.stats-future` |
