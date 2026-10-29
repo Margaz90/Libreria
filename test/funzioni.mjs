@@ -342,6 +342,52 @@ async function prossimo(browser) {
   ok('Scegli per me funziona anche con letture in corso', await p.locator('.sheet .next .ncard').count() >= 1);
   await p.keyboard.press('Escape'); await closed(p);
 
+  // Inizia con Annulla
+  const S = (id, o) => ({ id, title: 'Pila ' + id, author: 'Autore ' + id, status: D, rating: 0, ...o });
+  const stato = id => p.evaluate(id => JSON.parse(JSON.stringify(window.libreriaHost.books().find(x => x.id === id))), id);
+  const sans = b => { const { updated, ...r } = b; return JSON.stringify(Object.entries(r).sort()); };
+  const tbtn = p.locator('.toast button');
+  for (const i of [0, 1, 2]) {
+    await load(p, [S('s1', { added: 1, started: '2025-03-01', page: 12, pageStep: 5 }), S('s2', { added: 2 }), S('s3', { added: 3, finishedYear: 2019 }), ...letti.map(b => ({ ...b, rating: 0 }))]);
+    if (i === 0) await p.evaluate(() => { window.__ch = []; window.libreriaCloud = { connected: true, changed: id => window.__ch.push(id) }; });
+    const idsN = await ids(p.locator('#hero .next')), id = idsN[i], prima = await stato(id);
+    await tabEl(i).click(); await p.locator('#hero [data-start]').click();
+    ok(`Inizia dalla linguetta ${i + 1}: avviso «In lettura» con Annulla a fuoco`, /^In lettura: «/.test(await toastText(p)) && await p.evaluate(() => document.activeElement.matches('.toast button')));
+    ok('Inizia: il libro è In lettura', (await stato(id)).status === 'in-lettura');
+    await p.keyboard.press('Enter');
+    await p.waitForFunction(id => window.libreriaHost.books().find(x => x.id === id).status === 'da-leggere', id, { timeout: 3000 }).catch(() => {});
+    const dopo = await stato(id);
+    ok(`Annulla (linguetta ${i + 1}): libro com'era`, sans(dopo) === sans(prima) && dopo.updated > prima.updated, `${sans(prima)} / ${sans(dopo)}`);
+    ok('Annulla: proposte con la stessa linguetta e focus', await sel(i) === 'true' && await p.evaluate(i => document.activeElement === document.querySelectorAll('#hero [role=tab]')[i], i));
+    if (i === 0) {
+      ok('Annulla arriva al cloud', await p.evaluate(id => window.__ch.filter(x => x === id).length >= 2, id));
+      await p.evaluate(() => { delete window.libreriaCloud; });
+    }
+  }
+  {
+    const id = (await ids(p.locator('#hero .next')))[0];
+    await tabEl(0).click(); await p.locator('#hero [data-start]').click();
+    await p.evaluate(id => { const H = window.libreriaHost, b = H.books().find(x => x.id === id); H.setLocal(id, { ...b, status: 'letto' }); H.refreshChanged([{ id, from: 'in-lettura', to: 'letto', moved: true }]); }, id);
+    await p.locator('.toast button').click();
+    ok('Annulla dopo un cambio: libro invariato e avviso', (await stato(id)).status === 'letto' && /^Non annullato: «/.test(await toastText(p)), (await stato(id)).status + ' ' + await toastText(p));
+  }
+  await load(p, [S('b1', { added: 1, title: 'Bad Actors' }), S('b2', { added: 2, title: 'T'.repeat(60) }), S('b3', { added: 3 })]);
+  const bad = (await ids(p.locator('#hero .next'))), badTab = bad.indexOf('b1');
+  await tabEl(badTab).click(); await p.locator('#hero [data-start]').click();
+  const tbx = await p.locator('.toast').boundingBox(), addB = await p.locator('.dock .tab.add .ico').boundingBox();
+  ok('avviso «In lettura: «Bad Actors»» su una riga, lontano da Aggiungi', /In lettura: «Bad Actors»/.test(await toastText(p)) && tbx.height <= 46 && tbx.width > 195
+    && !(tbx.x < addB.x + addB.width && addB.x < tbx.x + tbx.width && tbx.y < addB.y + addB.height && addB.y < tbx.y + tbx.height), JSON.stringify(tbx));
+  await p.locator('.toast button').click();
+  await tabEl(bad.indexOf('b2')).click(); await p.locator('#hero [data-start]').click();
+  ok('titolo di 60 caratteri tagliato a 40 con «…»', (await toastText(p)).includes('«' + 'T'.repeat(40) + '…»'), await toastText(p));
+  // Scegli per me: Inizia dalla terza linguetta e Annulla
+  await load(p, [S('c1', { added: 1 }), S('c2', { added: 2 }), S('c3', { added: 3 })]);
+  await p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]').click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
+  const cid = (await ids(p.locator('.sheet .next')))[2];
+  await p.locator('.sheet #ns-t2').click(); await p.locator('.sheet [data-start]').click(); await closed(p);
+  ok('Scegli per me: Inizia dalla terza linguetta', (await stato(cid)).status === 'in-lettura' && await p.locator('.sheet').count() === 0);
+  await p.locator('.toast button').click();
+  ok('Scegli per me: Annulla rimette il libro in pila', (await stato(cid)).status === 'da-leggere');
   // Scegli per me insieme all'hero, titolo con virgolette, movimento ridotto
   await load(p, [...pila, ...letti].map(b => ({ ...base, ...b })));
   await p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]').click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});

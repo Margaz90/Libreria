@@ -1000,7 +1000,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (Math.abs(dx) >= 48 && Math.abs(dx) >= 2 * Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
       }, { passive: true });
     }
-    start.onclick = () => { const b = state.books.find(x => x.id === start.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); };
+    start.onclick = () => startNext(start.dataset.start, sheet);
     const m = $("[data-n=more]", root);
     if (m) m.onclick = () => {
       nextList(true); if (sheet) fillNext(root); else renderHero();
@@ -1010,6 +1010,25 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
   }
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
+  // «Inizia» con Annulla: rimette i campi di lettura com'erano prima (assenti restano assenti).
+  const NX_FIELDS = ["status", "started", "finished", "finishedYear", "finishedAuto", "page", "pageStep"];
+  function startNext(id, sheet) {
+    const b = state.books.find(x => x.id === id), before = {};
+    if (sheet) closeSheet();
+    if (!b || b.status !== "da-leggere") { renderHero(); return; }
+    NX_FIELDS.forEach(f => { if (f in b) before[f] = b[f]; });
+    setStatus(b, "in-lettura");
+    const short = b.title.length > 40 ? b.title.slice(0, 40) + "…" : b.title;
+    toast("In lettura: «" + short + "»", { label: "Annulla", run: () => {
+      const k = state.books.findIndex(x => x.id === id), cur = state.books[k];
+      if (!cur || cur.status !== "in-lettura") { toast("Non annullato: «" + short + "» è cambiato nel frattempo"); return; }
+      const nb = { ...cur }; NX_FIELDS.forEach(f => delete nb[f]);
+      state.books[k] = { ...clean({ ...nb, ...before }), id, updated: Date.now() };
+      schedulePersist(); cloudHook("changed", id); nx.sel = id;
+      refreshChanged([{ id, from: "in-lettura", to: "da-leggere", moved: true }]);
+      const f = $("#hero [role=tab][aria-selected=true]") || $("#hero [data-start]"); if (f) f.focus();
+    } }, { focus: true });
+  }
   // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
   function pquickHTML(b) {
     const id = esc(b.id), t = esc(b.title), step = Number(b.pageStep) || 0;
