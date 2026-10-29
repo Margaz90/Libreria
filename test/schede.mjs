@@ -57,6 +57,9 @@ async function stima(browser) {
     { ...base, id: 'e3', title: 'Letto di recente', author: 'C', status: 'letto' },
     { ...base, id: 'e4', title: 'In lettura', author: 'D', status: 'in-lettura', page: 10 },
     { ...base, id: 'e5', title: 'Solo anno', author: 'E', status: 'letto', finishedYear: 2019 },
+    { ...base, id: 'e6', title: 'Fine automatica', author: 'F', status: 'letto', finished: iso(), finishedAuto: true },
+    { ...base, id: 'e7', title: 'Fine scritta oggi', author: 'G', status: 'letto', finished: iso() },
+    { ...base, id: 'e8', title: 'Da finire', author: 'H', status: 'in-lettura', page: 200, started: '2025-01-10' },
   ]);
   const close = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(200); const d = p.locator('.sheet [data-u="drop"], .sheet button:has-text("Scarta")'); if (await d.count()) await d.first().click(); await p.waitForSelector('.sheet', { state: 'detached' }).catch(() => {}); };
   await openBook(p, 'e1'); await p.fill('#f-started', '2025-03-01');
@@ -75,6 +78,21 @@ async function stima(browser) {
   await close();
   await openBook(p, 'e5'); await p.fill('#f-started', '2019-02-01');
   ok('solo l\'anno già scritto: nessuna fine stimata', (await val(p, '#f-finished')) === '' && (await val(p, '#f-year')) === '2019');
+  await close();
+  await openBook(p, 'e6'); await p.fill('#f-started', '2025-03-01');
+  ok('fine messa in automatico (oggi): la stima la sostituisce', (await val(p, '#f-finished')) === '2025-03-21', await val(p, '#f-finished'));
+  await save(p);
+  const b6 = await book(p, 'e6');
+  ok('dopo il salvataggio la fine stimata resta (e si ricalcola se cambi l\'inizio)', b6.finished === '2025-03-21' && b6.finishedAuto === true, JSON.stringify(b6));
+  await openBook(p, 'e7'); await p.fill('#f-started', '2025-03-01');
+  ok('fine di oggi scritta da te: non cambia', (await val(p, '#f-finished')) === iso());
+  await close();
+  // «Finito!» nella scheda In lettura: fine di oggi automatica, poi l'inizio scelto nella scheda la sostituisce
+  await p.locator('#hero [data-finish="e8"]').click(); await p.waitForTimeout(800);
+  const b8 = await book(p, 'e8');
+  ok('«Finito!»: fine di oggi segnata come automatica', b8.status === 'letto' && b8.finished === iso() && b8.finishedAuto === true, JSON.stringify(b8));
+  await openBook(p, 'e8'); await p.fill('#f-started', '2025-03-01');
+  ok('poi scegliendo l\'inizio la fine diventa +20 giorni', (await val(p, '#f-finished')) === '2025-03-21', await val(p, '#f-finished'));
   await close();
   ok('fine stimata: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();

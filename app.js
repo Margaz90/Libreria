@@ -9,7 +9,7 @@
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
-  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt", "series", "seriesNo", "seriesNext", "seriesManual"];
+  const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt", "series", "seriesNo", "seriesNext", "seriesManual", "finishedAuto"];
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -121,6 +121,7 @@
     if (out.seriesNo !== undefined) { const v = String(out.seriesNo).trim().replace(",", "."); if (v.length <= 6 && /^\d+(\.\d+)?$/.test(v)) out.seriesNo = v; else delete out.seriesNo; }
     if (!out.series) { delete out.seriesNo; delete out.seriesNext; }
     if (out.seriesManual !== true) delete out.seriesManual;
+    if (out.finishedAuto !== true || !out.finished) delete out.finishedAuto; // fine messa dall'app (oggi o stima): la sostituisce la stima dall'inizio
     out.rating = Math.max(0, Math.min(5, Number(out.rating) || 0));
     if (!out.added) out.added = Date.now();
     return out;
@@ -958,7 +959,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function setStatus(b, st) {
     const nb = { ...b, status: st };
     // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
-    if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) nb.finished = today();
+    if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) { nb.finished = today(); nb.finishedAuto = true; }
     if (st === "in-lettura") { // si rilegge: la fine e l'anno della lettura precedente non valgono più, l'inizio riparte da oggi
       delete nb.finishedYear;
       if (nb.finished) { delete nb.finished; nb.started = today(); } else if (!nb.started) nb.started = today();
@@ -1410,7 +1411,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </div>
       <div class="grid2">
         <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
-        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.status === "letto" ? "" : " disabled"}></div>
+        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></div>
       </div>
       <p class="hint err" id="f-date-err" role="alert" hidden></p>
       <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
@@ -1480,11 +1481,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         const pr = dateProblem(sta.value, fin.value, el === sta ? "started" : "finished");
         if (pr) { el.value = el.dataset.ok; say(el, pr.msg); } else { el.dataset.ok = el.value; say(null); }
         est.hidden = true;
-        // Libro letto senza fine né anno: dall'inizio stimo la fine 20 giorni dopo (mai oltre oggi).
-        if (el === sta && sta.value && !pr && !fin.value && !fin.disabled && !(yr && yr.value)) {
+        if (el === fin) delete fin.dataset.auto; // fine scelta a mano: non la tocco più
+        // Libro letto senza fine (o con la fine messa dall'app) né anno: dall'inizio stimo la fine 20 giorni dopo (mai oltre oggi).
+        if (el === sta && sta.value && !pr && (!fin.value || fin.dataset.auto) && !fin.disabled && !(yr && yr.value)) {
           const d = new Date(sta.value + "T12:00"); d.setDate(d.getDate() + 20);
           const v = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-          fin.value = fin.dataset.ok = v < today() ? v : today(); est.hidden = false;
+          fin.value = fin.dataset.ok = v < today() ? v : today(); fin.dataset.auto = "1"; est.hidden = false;
         }
         limits(); syncYearRow(sheet);
       });
@@ -1525,13 +1527,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const was = b.status;
     b.status = $("#f-status", sheet).value;
     b.started = $("#f-started", sheet).value; b.finished = $("#f-finished", sheet).value;
+    b.finishedAuto = $("#f-finished", sheet).dataset.auto ? true : undefined;
     if (b.status !== "letto") b.finished = ""; // la fine vale solo per un libro letto
     const y = $("#f-year", sheet); b.finishedYear = y && b.status === "letto" && !b.finished ? y.value.trim() : undefined;
     b.notes = $("#f-notes", sheet).value.trim(); b.quote = $("#f-quote", sheet).value.trim();
     const pg = parseInt($("#f-page", sheet).value, 10); b.page = pg >= 0 ? pg : undefined;
     const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || b.pages;
     if (b.status === "letto" && tot) b.page = tot; // letto = tutte le pagine
-    if (b.status === "letto" && was !== "letto" && !b.finished && !b.finishedYear) b.finished = today();
+    if (b.status === "letto" && was !== "letto" && !b.finished && !b.finishedYear) { b.finished = today(); b.finishedAuto = true; }
   }
   function readData(sheet, b) {
     b.title = $("#d-title", sheet).value.trim() || b.title;
