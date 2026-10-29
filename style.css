@@ -678,3 +678,13 @@ html { scroll-behavior: smooth; }
 .rf .dt:has([aria-invalid=true]) { text-decoration: underline wavy var(--accent) 2px; }
 .rf .dt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .rf .psub { margin: 0; font-size: 14px; color: var(--muted); }
+.rf .seg { padding: 0 3px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; }
+.rf .seg button { min-height: 44px; padding: 8px 4px; font-size: 15px; border-radius: 0; }
+.rf .seg button[aria-checked=true] { color: var(--title); font-weight: 700; }
+.rf .seg-ink { top: auto; bottom: 0; height: 3px; border-radius: 0; background: var(--coral); }
+.rf .rate { justify-content: center; gap: 0; }
+.rf .rate button { width: 44px; height: 44px; padding: 0; font-size: 28px; color: var(--muted); }
+.rf .rate button.on { color: var(--accent); }
+.rf .verdict { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+.rf #f-rate + .verdict { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .rf .seg-ink { transition: none; } }

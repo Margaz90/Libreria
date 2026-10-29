@@ -1509,7 +1509,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
 
-  const rateHTML = b => `<div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div></div>`;
+  const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
+  const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
+  const rateHTML = b => `<div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
   function readingHead(b) {
     return `<div class="rf rf-head">
@@ -1573,6 +1575,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
         if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
         syncYearRow(sheet); syncPage(sheet); syncPeriod(sheet);
+        const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating || 0, btn.dataset.v);
       });
       const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", () => syncYearRow(sheet));
       wireDates(sheet); wireDateSlots(sheet);
@@ -1583,6 +1586,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
+      const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating, ($("#f-status", sheet) || { value: "letto" }).value);
     });
   }
   // Coerenza delle date di lettura: né nel futuro, la fine non prima dell'inizio. `edited` dice quale campo si sta cambiando.

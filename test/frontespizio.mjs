@@ -214,9 +214,33 @@ async function frase(browser) {
   await p.close2();
 }
 
+async function voto(browser) {
+  const p = await newPage(browser);
+  await load(p, [
+    { id: 'v1', title: 'Voto', author: 'A', status: 'letto', finished: '2025-01-02', added: 1, rating: 0 },
+    { id: 'v2', title: 'Pila', author: 'A', status: 'da-leggere', added: 2, rating: 0 },
+  ]);
+  await openBook(p, 'v1'); await p.waitForTimeout(400);
+  ok('verdetto iniziale per un Letto senza voto', await txt(p, '#f-verdict') === 'Tocca una stella per dare il voto');
+  await p.click('.rate button[data-n="4"]');
+  ok('4 stelle: Bellissimo', await txt(p, '#f-verdict') === 'Bellissimo');
+  await p.click('.rate button[data-n="4"]');
+  ok('stessa stella: torna al testo iniziale', await txt(p, '#f-verdict') === 'Tocca una stella per dare il voto');
+  const sizes = await p.evaluate(() => [...document.querySelectorAll('.rate button, .rf .seg button')].map(b => { const r = b.getBoundingClientRect(); return [r.width, r.height]; }));
+  ok('stelle e voci di stato >= 44 px', sizes.length === 8 && sizes.every(([w, h]) => w >= 43.5 && h >= 43.5), JSON.stringify(sizes));
+  ok('linea della voce scelta: 3 px', await p.evaluate(() => getComputedStyle(document.querySelector('.seg-ink')).height) === '3px');
+  await p.emulateMedia({ reducedMotion: 'reduce' });
+  ok('movimento ridotto: linea ferma', await p.evaluate(() => getComputedStyle(document.querySelector('.seg-ink')).transitionDuration) === '0s');
+  await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' });
+  await openBook(p, 'v2');
+  ok('Da leggere: Il voto, quando vuoi', await txt(p, '#f-verdict') === 'Il voto, quando vuoi');
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
   await aspetto(browser);
   await frase(browser);
+  await voto(browser);
 }
