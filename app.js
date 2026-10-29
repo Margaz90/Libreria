@@ -404,9 +404,11 @@
     let r;
     try { r = await fetchT(url); } catch { throw { code: "google-rete" }; }
     let retried = false;
-    if (r.status === 503) { // servizio giù per le richieste con chiave: riprovo senza chiave dopo una pausa
+    // 503 passeggero: riprovo con la chiave dopo una pausa, poi senza (la quota senza chiave è comune a tutti e quasi sempre finita)
+    for (const u of [url, url.replace("key=" + GBOOKS_KEY + "&", "")]) {
+      if (r.status !== 503) break;
       retried = true; await sleep(1200);
-      try { r = await fetchT(url.replace("key=" + GBOOKS_KEY + "&", "")); } catch { throw { code: "google-rete" }; }
+      try { r = await fetchT(u); } catch { throw { code: "google-rete" }; }
     }
     // Quota finita, chiave rifiutata o servizio giù: non insisto (5 minuti se è giù, altrimenti fino alla prossima apertura).
     if (r.status === 429 || r.status === 403 || r.status === 503) {
@@ -439,13 +441,15 @@
     });
   }
   async function appleSearch(term, max = 10) {
-    const j = await jsonp("https://itunes.apple.com/search?media=ebook&entity=ebook&country=it&lang=it_it&limit=" + max + "&term=" + encodeURIComponent(term));
+    const isbn = parseIsbn(term); // per un ISBN c'è la ricerca apposita (lookup), più precisa del testo libero
+    const j = await jsonp(isbn ? "https://itunes.apple.com/lookup?country=it&isbn=" + (isbn.length === 10 ? isbn13From10(isbn) : isbn)
+      : "https://itunes.apple.com/search?media=ebook&entity=ebook&country=it&lang=it_it&limit=" + max + "&term=" + encodeURIComponent(term));
     return (j.results || []).map(r => ({
       title: r.trackName || "", author: r.artistName || "",
       edYear: yearOf(r.releaseDate || ""), pages: undefined,
       genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
       synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
-      isbn: "", lang: "", ita: true,
+      isbn: isbn || "", lang: "", ita: true,
       cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
     })).filter(x => x.title);
   }

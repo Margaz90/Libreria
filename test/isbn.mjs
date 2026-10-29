@@ -102,4 +102,24 @@ export default async function ({ browser }) {
   ok('503 seguito da 429: Google sospeso per pochi minuti, poi di nuovo interrogato', subito === 0 && piuTardi > 0, `dopo 2 minuti: ${subito} richieste; dopo 8: ${piuTardi}`);
   await p.close2();
 
+
+  // 5. Google con chiave in 503 la prima volta: si riprova con la chiave (le richieste senza chiave finiscono quasi sempre in 429)
+  p = await apri(browser, (() => { let n = 0; return u => (/key=/.test(u) && n++ === 0 ? { status: 503, body: { error: { code: 503 } } } : { body: EINAUDI }); })());
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: dopo un 503 si riprova con la chiave e si trova il libro', /Underworld/.test(r.titoli.join('|')) && p.googleUrls.length >= 2 && p.googleUrls.slice(0, 2).every(u => /key=/.test(u)), p.googleUrls.map(u => /key=/.test(u) ? 'chiave' : 'senza').join(','));
+  await p.close2();
+
+  // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono
+  p = await apri(browser, () => ({ body: VUOTO }));
+  p.appleUrls = [];
+  await p.unroute(/itunes\.apple\.com/);
+  await p.route(/itunes\.apple\.com/, r => { const u = new URL(r.request().url()); p.appleUrls.push(u.pathname + u.search);
+    const hit = u.pathname === '/lookup' && u.searchParams.get('isbn') === '9788806242572';
+    r.fulfill({ status: 200, contentType: 'application/javascript', body: `${u.searchParams.get('callback')}(${JSON.stringify({ results: hit ? [{ trackName: 'Il libro Einaudi', artistName: 'Autore Prova', releaseDate: '2020-01-01T00:00:00Z' }] : [] })})` }); });
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, '978-88-06-24257-2');
+  ok('Apple Books cercato per ISBN (lookup), con l\'ISBN nel risultato', /Il libro Einaudi/.test(r.titoli.join('|')) && /9788806242572/.test(r.primo) && p.appleUrls.some(u => /^\/lookup\?.*isbn=9788806242572/.test(u)), p.appleUrls.join(' ') + ' / ' + r.primo);
+  await p.close2();
+
 }

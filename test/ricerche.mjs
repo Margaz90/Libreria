@@ -44,7 +44,7 @@ export default async function ({ browser }) {
   const b1 = await saved(p, 'b1'), b2 = await saved(p, 'b2');
   ok('Google giù: autore e copertina arrivano da Apple Books', b1.author === 'Don Winslow' && !!b1.cover && b1.year === 2023);
   ok('senza autore accetta solo il titolo identico (Black Money → Roversi)', b2.author === 'Paolo Roversi' && (b2.cover || '').includes('Pub/y'), b2.author);
-  ok('Google giù viene saltato invece di riprovarlo per ogni libro', gcalls <= 2, 'chiamate: ' + gcalls);
+  ok('Google giù viene saltato invece di riprovarlo per ogni libro', gcalls <= 3, 'chiamate: ' + gcalls);
 
   await p.locator('#main [data-id="b3"]').first().click();
   await p.click('#s-refresh'); await refStatus(p);
@@ -72,8 +72,8 @@ export default async function ({ browser }) {
   await q.click('#s-refresh'); await refStatus(q);
   await q.click('#s-save'); await q.waitForTimeout(900);
   const c1 = await saved(q, 'c1');
-  ok('Google senza chiave dopo un 503: pagine, genere e copertina', c1.pages === 928 && c1.genre === 'Narrativa' && /books\.google/.test(c1.cover || ''), JSON.stringify({ p: c1.pages, g: c1.genre }));
-  ok('il nuovo tentativo senza chiave avviene dopo il 503', calls.slice(0, 2).join(',') === 'chiave,senza', calls.join(','));
+  ok('Google senza chiave dopo due 503: pagine, genere e copertina', c1.pages === 928 && c1.genre === 'Narrativa' && /books\.google/.test(c1.cover || ''), JSON.stringify({ p: c1.pages, g: c1.genre }));
+  ok('dopo un 503 si riprova con la chiave, poi senza chiave', calls.slice(0, 3).join(',') === 'chiave,chiave,senza', calls.join(','));
 
   // 3. «Verifica ricerche»: esito visibile sotto il pulsante
   await q.locator('.dock .more').click(); await q.locator('[data-m=backup]').click();
