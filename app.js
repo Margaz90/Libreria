@@ -890,23 +890,23 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const needsDates = b => b.status === "letto" && ((!b.finished && !b.finishedYear) || !!dateProblem(b.started || "", b.finished || ""));
   const STALE = "periodo di lettura da aggiornare";
   const badgeHTML = b => needsDates(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
-  function spineHTML(b, tag = "button") {
+  function spineHTML(b, tag = "button", dim) { // dim: { w (%), h (px) } per le mensole delle Statistiche
     const p = Math.min(Number(b.pages) || 280, 900);
-    const h = Math.round(132 + p / 900 * 72);
-    let w = Math.round(26 + p / 900 * 24);
-    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
-    const stale = tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
+    const h = dim ? dim.h : Math.round(132 + p / 900 * 72);
+    let w = dim ? dim.w : Math.round(26 + p / 900 * 24) + "px";
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)}${dim ? ", " : " di "}${esc(b.author || "")}${serAria(b)}${!dim && needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
+    const stale = !dim && tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
-      if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
-      return `<${tag} class="spine photo${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
+      if (b.spineRatio && !dim) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio))) + "px";
+      return `<${tag} class="spine photo${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
     }
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
-      return `<${tag} class="spine fromcover${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+      return `<${tag} class="spine fromcover${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background:${colorOf(b)}">
         <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}${bd}</${tag}>`;
     }
-    return `<${tag} class="spine${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+    return `<${tag} class="spine${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background:${colorOf(b)}">
       <span class="band a"></span>${text}<span class="band b"></span>${bd}</${tag}>`;
   }
 
@@ -1161,11 +1161,25 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (S.monthsCount >= 3 && tm.length === 1) t += ` Il mese in cui finisci più libri è ${B(MONTHS[tm[0]])}.`;
     return `<p class="stats-lede">${t}</p>`;
   }
+  // Mensola di un anno: dorsi toccabili sul legno, file da 300 unità, paginata come gli scaffali.
+  function yearHTML(a, racconto) {
+    const shown = a.books.slice(0, state.limit["y" + a.year] || PAGE);
+    const nums = plural(a.count, "libro", "libri") + (a.pages ? `, ${num(a.pages)} pagine` : "");
+    const d = [a.topAuthor && a.topAuthor.count >= 2 ? `Autore dell'anno <b>${esc(a.topAuthor.name)}</b>` : "", a.topGenre && a.topGenre.count >= 2 ? `Genere <b>${esc(a.topGenre.name)}</b>` : "",
+      a.best && a.count >= 2 ? `Il preferito: <b>${esc(a.best.title)}</b>, ${STARS_IT[Math.min(5, Math.round(a.best.rating))]}` : ""].filter(Boolean);
+    return `<section class="ys" data-year="${a.year}" aria-labelledby="ys-${a.year}">
+      <div class="ys-head"><div><h3 class="ys-n" id="ys-${a.year}" tabindex="-1">${a.year}</h3>
+        <p class="ys-m">${nums}${a.avgRating ? `, <span aria-hidden="true">★</span><span class="sr">voto medio</span> ${dec(a.avgRating)}` : ""}</p></div>
+        ${racconto ? `<button class="story-btn" type="button" data-story="${a.year}" aria-label="Il racconto del ${a.year}">Il racconto</button>` : ""}</div>
+      <div class="ys-shelf${racconto ? " ribbon" : ""}" role="group" aria-label="${a.year}: ${nums}">${ysRows(shown).map(r => `<div class="ys-row">${r.map(b => spineHTML(b, "button", statDim(b))).join("")}</div>`).join("")}</div>
+      ${pagerHTML("y" + a.year, shown.length, a.books.length)}
+      ${d.length ? `<p class="ys-d">${d.join(". ")}.</p>` : ""}
+    </section>`;
+  }
   function renderStats(st) {
     const S = st.sempre;
     if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
     const blk = (key, title, small, body, cls = "") => `<section class="sblk${cls}" data-panel="${key}"><h3>${title}${small ? ` <small>${small}</small>` : ""}</h3>${body}</section>`;
-    const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
     const maxR = Math.max(...Object.values(S.ratings)), rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), f5 = S.fiveStars.map(b => `<b>${esc(b.title)}</b>`);
     const voti = (rated ? [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} ${n === 1 ? "stella" : "stelle"}">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") : "") +
       `<p class="hint">${rated ? "" : "Dai un voto dalla scheda del libro per vedere come giudichi le tue letture."}${f5.length ? `Cinque stelle a ${f5.length > 3 ? f5.slice(0, 3).join(", ") + ` e altri ${f5.length - 3}` : elenco(f5)}.` : ""}${S.unrated && rated ? ` ${plural(S.unrated, "libro senza voto", "libri senza voto")}.` : ""}</p>`;
@@ -1180,15 +1194,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       : `<p class="hint">Aggiungi l'autore nella scheda dei libri.</p>`;
     const maxG = S.genres.length ? S.genres[0].count : 0;
     const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
-    const years = st.anni.map((a, i) => `<details class="year" data-year="${a.year}"${i ? "" : " open"}>
-        <summary><b>${a.year}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></summary>
-        <div class="in">${a.months.some(Boolean) ? monthsHTML(a.months) : ""}
-          ${a.topAuthor || a.topGenre ? `<div class="pair">${a.topAuthor ? `<div><span class="label">Autore dell'anno</span><b>${esc(a.topAuthor.name)}</b><span>${plural(a.topAuthor.count, "libro", "libri")}</span></div>` : ""}${a.topGenre ? `<div><span class="label">Genere dell'anno</span><b>${esc(a.topGenre.name)}</b><span>${plural(a.topGenre.count, "libro", "libri")}</span></div>` : ""}</div>` : ""}
-          ${a.best ? `<div class="best">${coverHTML(a.best, 120)}<div><span class="label">Il preferito</span><b>${esc(a.best.title)}</b><span class="stars">${starStr(a.best.rating)}</span></div></div>` : ""}
-        </div></details>`).join("");
     return `<div class="stats"><h2 class="stats-title" tabindex="-1">Statistiche</h2>${ledeHTML(S)}
       <div class="stats-cols"><div class="stats-years"><h2 class="sr">Anno per anno</h2>
-        ${stories ? `<div class="stories">${stories}</div>` : ""}${years ? `<div class="years">${years}</div>` : ""}
+        ${st.anni.map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}
         ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
         ${st.noYear ? `<div class="stats-noyear"><b>${st.noYear === 1 ? "1 libro letto senza anno." : `${num(st.noYear)} libri letti senza anno.`}</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</div>` : ""}
       </div><div class="sempre"><h2 class="sr">Sempre</h2>
@@ -1241,7 +1249,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const close = () => {
       document.removeEventListener("keydown", keys, true); el.remove(); document.body.style.overflow = "";
       if (opener && opener.isConnected) opener.focus({ preventScroll: true });
-      else { const c = document.querySelector(`.story-card[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
+      else { const c = document.querySelector(`[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
     };
     function keys(e) {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }

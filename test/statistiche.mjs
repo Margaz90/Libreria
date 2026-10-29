@@ -155,7 +155,7 @@ const noHScroll = p => p.evaluate(w => document.documentElement.scrollWidth <= w
 async function pagina(browser) {
   let p = await statsPage(browser, FIXTURE);
   const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
-  ok('due schede racconto 2025 e 2024', (await p.$$eval('button.story-card', els => els.map(e => e.dataset.story).join())) === '2025,2024');
+  ok('pulsanti racconto 2025 e 2024 nelle loro mensole', (await p.$$eval('section.ys button.story-btn', els => els.map(e => e.closest('section.ys').dataset.year + '=' + e.dataset.story).join())) === '2025=2025,2024=2024' && !(await p.locator('section.ys[data-year="2019"] .story-btn').count()));
   const panels = await p.$$eval('[data-panel]', els => els.map(e => e.dataset.panel).join());
   ok('blocchi di Sempre presenti', panels === 'voti,tempo,mesi,autori,generi', panels);
   ok('incipit con i dati di prova', (await txt('.stats-lede')).replace(/\s+/g, ' ').trim() === 'Hai letto 8 libri, 2850 pagine in tutto. Il mese in cui finisci più libri è agosto.', await txt('.stats-lede'));
@@ -164,7 +164,7 @@ async function pagina(browser) {
   ok('voti: cinque stelle a Uno e Tre, 1 senza voto', /Cinque stelle a Uno e Tre\.\s*1 libro senza voto\./.test(await txt('[data-panel="voti"]')), await txt('[data-panel="voti"]'));
   ok('mesi: leggi di più ad agosto', /Leggi di più ad agosto: 3 libri\./.test(await txt('[data-panel="mesi"]')));
   ok('autori: Stephen King con 2 mini-dorsi nascosti a VoiceOver', await p.$eval('[data-panel="autori"] li', li => li.textContent.includes('Stephen King') && li.querySelectorAll('.mini i').length === 2 && li.querySelector('.mini').getAttribute('aria-hidden') === 'true'));
-  ok('anni 2025, 2024, 2019, il primo aperto', (await p.$$eval('details.year', els => els.map(e => e.dataset.year + (e.open ? '*' : '')).join())) === '2025*,2024,2019');
+  ok('mensole 2025, 2024, 2019', (await p.$$eval('section.ys', els => els.map(e => e.dataset.year).join())) === '2025,2024,2019');
   ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /1 libro letto senza anno\./.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
   ok('stelle dei voti leggibili da VoiceOver', (await p.locator('[data-panel="voti"] [role="img"][aria-label="5 stelle"]').count()) === 1);
   ok('barre con il numero accanto (Generi: Thriller 3)', /Thriller\s*3/.test(await txt('[data-panel="generi"]')));
@@ -175,7 +175,7 @@ async function pagina(browser) {
   await p.close2();
 
   p = await statsPage(browser, FIXTURE.filter(b => b.status === 'letto').map(({ started, finished, finishedYear, ...b }) => b));
-  ok('senza date: Mesi e Tempo spiegano cosa serve', !!(await p.locator('[data-panel="mesi"] .hint').count()) && !!(await p.locator('[data-panel="tempo"] .hint').count()) && !(await p.locator('[data-panel="mesi"] .months').count()) && !(await p.locator('details.year').count()));
+  ok('senza date: Mesi e Tempo spiegano cosa serve', !!(await p.locator('[data-panel="mesi"] .hint').count()) && !!(await p.locator('[data-panel="tempo"] .hint').count()) && !(await p.locator('[data-panel="mesi"] .months').count()) && !(await p.locator('section.ys').count()));
   await p.close2();
 
   p = await statsPage(browser, [...FIXTURE, { id: 'Lungo', title: 'T'.repeat(150), author: 'Autore '.repeat(18), genre: 'Genere'.repeat(20), pages: 100, rating: 5, status: 'letto', finished: '2025-09-01', added: 1 }]);
@@ -191,6 +191,41 @@ async function pagina(browser) {
     ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
     await p.close2();
   }
+}
+
+async function mensole(browser) {
+  let p = await statsPage(browser, FIXTURE);
+  const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
+  ok('etichetta della mensola 2025', (await p.getAttribute('section.ys[data-year="2025"] .ys-shelf', 'aria-label')) === '2025: 3 libri, 800 pagine');
+  ok('tre dorsi toccabili «Titolo, Autore» nel 2025', (await p.$$eval('section.ys[data-year="2025"] button.spine[data-id]', els => els.map(e => e.getAttribute('aria-label')).join('|'))) === 'Due, Don Winslow|Uno, Don Winslow|Sette, Bad Dates', await p.$$eval('section.ys[data-year="2025"] button.spine[data-id]', els => els.map(e => e.getAttribute('aria-label')).join('|')));
+  ok('riga del 2025', /Autore dell'anno Don Winslow\. Genere Thriller\. Il preferito: Uno, cinque stelle\./.test(await txt('section.ys[data-year="2025"] .ys-d')));
+  ok('riga dei numeri del 2025', /3 libri, 800 pagine,\s*★?\s*voto medio\s*3,7/.test(await txt('section.ys[data-year="2025"] .ys-m')), await txt('section.ys[data-year="2025"] .ys-m'));
+  ok('nessuna riga dell\'anno nel 2019 (1 libro)', !(await p.locator('section.ys[data-year="2019"] .ys-d').count()));
+  ok('segnalibro sulla mensola con il racconto', await p.locator('section.ys[data-year="2025"] .ys-shelf.ribbon').count() === 1 && !(await p.locator('section.ys[data-year="2019"] .ribbon').count()));
+  ok('pulsante «Il racconto» alto almeno 44 px', (await p.locator('.story-btn').first().boundingBox()).height >= 44);
+  await p.close2();
+
+  const B = (id, extra) => ({ id, title: id, author: 'A', status: 'letto', finished: '2025-05-05', added: 1, rating: 0, ...extra });
+  p = await statsPage(browser, [B('P0', { finished: '2025-05-03' }), B('P100', { pages: 100, finished: '2025-05-02' }), B('P900', { pages: 900, finished: '2025-05-01' })]);
+  const wd = id => p.locator(`section.ys .spine[data-id="${id}"]`).boundingBox().then(b => b.width);
+  const w0 = await wd('P0'), w100 = await wd('P100'), w900 = await wd('P900');
+  ok('larghezze: 0 e 100 pagine uguali (minima), 900 la più larga', Math.abs(w0 - w100) < 0.5 && w900 > w0, `${w0} ${w100} ${w900}`);
+  await p.close2();
+
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  p = await statsPage(browser, [B('Foto', { spine: PNG, spineRatio: 0.5, pages: 300 })]);
+  const sw = await p.$eval('section.ys .spine', e => e.style.width);
+  ok('foto del dorso: larghezza percentuale, non spineRatio', /%$/.test(sw), sw);
+  await p.close2();
+
+  p = await statsPage(browser, Array.from({ length: 20 }, (_, i) => B('G' + i, { pages: 900, finished: `2025-05-${String(i + 1).padStart(2, '0')}` })), undefined, { width: 320, height: 700 });
+  const rc = await p.locator('section.ys .ys-row').count();
+  ok('mensola piena a 320 px: file da 6 dorsi e niente scorrimento laterale', rc === 3 && await noHScroll(p), String(rc));
+  await p.close2();
+
+  p = await statsPage(browser, [B('H', { title: '<i>T&amp;</i>', author: '<b>A</b>' })]);
+  ok('dorso con HTML nel titolo: solo testo', !(await p.locator('section.ys .spine i i, section.ys .spine b').count()));
+  await p.close2();
 }
 
 async function incipit(browser) {
@@ -213,7 +248,7 @@ async function incipit(browser) {
 async function racconto(browser) {
   let p = await statsPage(browser, FIXTURE);
   const cur = () => p.$eval('#story .slide:not([hidden])', e => e.dataset.s).catch(() => '');
-  const open = async y => { await p.locator(`button.story-card[data-story="${y}"]`).click(); await p.waitForSelector('#story[role="dialog"][aria-modal="true"]', { timeout: 3000 }); };
+  const open = async y => { await p.locator(`button.story-btn[data-story="${y}"]`).click(); await p.waitForSelector('#story[role="dialog"][aria-modal="true"]', { timeout: 3000 }); };
   await open(2025);
   const ids = await p.$$eval('#story .slide', els => els.map(e => e.dataset.s).join());
   ok('2025: 9 schermate', ids === 'copertina,numeri,mese,tempo,autore,genere,preferito,voti,chiusura', ids);
@@ -252,7 +287,7 @@ async function racconto(browser) {
 
   // Il focus resta nel racconto anche quando il pulsante che lo aveva si disattiva o sparisce (computer, frecce visibili)
   p = await statsPage(browser, FIXTURE, undefined, { width: 1366, height: 860 });
-  await p.locator('button.story-card[data-story="2025"]').click(); await p.waitForSelector('#story');
+  await p.locator('button.story-btn[data-story="2025"]').click(); await p.waitForSelector('#story');
   await p.locator('#story .story-next').focus();
   for (let i = 0; i < 10; i++) await p.keyboard.press('Enter');
   const atLast = await p.$eval('#story .slide:not([hidden])', e => e.dataset.s);
@@ -264,7 +299,7 @@ async function racconto(browser) {
   await p.close2();
 
   p = await statsPage(browser, [...FIXTURE, { id: 'V', title: 'Ventisei', author: 'X', status: 'letto', finished: '2026-11-02', added: 1, rating: 0 }], '2027-01-05T10:00:00');
-  ok('racconti rolling al 2027-01-05: 2026 e 2025', (await p.$$eval('button.story-card', els => els.map(e => e.dataset.story).join())) === '2026,2025');
+  ok('racconti rolling al 2027-01-05: 2026 e 2025', (await p.$$eval('button.story-btn', els => els.map(e => e.dataset.story).join())) === '2026,2025');
   await p.close2();
 }
 
@@ -273,5 +308,6 @@ export default async function ({ browser }) {
   await calcoli(browser);
   await pagina(browser);
   await incipit(browser);
+  await mensole(browser);
   await racconto(browser);
 }
