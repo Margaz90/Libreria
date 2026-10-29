@@ -544,7 +544,7 @@ OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } OPTIONAL { ?work wdt:
     if (!ws.length) return [];
     const ids = [...new Set(ws.flatMap(w => [names ? w.w : "", w.ser, w.nx]).filter(Boolean))];
     const L = ids.length ? await wdLabels(ids) : new Map(), lab = (k, ...lg) => { const l = L.get(k) || []; for (const g of lg) { const x = l.find(y => y[1] === g); if (x) return x[0]; } };
-    return ws.map(w => ({ id: w.id, ed: w.ed, names: names ? [...new Set((L.get(w.w) || []).map(x => x[0]))] : [], series: w.ser ? lab(w.ser, "it", "en", "mul") : undefined, no: w.no, it: w.nx ? lab(w.nx, "it") : undefined }));
+    return ws.map(w => ({ id: w.id, ed: w.ed, names: names ? [...new Set((L.get(w.w) || []).map(x => x[0]))] : [], series: w.ser ? lab(w.ser, "it", "en", "mul") : undefined, serNames: w.ser ? [...new Set((L.get(w.ser) || []).map(x => x[0]))] : [], no: w.no, it: w.nx ? lab(w.nx, "it") : undefined }));
   }
   const isbnWorks = isbn => wdWorks(`SELECT ?ed ?work ?st ?ser ?no ?nx ?n2 ?x2 WHERE { hint:Query hint:optimizer "None".
 ${wdIsbn(isbn)} OPTIONAL { ?ed wdt:P629 ?w0 } BIND(COALESCE(?w0, ?ed) AS ?work) FILTER NOT EXISTS { ?work wdt:P629 ?e0 }
@@ -610,19 +610,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     if (!w) return null;
     const r = { series: w.series };
+    if (w.serNames && w.serNames.length) r.names = w.serNames; // la serie in tutte le lingue: per riconoscere il nome già usato in libreria
     if (w.no) r.no = w.no;
     if (w.it && await itEdition(w.it, a)) r.next = w.it;
     return r;
   }
   // Copia con la serie trovata, rispettando seriesManual; onlyNext: solo il seguito (libro che ha già la serie).
   function applySeries(b, r, onlyNext) {
-    const o = { ...b };
-    if (!onlyNext && !b.seriesManual && r.series) {
-      const s = seriesName(r.series);
+    const o = { ...b }, s = r.series ? seriesName(r.series, r.names || []) : "";
+    if (!onlyNext && !b.seriesManual && s) {
       if (seriesKey(s) !== seriesKey(b.series)) { delete o.seriesNo; delete o.seriesNext; }
       o.series = s; if (r.no) o.seriesNo = r.no;
     }
-    if (r.next && seriesKey(o.series) === seriesKey(r.series)) o.seriesNext = r.next;
+    if (r.next && s && seriesKey(o.series) === seriesKey(s)) o.seriesNext = r.next;
     return o;
   }
   // Salva la serie trovata (upsert: un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
@@ -638,7 +638,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const b = state.books.find(x => x.id === id);
     if (b && navigator.onLine) findSeries(b).then(r => {
       const cur = state.books.find(x => x.id === id);
-      if (r && cur) applySeriesTo(cur, r);
+      if (!r || !cur) return;
+      const had = !!cur.series; // se trovata adesso, lo dico (il nome è quello già usato in libreria, se c'è)
+      const nb = applySeriesTo(cur, r) && !had && state.books.find(x => x.id === id);
+      if (nb && nb.series) toast(`«${nb.title}»: serie ${nb.series}${nb.seriesNo ? " · " + nb.seriesNo : ""}`);
     }).catch(() => {});
   }
   async function searchBooks(q) {
@@ -1567,13 +1570,20 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       b.series = name; b.seriesNo = no; b.seriesNext = ""; b.seriesManual = true;
     }
   }
-  // Nomi già usati (prima forma trovata): un nome uguale prende quella forma.
-  function seriesNames() {
+  // Nomi già usati (prima forma trovata): un nome uguale prende quella forma. Il confronto largo ignora accenti, punteggiatura,
+  // articoli e parole come «saga», «ciclo», «series» («Slough House series» = «Slough House»).
+  const seriesLoose = v => { const k = norm(v).replace(/\b(the|il|lo|la|i|gli|le|l|series|serie|saga|ciclo|cycle|trilogia|trilogy|sequence)\b/g, " ").replace(/\s+/g, " ").trim(); return k || seriesKey(v); };
+  function seriesNames(key = seriesKey) {
     const m = new Map();
-    for (const b of state.books) if (b.series && !m.has(seriesKey(b.series))) m.set(seriesKey(b.series), b.series);
+    for (const b of state.books) if (b.series && !m.has(key(b.series))) m.set(key(b.series), b.series);
     return m;
   }
-  const seriesName = v => seriesNames().get(seriesKey(v)) || v.trim();
+  // Nome scritto a mano: confronto stretto. Nome da Wikidata (alts: la stessa serie in altre lingue): confronto largo,
+  // e se uno dei nomi è già in libreria vince quello.
+  const seriesName = (v, alts) => {
+    if (!alts) return seriesNames().get(seriesKey(v)) || v.trim();
+    const m = seriesNames(seriesLoose); for (const x of [v, ...alts]) { const f = m.get(seriesLoose(x)); if (f) return f; } return v.trim();
+  };
   function fillData(sheet, hit, b, { keepYear = false } = {}) {
     if (hit.title) $("#d-title", sheet).value = hit.title;
     if (hit.author) $("#d-author", sheet).value = hit.author;

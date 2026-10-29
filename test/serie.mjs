@@ -185,7 +185,7 @@ const c2Rows = (q, ws) => {
   const L = (x, nm, lg) => out.push({ x: E(x), nm: { type: 'literal', value: nm, 'xml:lang': lg }, lg: { value: lg } });
   for (const x of ids) {
     for (const w of ws) if (w.id === x) for (const nm of String(w.names || '').split('|').filter(Boolean)) L(x, nm, 'en');
-    for (const [t, q2] of QN) if (q2 === x) L(x, t.slice(2), 'it');
+    for (const [t, q2] of QN) if (q2 === x) t.slice(2).split('|').forEach((nm, i) => L(x, nm, i ? 'en' : 'it')); // serie: «italiano|altri nomi»
   }
   return out;
 };
@@ -428,6 +428,40 @@ async function usoRicerca(browser) {
   await p.close2();
 }
 
+// --- Nuovo libro di una serie già in libreria: prende il nome già usato, anche se Wikidata lo scrive in un'altra lingua ---
+async function nomeGiaUsato(browser) {
+  const p = await fonti(browser);
+  const base = { added: 1, rating: 0, status: 'letto', author: 'George R. R. Martin' };
+  await load(p, [{ ...base, id: 'g1', title: 'Il trono di spade', series: 'A Song of Ice and Fire', seriesNo: '1' },
+    { ...base, id: 'd1', title: 'Il colore della magia', author: 'Terry Pratchett', series: 'Discworld', seriesNo: '1' },
+    { ...base, id: 'm1', title: 'Altro', author: 'Altro Autore', series: 'Mia serie', seriesNo: '1', seriesManual: true }]);
+  p.cfg.works = [W('Q20', 'A Clash of Kings|Il regno dei lupi', 'Cronache del ghiaccio e del fuoco|A Song of Ice and Fire', '2'),
+    W('Q21', 'The Light Fantastic|La luce fantastica', 'Ciclo di Mondo Disco|Discworld series', '2'),
+    W('Q22', 'Dune|Dune', 'Le cronache di Dune', '1')];
+  const nuovo = async (title, author, serie) => {
+    await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
+    await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+    await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+    await p.fill('#d-title', title); await p.fill('#d-author', author);
+    if (serie) await p.fill('#d-series', serie);
+    await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
+    await p.waitForFunction(t => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === t && x.series), title, { timeout: 12000 }).catch(() => {});
+    return (await localBooks(p)).find(x => x.title === title) || {};
+  };
+  let b = await nuovo('Il regno dei lupi', 'George R. R. Martin');
+  const t = await p.evaluate(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' | '));
+  ok('nuovo libro: serie già in libreria con un altro nome su Wikidata → nome della libreria', b.series === 'A Song of Ice and Fire' && b.seriesNo === '2', JSON.stringify(b));
+  ok('nuovo libro: un avviso dice la serie trovata', /Il regno dei lupi.*A Song of Ice and Fire · 2/.test(t), t);
+  b = await nuovo('La luce fantastica', 'Terry Pratchett');
+  ok('nuovo libro: «Discworld series» = «Discworld» già in libreria', b.series === 'Discworld' && b.seriesNo === '2', JSON.stringify(b));
+  b = await nuovo('Dune', 'Frank Herbert');
+  ok('nuovo libro: serie non in libreria → nome di Wikidata, a nuovo', b.series === 'Le cronache di Dune' && b.seriesNo === '1', JSON.stringify(b));
+  b = await nuovo('Scritto a mano', 'Altro Autore', 'Mia');
+  ok('serie scritta a mano: confronto stretto («Mia» resta diversa da «Mia serie»)', b.series === 'Mia', JSON.stringify(b));
+  ok('nome già usato: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 // --- «Cerca le serie» in sottofondo (Altro → Backup) ---
 async function cercaSerie(browser) {
   const p = await fonti(browser);
@@ -653,6 +687,7 @@ async function prossimo(browser) {
 export default async function ({ browser }) {
   await ricerca(browser);
   await usoRicerca(browser);
+  await nomeGiaUsato(browser);
   await pulizia(browser);
   await titoli(browser);
   await scheda(browser);
