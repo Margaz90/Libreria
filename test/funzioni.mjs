@@ -262,6 +262,27 @@ async function prossimo(browser) {
   ok('segnatura con «Segnatura» solo per VoiceOver', await hero.locator('.ncard:visible .call .sr').textContent() === 'Segnatura ');
   const why0 = await next([...pila, ...letti]);
   ok('motivo senza punto nel testo', await hero.locator('.ncard').first().locator('.why').textContent() === why0[0].reason);
+  // Linguette interattive
+  const tabEl = i => p.locator('#hero [role=tab]').nth(i), sel = i => tabEl(i).getAttribute('aria-selected');
+  const titleOf = id => p.locator(`#hero .ncard[data-next="${id}"] b`).textContent();
+  await tabEl(1).click();
+  ok('clic sulla seconda linguetta: mostra il secondo libro', await sel(1) === 'true' && await hero.locator('.ncard:visible').getAttribute('data-next') === l1[1]
+    && await hero.locator('[data-start]').getAttribute('data-start') === l1[1] && await hero.locator('[data-start]').getAttribute('aria-label') === 'Inizia ' + await titleOf(l1[1]));
+  const act = () => p.evaluate(() => document.activeElement.id);
+  await p.keyboard.press('ArrowRight');
+  ok('ArrowRight: linguetta successiva con focus e selezione', await act() === 'nh-t2' && await sel(2) === 'true' && await sel(1) === 'false');
+  await p.keyboard.press('ArrowRight');
+  ok('ArrowRight dall\'ultima: la prima', await act() === 'nh-t0' && await sel(0) === 'true');
+  await p.keyboard.press('ArrowLeft');
+  ok('ArrowLeft dalla prima: l\'ultima', await act() === 'nh-t2');
+  await p.keyboard.press('Home'); const h0 = await act(); await p.keyboard.press('End');
+  ok('Home e End', h0 === 'nh-t0' && await act() === 'nh-t2');
+  ok('tabindex mobile e pannello focalizzabile', await tabEl(2).getAttribute('tabindex') === '0' && await tabEl(0).getAttribute('tabindex') === '-1' && await tabEl(1).getAttribute('tabindex') === '-1'
+    && await hero.locator('.ncard:visible').getAttribute('tabindex') === '0');
+  await tabEl(1).click();
+  await p.evaluate(id => { const H = window.libreriaHost, b = H.books().find(x => x.id === id); H.setLocal(id, { ...b, title: b.title + ' bis' }); H.refreshChanged([{ id, from: 'da-leggere', to: 'da-leggere' }]); }, l1[2]);
+  ok('selezione ricordata dopo un cambio di titolo', await sel(1) === 'true' && /bis$/.test(await titleOf(l1[2])));
+  await tabEl(0).click();
   const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
   ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
   await p.locator('#main [data-id="n2"]').first().click(); await p.waitForSelector('.sheet details.edit');
@@ -273,6 +294,7 @@ async function prossimo(browser) {
   await p.locator('#n-more').click(); await moved(before.join());
   const after = await ids(p.locator('#hero .next'));
   ok('Altre proposte cambia i libri', after.length > 0 && after.every(x => !before.includes(x)), `${before} → ${after}`);
+  ok('Altre proposte: prima linguetta, annuncio e focus', await sel(0) === 'true' && /^Nuove proposte: /.test(await p.locator('#n-live').textContent()) && await act() === 'n-more');
   await p.locator('#n-more').click(); await moved(after.join());
   ok('pila esaurita: si ricomincia', (await ids(p.locator('#hero .next'))).length === 3);
   await p.locator('[data-filter="letto"]').first().click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
@@ -300,6 +322,21 @@ async function prossimo(browser) {
   ok('Scegli per me funziona anche con letture in corso', await p.locator('.sheet .next .ncard').count() >= 1);
   await p.keyboard.press('Escape'); await closed(p);
 
+  // Scegli per me insieme all'hero, titolo con virgolette, movimento ridotto
+  await load(p, [...pila, ...letti].map(b => ({ ...base, ...b })));
+  await p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]').click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
+  ok('scheda con la sua tablist ns-*', await p.locator('.sheet [role=tablist]').count() === 1 && await p.locator('.sheet #ns-t0').count() === 1);
+  ok('nessun id duplicato con hero e scheda aperti', await p.evaluate(() => { const a = [...document.querySelectorAll('[id]')].map(x => x.id); return a.length === new Set(a).size; }));
+  const heroSel = () => p.locator('#hero [role=tab][aria-selected=true]').getAttribute('id');
+  const h1 = await heroSel(); await p.locator('.sheet #ns-t2').click();
+  ok('cambiare linguetta nella scheda non cambia quella dell\'hero', await heroSel() === h1 && await p.locator('.sheet #ns-t2').getAttribute('aria-selected') === 'true');
+  await p.keyboard.press('Escape'); await closed(p);
+  await load(p, [{ id: 'q1', title: 'Primo', author: 'A', status: D, added: 1 }, { id: 'q2', title: 'Due "virgolette" <i>', author: 'B', status: D, added: 2 }]);
+  await tabEl(1).click();
+  ok('aria-label di Inizia con virgolette e HTML', await p.locator('#hero [data-start]').getAttribute('aria-label') === 'Inizia Due "virgolette" <i>');
+  await p.emulateMedia({ reducedMotion: 'reduce' }); await tabEl(0).click();
+  ok('movimento ridotto: nessuna animazione al cambio', await p.locator('#hero .ncard:visible').evaluate(n => getComputedStyle(n).animationName) === 'none');
+  await p.emulateMedia({ reducedMotion: null });
   await load(p, [{ id: 'u1', title: 'Unico <b>', author: 'A', status: D, added: 1 }]);
   ok('un solo libro in pila: una proposta, testo con esc', await p.locator('#hero .ncard').count() === 1 && /Unico <b>/.test(await p.locator('#hero .ncard b').innerText()));
   ok('un solo libro: niente linguette né contatore, regione «Proposta»', await p.locator('#hero [role=tablist]').count() === 0 && await p.locator('#hero .n').count() === 0

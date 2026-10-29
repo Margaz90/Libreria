@@ -962,10 +962,37 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return `<section class="next"><${h}>Cosa leggo adesso?</${h}><div class="drawer${n > 1 ? " many" : ""}">${tabs}<div class="nstack">${cards}</div></div>
       <div class="nfoot"><button class="btn primary" type="button" data-start="${esc(cur.id)}" aria-label="Inizia ${esc(cur.title)}">Inizia</button>${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
   }
+  function announce(text) {
+    let l = $("#n-live"); if (!l) { l = document.createElement("div"); l.id = "n-live"; l.className = "sr"; l.setAttribute("aria-live", "polite"); document.body.append(l); }
+    l.textContent = text;
+  }
+  const flipCard = c => { if (!c) return; c.classList.remove("flip"); void c.offsetWidth; c.classList.add("flip"); };
   function wireNext(root, sheet) {
-    root.querySelectorAll("[data-start]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); });
+    const tabs = [...root.querySelectorAll(".ntab")], cards = [...root.querySelectorAll(".ncard")], start = $("[data-start]", root);
+    let cur = Math.max(0, tabs.findIndex(t => t.getAttribute("aria-selected") === "true"));
+    const pick = (id, anim) => {
+      cur = Math.max(0, cards.findIndex(c => c.dataset.next === id));
+      cards.forEach((c, i) => c.hidden = i !== cur);
+      tabs.forEach((t, i) => { t.setAttribute("aria-selected", i === cur); t.tabIndex = i === cur ? 0 : -1; });
+      start.dataset.start = id; start.setAttribute("aria-label", "Inizia " + $("b", cards[cur]).textContent);
+      if (!sheet) nx.sel = id;
+      if (anim) flipCard(cards[cur]);
+    };
+    const go = (i, focus) => { i = (i + tabs.length) % tabs.length; pick(tabs[i].dataset.tab, true); if (focus) tabs[i].focus(); };
+    tabs.forEach(t => t.onclick = () => pick(t.dataset.tab, true));
+    const tl = $("[role=tablist]", root);
+    if (tl) tl.onkeydown = e => {
+      const i = tabs.indexOf(document.activeElement), to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (i < 0 || to === undefined) return;
+      e.preventDefault(); go(to, true);
+    };
+    start.onclick = () => { const b = state.books.find(x => x.id === start.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); };
     const m = $("[data-n=more]", root);
-    if (m) m.onclick = () => { nextList(true); if (sheet) fillNext(root); else renderHero(); const n = $("[data-n=more]", root); if (n) n.focus(); };
+    if (m) m.onclick = () => {
+      nextList(true); if (sheet) fillNext(root); else renderHero();
+      flipCard($(".ncard", root)); announce("Nuove proposte: " + nx.list.map(x => x.book.title).join(", "));
+      const n = $("[data-n=more]", root); if (n) n.focus();
+    };
     $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
   }
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }

@@ -631,7 +631,7 @@ html { scroll-behavior: smooth; }
 .ncard.flip { animation: nflip .35s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes nflip { from { transform: translateY(-10px) rotate(-.6deg); opacity: .2; } }
 @media (min-width: 1024px) { .hero .next { max-width: 600px; } }
-@media (prefers-reduced-motion: reduce) { .ncard { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ncard.flip { animation: none; } }
 /* Si vede alto 36 px, ma il bordo trasparente porta il bersaglio al tocco a 44 px */
 .shelf-head .choose { margin: 0 6px 0 auto; min-height: 44px; padding: 6px 12px; font-size: 13px; border: 4px solid transparent; border-radius: 14px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--rule); }
 /* Serie: bollino, pulsante, riga Serie/N. */
