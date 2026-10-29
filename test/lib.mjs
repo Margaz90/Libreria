@@ -8,9 +8,11 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 export const { chromium } = require('playwright');
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const APP = 'http://localhost:8765';
-export const API = 'http://localhost:8766';
-export const STUB = fs.readFileSync(path.join(ROOT, 'test', 'firebase-stub.js'), 'utf8');
+// Porte: 8765 (app) e 8766 (finto Firestore); con TEST_PORT=N si usano N e N+1, così più copie del progetto possono fare i test insieme.
+const PORT = Number(process.env.TEST_PORT) || 8765;
+export const APP = `http://localhost:${PORT}`;
+export const API = `http://localhost:${PORT + 1}`;
+export const STUB = fs.readFileSync(path.join(ROOT, 'test', 'firebase-stub.js'), 'utf8').replace("'http://localhost:8766'", `'${API}'`);
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const overrides = new Map(); // percorso → contenuto sostitutivo (es. un sw.js con una versione nuova)
@@ -20,7 +22,7 @@ const store = new Map(); // dati del finto Firestore: "users/u1/books/b1" → do
 export const resetCloud = () => store.clear();
 export const putDoc = (p, data) => store.set(p, data);
 
-// Avvia il server dei file dell'app (8765) e il finto Firestore (8766); restituisce una funzione per spegnerli.
+// Avvia il server dei file dell'app (8765) e il finto Firestore (8766), o le porte di TEST_PORT; restituisce una funzione per spegnerli.
 export async function startServers() {
   const app = http.createServer((req, res) => {
     let p = decodeURIComponent(new URL(req.url, APP).pathname).replace(/^\/+/, '') || 'index.html';
@@ -42,7 +44,7 @@ export async function startServers() {
     if (u.pathname === '/col') { const pre = p + '/', out = []; for (const [k, v] of store) if (k.startsWith(pre) && !k.slice(pre.length).includes('/')) out.push({ id: k.slice(pre.length), data: v }); return res.end(JSON.stringify(out)); }
     res.statusCode = 404; res.end('{}');
   });
-  await Promise.all([new Promise(r => app.listen(8765, r)), new Promise(r => api.listen(8766, r))]);
+  await Promise.all([new Promise(r => app.listen(PORT, r)), new Promise(r => api.listen(PORT + 1, r))]);
   return () => Promise.all([new Promise(r => app.close(r)), new Promise(r => api.close(r))]);
 }
 

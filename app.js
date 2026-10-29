@@ -890,23 +890,23 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const needsDates = b => b.status === "letto" && ((!b.finished && !b.finishedYear) || !!dateProblem(b.started || "", b.finished || ""));
   const STALE = "periodo di lettura da aggiornare";
   const badgeHTML = b => needsDates(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
-  function spineHTML(b, tag = "button") {
+  function spineHTML(b, tag = "button", dim) { // dim: { w (%), h (px) } per le mensole delle Statistiche
     const p = Math.min(Number(b.pages) || 280, 900);
-    const h = Math.round(132 + p / 900 * 72);
-    let w = Math.round(26 + p / 900 * 24);
-    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
-    const stale = tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
+    const h = dim ? dim.h : Math.round(132 + p / 900 * 72);
+    let w = dim ? dim.w : Math.round(26 + p / 900 * 24) + "px";
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)}${dim ? ", " : " di "}${esc(b.author || "")}${serAria(b)}${!dim && needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
+    const stale = !dim && tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
-      if (b.spineRatio) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio)));
-      return `<${tag} class="spine photo${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
+      if (b.spineRatio && !dim) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio))) + "px";
+      return `<${tag} class="spine photo${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background-image:url('${b.spine}')"><span class="gloss"></span>${bd}</${tag}>`;
     }
     const text = `<span class="t">${esc(b.title)}</span><span class="au">${esc(last)}</span>`;
     if (b.cover) {
-      return `<${tag} class="spine fromcover${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+      return `<${tag} class="spine fromcover${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background:${colorOf(b)}">
         <img src="${esc(thumb(b.cover, 120))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('fromcover');this.remove()"><span class="shade"></span>${text}${bd}</${tag}>`;
     }
-    return `<${tag} class="spine${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w}px;background:${colorOf(b)}">
+    return `<${tag} class="spine${ser}${stale ? " stale" : ""}" ${attrs} style="--h:${h}px;height:${h}px;width:${w};background:${colorOf(b)}">
       <span class="band a"></span>${text}<span class="band b"></span>${bd}</${tag}>`;
   }
 
@@ -1054,7 +1054,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         fastest: timed.reduce((a, x) => x.days < a.days ? x : a), slowest: timed.reduce((a, x) => x.days > a.days ? x : a),
       } : null,
       months: mo, monthsCount: mo.reduce((t, n) => t + n, 0),
-      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs) }))
+      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs), books: g.xs.slice().sort(recent).map(x => x.b) }))
         .sort((a, b) => b.count - a.count || b.pages - a.pages || a.name.localeCompare(b.name, "it")).slice(0, 6),
       genres: groups(read, "genre").map(g => ({ name: g.name, count: g.xs.length }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "it")).slice(0, 6),
@@ -1068,7 +1068,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
     return { sempre, anni, noYear: read.filter(x => !x.year && !(x.b.finished > iso)).length, future: read.filter(x => !x.year && x.b.finished > iso).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
   }
-  window.libreriaStats = Object.freeze({ compute: computeStats });
+  // Misure di un dorso sulla mensola: unità (larghezza relativa), larghezza in % della fila, altezza in px.
+  function statDim(b) {
+    const p = Number(b.pages) || 0, u = p > 0 ? Math.min(44, Math.max(20, Math.round(p / 14))) : 20;
+    return { u, w: (u / 3.4).toFixed(2) + "%", h: p > 0 ? Math.round(84 + Math.min(p, 900) / 900 * 32) : 92 };
+  }
+  // Divide i libri in file da al più 300 unità (mai file vuote).
+  function ysRows(list) {
+    const rows = []; let cur = [], tot = 0;
+    list.forEach(b => { const u = statDim(b).u; if (cur.length && tot + u > 300) { rows.push(cur); cur = []; tot = 0; } cur.push(b); tot += u; });
+    if (cur.length) rows.push(cur);
+    return rows;
+  }
+  window.libreriaStats = Object.freeze({ compute: computeStats, dim: statDim, rows: ysRows });
 
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");
@@ -1128,52 +1140,73 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="mlab" aria-hidden="true">${MONTHS.map(x => `<span>${x[0].toUpperCase()}</span>`).join("")}</div>
       <p class="sr">${m.map((n, i) => n ? `${MONTHS[i]} ${n}` : "").filter(Boolean).join(", ")}</p>`;
   }
+  const STARS_IT = ["", "una stella", "due stelle", "tre stelle", "quattro stelle", "cinque stelle"];
+  const inMese = m => (/^[aeiou]/.test(m) ? "ad " : "a ") + m;
+  const elenco = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " e " + xs[xs.length - 1];
+  // Mini-dorsi (uno per libro, al massimo 20) accanto a un autore.
+  function miniSpines(books) {
+    return `<span class="mini" aria-hidden="true">${books.slice(0, 20).map(b => { const p = Number(b.pages) || 0; return `<i style="height:${p > 0 ? 18 + Math.round(Math.min(p, 900) / 900 * 10) : 20}px;background:${colorOf(b)}"></i>`; }).join("")}</span>`;
+  }
+  // La frase in cima: ogni pezzo compare solo se vero e significativo.
+  function ledeHTML(S) {
+    const B = t => `<b>${t}</b>`, one = S.read === 1;
+    let t = `Hai letto ${one ? B("un") + " libro" : B(num(S.read)) + " libri"}${S.pages ? `, ${B(num(S.pages))} pagine${one ? "" : " in tutto"}` : ""}.`;
+    const rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), mx = Math.max(...Object.values(S.ratings)), tops = [1, 2, 3, 4, 5].filter(n => S.ratings[n] === mx);
+    const mid = [];
+    if (rated >= 3 && tops.length === 1) mid.push(`il voto che dai più spesso è ${B(STARS_IT[tops[0]])}, a ${B(num(mx))} ${mx === 1 ? "libro" : "libri"}`);
+    const A = S.authors;
+    if (A[0] && A[0].count >= 2 && (!A[1] || A[0].count > A[1].count)) mid.push(`l'autore che torna di più è ${B(esc(A[0].name))}, con ${B(num(A[0].count))} titoli`);
+    if (mid.length) { const m = mid.join("; "); t += " " + m[0].toUpperCase() + m.slice(1) + "."; }
+    const mm = Math.max(...S.months), tm = S.months.map((n, i) => n === mm ? i : -1).filter(i => i >= 0);
+    if (S.monthsCount >= 3 && tm.length === 1) t += ` Il mese in cui finisci più libri è ${B(MONTHS[tm[0]])}.`;
+    return `<p class="stats-lede">${t}</p>`;
+  }
+  // Mensola di un anno: dorsi toccabili sul legno, file da 300 unità, paginata come gli scaffali.
+  function yearHTML(a, racconto) {
+    const shown = a.books.slice(0, state.limit["y" + a.year] || PAGE);
+    const nums = plural(a.count, "libro", "libri") + (a.pages ? `, ${num(a.pages)} pagine` : "");
+    const d = [a.topAuthor && a.topAuthor.count >= 2 ? `Autore dell'anno <b>${esc(a.topAuthor.name)}</b>` : "", a.topGenre && a.topGenre.count >= 2 ? `Genere <b>${esc(a.topGenre.name)}</b>` : "",
+      a.best && a.count >= 2 ? `Il preferito: <b>${esc(a.best.title)}</b>, ${STARS_IT[Math.min(5, Math.round(a.best.rating))]}` : ""].filter(Boolean);
+    return `<section class="ys" data-year="${a.year}" aria-labelledby="ys-${a.year}">
+      <div class="ys-head"><div><h3 class="ys-n" id="ys-${a.year}" tabindex="-1">${a.year}</h3>
+        <p class="ys-m">${nums}${a.avgRating ? `, <span aria-hidden="true">★</span><span class="sr">voto medio</span> ${dec(a.avgRating)}` : ""}</p></div>
+        ${racconto ? `<button class="story-btn" type="button" data-story="${a.year}" aria-label="Il racconto del ${a.year}">Il racconto</button>` : ""}</div>
+      <div class="ys-shelf${racconto ? " ribbon" : ""}" role="group" aria-label="${a.year}: ${nums}">${ysRows(shown).map(r => `<div class="ys-row">${r.map(b => spineHTML(b, "button", statDim(b))).join("")}</div>`).join("")}</div>
+      ${pagerHTML("y" + a.year, shown.length, a.books.length)}
+      ${d.length ? `<p class="ys-d">${d.join(". ")}.</p>` : ""}
+    </section>`;
+  }
+  let statsLast = null; // ultimi calcoli, per ridisegnare una sola mensola
   function renderStats(st) {
     const S = st.sempre;
     if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
-    const panel = (key, title, body) => `<section class="panel" data-panel="${key}"><h3>${title}</h3>${body}</section>`;
-    const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
-    const maxR = Math.max(...Object.values(S.ratings));
-    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
-      `<p class="hint">${S.unrated ? plural(S.unrated, "libro senza voto", "libri senza voto") + "." : ""}${S.fiveStars.length ? ` 5 stelle: ${S.fiveStars.slice(0, 4).map(b => esc(b.title)).join(", ")}${S.fiveStars.length > 4 ? ` e altri ${S.fiveStars.length - 4}` : ""}.` : ""}</p>`;
+    const blk = (key, title, small, body, cls = "") => `<section class="sblk${cls}" data-panel="${key}"><h3>${title}${small ? ` <small>${small}</small>` : ""}</h3>${body}</section>`;
+    const maxR = Math.max(...Object.values(S.ratings)), rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), f5 = S.fiveStars.map(b => `<b>${esc(b.title)}</b>`);
+    const voti = (rated ? [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} ${n === 1 ? "stella" : "stelle"}">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") : "") +
+      `<p class="hint">${rated ? "" : "Dai un voto dalla scheda del libro per vedere come giudichi le tue letture."}${f5.length ? `Cinque stelle a ${f5.length > 3 ? f5.slice(0, 3).join(", ") + ` e altri ${f5.length - 3}` : elenco(f5)}.` : ""}${S.unrated && rated ? ` ${plural(S.unrated, "libro senza voto", "libri senza voto")}.` : ""}</p>`;
     const D = S.days;
-    const tempo = D ? `<div class="trio"><div><b>${D.avg}</b><span>giorni in media</span></div>
-        <div><b>${D.fastest.days}</b><span>il più veloce · ${esc(D.fastest.book.title)}</span></div>
-        <div><b>${D.slowest.days}</b><span>il più lento · ${esc(D.slowest.book.title)}</span></div></div>
-        <p class="hint">Su ${plural(D.count, "libro", "libri")} con data di inizio e di fine.</p>`
+    const tempo = D ? `<div class="tm"><b>${D.avg}</b><span>${D.avg === 1 ? "giorno" : "giorni"} in media per libro</span></div>
+        <p class="hint">${D.count === 1 ? `Su un solo libro: <b>${esc(D.fastest.book.title)}</b>.` : `Il più veloce <b>${esc(D.fastest.book.title)}</b>, ${D.fastest.days} ${D.fastest.days === 1 ? "giorno" : "giorni"}. Il più lento <b>${esc(D.slowest.book.title)}</b>, ${D.slowest.days}.`}</p>`
       : `<p class="hint">Aggiungi «Iniziato il» e «Finito il» nella scheda dei libri per sapere quanto tempo ti serve per finirne uno.</p>`;
-    const topM = S.months.indexOf(Math.max(...S.months));
-    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">Leggi di più a ${MONTHS[topM]}. Su ${plural(S.monthsCount, "libro", "libri")} con data di fine.</p>`
+    const mxm = Math.max(...S.months), tms = S.months.map((n, i) => n === mxm ? MONTHS[i] : "").filter(Boolean);
+    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">${tms.length === 1 ? `Leggi di più ${inMese(tms[0])}: ${plural(mxm, "libro", "libri")}.` : tms.length <= 3 ? `Leggi di più ${inMese(elenco(tms))}: ${mxm} libri ciascuno.` : ""}</p>`
       : `<p class="hint">Aggiungi «Finito il» nella scheda dei libri per vedere in quali mesi leggi di più.</p>`;
-    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><span title="${esc(a.name)}">${esc(a.name)}</span><span>${plural(a.count, "libro", "libri")}${a.pages ? ` · ${num(a.pages)} pp` : ""}${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></li>`).join("")}</ul>`
+    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><div><b title="${esc(a.name)}">${esc(a.name)}</b><span>${plural(a.count, "libro", "libri")}${a.pages ? `, ${num(a.pages)} pagine` : ""}${a.avgRating ? `, ★ ${dec(a.avgRating)}` : ""}</span></div>${miniSpines(a.books)}</li>`).join("")}</ul>`
       : `<p class="hint">Aggiungi l'autore nella scheda dei libri.</p>`;
     const maxG = S.genres.length ? S.genres[0].count : 0;
     const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
-    const years = st.anni.map((a, i) => `<details class="year" data-year="${a.year}"${i ? "" : " open"}>
-        <summary><b>${a.year}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></summary>
-        <div class="in">${a.months.some(Boolean) ? monthsHTML(a.months) : ""}
-          ${a.topAuthor || a.topGenre ? `<div class="pair">${a.topAuthor ? `<div><span class="label">Autore dell'anno</span><b>${esc(a.topAuthor.name)}</b><span>${plural(a.topAuthor.count, "libro", "libri")}</span></div>` : ""}${a.topGenre ? `<div><span class="label">Genere dell'anno</span><b>${esc(a.topGenre.name)}</b><span>${plural(a.topGenre.count, "libro", "libri")}</span></div>` : ""}</div>` : ""}
-          ${a.best ? `<div class="best">${coverHTML(a.best, 120)}<div><span class="label">Il preferito</span><b>${esc(a.best.title)}</b><span class="stars">${starStr(a.best.rating)}</span></div></div>` : ""}
-        </div></details>`).join("");
-    return `<div class="stats">
-      ${stories ? `<div class="stories">${stories}</div>` : ""}
-      <h2 class="stats-group">Sempre</h2>
-      <div class="stats-grid">
-        ${panel("sintesi", "In sintesi", `<div class="figures">
-          <div class="fig"><b>${num(S.read)}</b><span>${S.read === 1 ? "libro letto" : "libri letti"}</span></div>
-          <div class="fig"><b>${S.pages >= 10000 ? Math.round(S.pages / 1000) + "k" : num(S.pages)}</b><span>pagine</span></div>
-          <div class="fig"><b>${dec(S.avgRating)}</b><span>voto medio</span></div>
-          <div class="fig"><b>${D ? D.avg : "–"}</b><span>giorni per libro</span></div></div>`)}
-        ${panel("voti", "Voti", voti)}
-        ${panel("tempo", "Tempo di lettura", tempo)}
-        ${panel("mesi", "Mesi", mesi)}
-        ${panel("autori", "Autori", autori)}
-        ${panel("generi", "Generi", generi)}
-      </div>
-      ${years ? `<h2 class="stats-group">Anno per anno</h2><div class="years">${years}</div>` : ""}
-      ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
-      ${st.noYear ? `<p class="hint stats-noyear">${st.noYear === 1 ? "1 libro letto non ha un anno" : `${num(st.noYear)} libri letti non hanno un anno`}: aggiungilo dalla scheda del libro («Finito il» oppure solo l'anno).</p>` : ""}
-    </div>`;
+    return `<div class="stats"><h2 class="stats-title" tabindex="-1">Statistiche</h2>${ledeHTML(S)}
+      <div class="stats-cols"><div class="stats-years"><h2 class="sr">Anno per anno</h2>
+        ${st.anni.map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}
+        ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
+        ${st.noYear ? `<div class="stats-noyear"><b>${st.noYear === 1 ? "1 libro letto senza anno." : `${num(st.noYear)} libri letti senza anno.`}</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</div>` : ""}
+      </div><div class="sempre"><h2 class="sr">Sempre</h2>
+        ${blk("voti", "Voti", rated ? `${plural(rated, "libro votato", "libri votati")} · media ${dec(S.avgRating)}` : "nessun voto", voti)}
+        ${blk("tempo", "Tempo di lettura", D ? plural(D.count, "libro con le date", "libri con le date") : "", tempo)}
+        ${blk("mesi", "Mesi", S.monthsCount ? plural(S.monthsCount, "libro con la data di fine", "libri con la data di fine") : "", mesi)}
+        ${blk("autori", "Autori", "", autori, " span2")}
+        ${blk("generi", "Generi", "", generi, " span2")}
+      </div></div></div>`;
   }
 
   // Racconto a schermo intero di un anno appena concluso: schermate da sfogliare, senza avanzamento automatico.
@@ -1183,7 +1216,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const Y = computeStats(a.books, now).sempre, opener = document.activeElement;
     const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     const slide = (key, body) => `<section class="slide" data-s="${key}">${body}</section>`;
-    const list = [slide("copertina", `<p class="kick">Il tuo anno da lettore</p><p class="big">${year}</p><p class="mid">Ecco com'è andata.</p><p class="sm">Tocca a destra per continuare</p>`),
+    const list = [slide("copertina", `<p class="big">${year}</p><p class="mid">Hai messo sullo scaffale <b>${a.count === 1 ? "un libro" : a.count + " libri"}</b>.</p><p class="sm">Tocca a destra per continuare</p>`),
       slide("numeri", `<p class="kick">I numeri</p><p class="big">${num(a.count)}</p><p class="mid">${a.count === 1 ? "libro letto" : "libri letti"}</p>${a.pages ? `<p class="big small">${num(a.pages)}</p><p class="mid">pagine</p><p class="sm">In media ${num(Math.max(1, Math.round(a.pages / (leap ? 366 : 365))))} pagine al giorno, tutti i giorni.</p>` : ""}`)];
     if (a.count >= 3) {
       const D = Y.days, topM = a.months.indexOf(Math.max(...a.months));
@@ -1191,16 +1224,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (D) list.push(slide("tempo", `<p class="kick">Tempo di lettura</p><p class="big">${D.avg}</p><p class="mid">${D.avg === 1 ? "giorno" : "giorni"} in media per libro</p><p class="sm">Il più veloce: ${esc(D.fastest.book.title)}, in ${plural(D.fastest.days, "giorno", "giorni")}.</p>`));
       if (a.topAuthor) list.push(slide("autore", `<p class="kick">L'autore dell'anno</p><p class="mid name">${esc(a.topAuthor.name)}</p><p class="sm">${plural(a.topAuthor.count, "libro letto", "libri letti")}</p>`));
       if (a.topGenre) list.push(slide("genere", `<p class="kick">Il genere dell'anno</p><p class="mid name">${esc(a.topGenre.name)}</p><p class="sm">${plural(a.topGenre.count, "libro", "libri")} su ${num(a.count)}</p>`));
-      if (a.best) list.push(slide("preferito", `<p class="kick">Il tuo preferito</p><div class="fav">${coverHTML(a.best, 300)}<div><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars">${starStr(a.best.rating)}</p></div></div>`));
+      if (a.best) list.push(slide("preferito", `<p class="kick">Il preferito del ${year}</p><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars" role="img" aria-label="${Math.round(a.best.rating)} ${Math.round(a.best.rating) === 1 ? "stella" : "stelle"}">${starStr(Math.round(a.best.rating))}</p>`));
       if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
     }
-    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><div class="story-covers">${a.books.slice(0, 12).map(b => coverHTML(b, 160)).join("")}</div><button class="story-done" type="button">Chiudi</button>`));
+    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><button class="story-done" type="button">Chiudi</button>`));
+    // Palco: i libri dell'anno fino a 170 unità (al massimo 12); il preferito c'è sempre, al posto dell'ultimo.
+    const stage = []; let tot = 0;
+    for (const b of a.books) { const u = statDim(b).u; if (stage.length >= 12 || tot + u > 170) break; stage.push(b); tot += u; }
+    if (a.best && !stage.includes(a.best)) { if (stage.length) stage[stage.length - 1] = a.best; else stage.push(a.best); }
+    const stageHTML = stage.map((b, k) => spineHTML(b, "span", { w: (statDim(b).u * 0.53).toFixed(2) + "%", h: statDim(b).h }).replace("<span ", `<span${b === a.best && list.some(x => x.includes('data-s="preferito"')) ? " data-best" : ""} `).replace('style="', `style="--i:${k};`)).join("");
     const el = document.createElement("div");
     el.id = "story"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Il tuo ${year}`); el.tabIndex = -1;
     el.innerHTML = `<div class="story-bars" aria-hidden="true">${list.map(() => "<i></i>").join("")}</div>
-      <button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button>
-      <div class="story-body">${list.join("")}</div><p class="sr story-live" aria-live="polite"></p>
-      <button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><button class="story-next" type="button" aria-label="Schermata successiva">›</button>`;
+      <div class="story-top"><span>Il tuo anno da lettore</span><button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button></div>
+      <div class="story-body">${list.join("")}</div><div class="story-stage" aria-hidden="true">${stageHTML}</div><p class="sr story-live" aria-live="polite"></p>
+      <div class="story-nav"><button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><span class="story-count"></span><button class="story-next" type="button" aria-label="Schermata successiva">›</button></div>`;
     document.body.append(el); document.body.style.overflow = "hidden";
     const slides = [...el.querySelectorAll(".slide")], bars = [...el.querySelectorAll(".story-bars i")];
     let i = 0;
@@ -1210,6 +1248,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       bars.forEach((x, k) => x.classList.toggle("on", k <= i));
       const k = slides[i].querySelector(".kick"), body = slides[i].textContent.replace(/\s+/g, " ").trim();
       $(".story-live", el).textContent = `Schermata ${i + 1} di ${slides.length}: ${k ? k.textContent + ". " + body.slice(k.textContent.length).trim() : body}`.slice(0, 240);
+      $(".story-count", el).textContent = `${i + 1} di ${slides.length}`;
+      const bk = $("[data-best]", el); if (bk) bk.classList.toggle("out", slides[i].dataset.s === "preferito");
       $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
       const a = document.activeElement; // un pulsante disattivato o nascosto perderebbe il focus: lo riporto sul racconto
       if (a && a !== el && el.contains(a) && (a.disabled || !a.offsetParent)) el.focus();
@@ -1217,7 +1257,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const close = () => {
       document.removeEventListener("keydown", keys, true); el.remove(); document.body.style.overflow = "";
       if (opener && opener.isConnected) opener.focus({ preventScroll: true });
-      else { const c = document.querySelector(`.story-card[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
+      else { const c = document.querySelector(`[data-story="${year}"]`); if (c) c.focus({ preventScroll: true }); }
     };
     function keys(e) {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
@@ -1237,6 +1277,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (e.target.closest(".story-close, .story-done")) return close();
       if (e.target.closest(".story-prev")) return show(i - 1);
       if (e.target.closest(".story-next")) return show(i + 1);
+      if (e.target.closest(".story-nav")) return;
       const r = el.getBoundingClientRect();
       show(e.clientX < r.left + r.width / 3 ? i - 1 : i + 1); // tocco: terzo sinistro indietro, il resto avanti
     });
@@ -1261,7 +1302,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function render() {
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
-    if (state.view === "stats") main.innerHTML = renderStats(computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
+    const sk = state.view === "stats" ? statsFocusKey() : null;
+    if (state.view === "stats") main.innerHTML = renderStats(statsLast = computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
@@ -1269,6 +1311,22 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     $("#toolbar").hidden = state.view === "stats";
     wireMain(main);
+    if (sk) statsFocusRestore(sk);
+  }
+  // Ridisegnando le Statistiche il focus non si perde: torna sul dorso (o sul titolo dell'anno, o su «Statistiche»).
+  const sheetOpen = () => !!document.querySelector("#scrim:not(.closing)");
+  function statsFocusKey() {
+    const inYs = el => el && el.closest && el.closest("#main section.ys");
+    const a = document.activeElement;
+    const el = inYs(a) ? a : sheetOpen() && inYs(lastFocus) ? lastFocus : null;
+    if (!el) return null;
+    const sec = el.closest("section.ys");
+    return { id: el.dataset ? el.dataset.id || null : null, year: Number(sec.dataset.year) };
+  }
+  function statsFocusRestore(k) {
+    const m = $("#main"), t = (k.id && m.querySelector(`section.ys [data-id="${CSS.escape(k.id)}"]`)) || m.querySelector(`#ys-${k.year}`) || m.querySelector(".stats-title");
+    if (!t) return;
+    if (sheetOpen()) lastFocus = t; else t.focus({ preventScroll: true });
   }
   function wireMain(root) {
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
@@ -1277,11 +1335,17 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;
       state.limit[key] = (state.limit[key] || PAGE) + PAGE;
+      if (/^y\d{4}$/.test(key)) { const n = replaceYear(Number(key.slice(1))); const f = n && (n.querySelector("[data-more]") || n.querySelector("[data-less]")); if (f) f.focus({ preventScroll: true }); return; }
       if (key === "covers") { swapIn(); render(); } else replaceShelf(key);
     });
     root.querySelectorAll("[data-less]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.less;
       state.limit[key] = PAGE;
+      if (/^y\d{4}$/.test(key)) {
+        const n = replaceYear(Number(key.slice(1)));
+        if (n) { const f = n.querySelector("[data-more]"); if (f) f.focus({ preventScroll: true }); if (n.getBoundingClientRect().top < 0) n.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+        return;
+      }
       if (key === "covers") { render(); $("#toolbar").scrollIntoView({ block: "start" }); return; }
       const sh = document.querySelector(`[data-shelf="${key}"]`);
       replaceShelf(key);
@@ -1330,6 +1394,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     renderTally(); renderNav();
   }
+  // Ridisegna una sola mensola dell'anno da statsLast (niente ricalcolo); restituisce la nuova sezione.
+  function replaceYear(year) {
+    const old = $("#main").querySelector(`section.ys[data-year="${year}"]`), a = statsLast && statsLast.anni.find(x => x.year === year);
+    if (!old || !a) return null;
+    const t = document.createElement("template"); t.innerHTML = yearHTML(a, statsLast.racconti.includes(year)).trim();
+    const n = t.content.firstElementChild; old.replaceWith(n); wireMain(n); return n;
+  }
   function replaceShelf(st) {
     const main = $("#main"), old = main.querySelector(`[data-shelf="${st}"]`);
     if (!old) return;
@@ -1367,7 +1438,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const cancel = () => { clearTimeout(t); t = null; };
     el.addEventListener("pointerdown", e => {
       x0 = e.clientX; y0 = e.clientY; cancel();
-      t = setTimeout(() => { t = null; el.dataset.lp = "1"; const b = state.books.find(x => x.id === el.dataset.id); if (b) openQuick(b); }, 480);
+      t = setTimeout(() => { t = null; el.dataset.lp = "1"; const b = state.books.find(x => x.id === el.dataset.id); if (el.closest("section.ys")) el.focus({ preventScroll: true }); if (b) openQuick(b); }, 480);
     });
     el.addEventListener("pointermove", e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
     ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, cancel));
