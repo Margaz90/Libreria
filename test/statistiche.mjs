@@ -157,17 +157,21 @@ async function pagina(browser) {
   const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
   ok('due schede racconto 2025 e 2024', (await p.$$eval('button.story-card', els => els.map(e => e.dataset.story).join())) === '2025,2024');
   const panels = await p.$$eval('[data-panel]', els => els.map(e => e.dataset.panel).join());
-  ok('pannelli di Sempre presenti', panels === 'sintesi,voti,tempo,mesi,autori,generi', panels);
-  const sint = await txt('[data-panel="sintesi"]');
-  ok('sintesi mostra 8 libri e 40 giorni', /\b8\b[\s\S]*libri letti/.test(sint) && /\b40\b[\s\S]*giorni/.test(sint), sint.replace(/\n/g, ' '));
+  ok('blocchi di Sempre presenti', panels === 'voti,tempo,mesi,autori,generi', panels);
+  ok('incipit con i dati di prova', (await txt('.stats-lede')).replace(/\s+/g, ' ').trim() === 'Hai letto 8 libri, 2850 pagine in tutto. Il mese in cui finisci più libri è agosto.', await txt('.stats-lede'));
+  ok('tempo: 40 giorni in media', /\b40\b/.test(await txt('[data-panel="tempo"]')));
+  ok('voti: 7 libri votati, media 3,4', /7 libri votati · media 3,4/.test(await txt('[data-panel="voti"]')));
+  ok('voti: cinque stelle a Uno e Tre, 1 senza voto', /Cinque stelle a Uno e Tre\.\s*1 libro senza voto\./.test(await txt('[data-panel="voti"]')), await txt('[data-panel="voti"]'));
+  ok('mesi: leggi di più ad agosto', /Leggi di più ad agosto: 3 libri\./.test(await txt('[data-panel="mesi"]')));
+  ok('autori: Stephen King con 2 mini-dorsi nascosti a VoiceOver', await p.$eval('[data-panel="autori"] li', li => li.textContent.includes('Stephen King') && li.querySelectorAll('.mini i').length === 2 && li.querySelector('.mini').getAttribute('aria-hidden') === 'true'));
   ok('anni 2025, 2024, 2019, il primo aperto', (await p.$$eval('details.year', els => els.map(e => e.dataset.year + (e.open ? '*' : '')).join())) === '2025*,2024,2019');
-  ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /1 libro letto non ha un anno/.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
+  ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /1 libro letto senza anno\./.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
   ok('stelle dei voti leggibili da VoiceOver', (await p.locator('[data-panel="voti"] [role="img"][aria-label="5 stelle"]').count()) === 1);
   ok('barre con il numero accanto (Generi: Thriller 3)', /Thriller\s*3/.test(await txt('[data-panel="generi"]')));
   await p.close2();
 
   p = await statsPage(browser, FIXTURE.filter(b => b.status !== 'letto'));
-  ok('libreria senza letti: messaggio', (await p.locator('.stats-empty').innerText().catch(() => '')).trim() === 'Quando segnerai un libro come Letto, qui compariranno le tue statistiche' && !(await p.locator('[data-panel]').count()));
+  ok('libreria senza letti: messaggio', (await p.locator('.stats-empty').innerText().catch(() => '')).trim() === 'Quando segnerai un libro come Letto, qui compariranno le tue statistiche' && !(await p.locator('[data-panel], .stats-title, .stats-lede, section.ys').count()));
   await p.close2();
 
   p = await statsPage(browser, FIXTURE.filter(b => b.status === 'letto').map(({ started, finished, finishedYear, ...b }) => b));
@@ -187,6 +191,23 @@ async function pagina(browser) {
     ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
     await p.close2();
   }
+}
+
+async function incipit(browser) {
+  const A = (id, author, rating, pages, finished) => ({ id, title: id, author, rating, pages, finished, status: 'letto', added: 1 });
+  const lede = async (books) => { const p = await statsPage(browser, books); const x = (await p.locator('.stats-lede').innerText()).replace(/\s+/g, ' ').trim(); return [p, x]; };
+  let [p, l] = await lede([A('A1', 'X', 5, 100, '2025-03-01'), A('A2', 'X', 5, 200, '2025-03-20'), A('A3', 'Y', 4, 300, '2025-07-01')]);
+  ok('incipit completo', l === "Hai letto 3 libri, 600 pagine in tutto. Il voto che dai più spesso è cinque stelle, a 2 libri; l'autore che torna di più è X, con 2 titoli. Il mese in cui finisci più libri è marzo.", l);
+  await p.close2();
+  [p, l] = await lede([A('U', 'Z', 0, 0)]);
+  ok('incipit: un libro senza pagine né voto', l === 'Hai letto un libro.', l);
+  await p.close2();
+  [p, l] = await lede([A('U', 'Z', 0, 320, '2025-01-01')]);
+  ok('incipit: un libro con pagine', l === 'Hai letto un libro, 320 pagine.', l);
+  await p.close2();
+  [p, l] = await lede([{ ...A('T1', '<b>Tom & "Jerry"</b>', 0, 0), title: 'x' }, { ...A('T2', '<b>Tom & "Jerry"</b>', 0, 0), title: 'y' }]);
+  ok('incipit e autori: nomi con HTML restano testo', !(await p.locator('.stats-lede b b, [data-panel="autori"] li b b').count()) && l.includes('<b>Tom & "Jerry"</b>'), l);
+  await p.close2();
 }
 
 async function racconto(browser) {
@@ -251,5 +272,6 @@ export default async function ({ browser }) {
   await scheda(browser);
   await calcoli(browser);
   await pagina(browser);
+  await incipit(browser);
   await racconto(browser);
 }

@@ -1140,24 +1140,43 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="mlab" aria-hidden="true">${MONTHS.map(x => `<span>${x[0].toUpperCase()}</span>`).join("")}</div>
       <p class="sr">${m.map((n, i) => n ? `${MONTHS[i]} ${n}` : "").filter(Boolean).join(", ")}</p>`;
   }
+  const STARS_IT = ["", "una stella", "due stelle", "tre stelle", "quattro stelle", "cinque stelle"];
+  const inMese = m => (/^[aeiou]/.test(m) ? "ad " : "a ") + m;
+  const elenco = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " e " + xs[xs.length - 1];
+  // Mini-dorsi (uno per libro, al massimo 20) accanto a un autore.
+  function miniSpines(books) {
+    return `<span class="mini" aria-hidden="true">${books.slice(0, 20).map(b => { const p = Number(b.pages) || 0; return `<i style="height:${p > 0 ? 18 + Math.round(Math.min(p, 900) / 900 * 10) : 20}px;background:${colorOf(b)}"></i>`; }).join("")}</span>`;
+  }
+  // La frase in cima: ogni pezzo compare solo se vero e significativo.
+  function ledeHTML(S) {
+    const B = t => `<b>${t}</b>`, one = S.read === 1;
+    let t = `Hai letto ${one ? B("un") + " libro" : B(num(S.read)) + " libri"}${S.pages ? `, ${B(num(S.pages))} pagine${one ? "" : " in tutto"}` : ""}.`;
+    const rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), mx = Math.max(...Object.values(S.ratings)), tops = [1, 2, 3, 4, 5].filter(n => S.ratings[n] === mx);
+    const mid = [];
+    if (rated >= 3 && tops.length === 1) mid.push(`il voto che dai più spesso è ${B(STARS_IT[tops[0]])}, a ${B(num(mx))} ${mx === 1 ? "libro" : "libri"}`);
+    const A = S.authors;
+    if (A[0] && A[0].count >= 2 && (!A[1] || A[0].count > A[1].count)) mid.push(`l'autore che torna di più è ${B(esc(A[0].name))}, con ${B(num(A[0].count))} titoli`);
+    if (mid.length) { const m = mid.join("; "); t += " " + m[0].toUpperCase() + m.slice(1) + "."; }
+    const mm = Math.max(...S.months), tm = S.months.map((n, i) => n === mm ? i : -1).filter(i => i >= 0);
+    if (S.monthsCount >= 3 && tm.length === 1) t += ` Il mese in cui finisci più libri è ${B(MONTHS[tm[0]])}.`;
+    return `<p class="stats-lede">${t}</p>`;
+  }
   function renderStats(st) {
     const S = st.sempre;
     if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
-    const panel = (key, title, body) => `<section class="panel" data-panel="${key}"><h3>${title}</h3>${body}</section>`;
+    const blk = (key, title, small, body, cls = "") => `<section class="sblk${cls}" data-panel="${key}"><h3>${title}${small ? ` <small>${small}</small>` : ""}</h3>${body}</section>`;
     const stories = st.racconti.map(y => { const a = st.anni.find(x => x.year === y); return `<button class="story-card" type="button" data-story="${y}"><small>Racconto</small><b>Il tuo ${y}</b><span>${plural(a.count, "libro", "libri")} · ${num(a.pages)} pagine</span></button>`; }).join("");
-    const maxR = Math.max(...Object.values(S.ratings));
-    const voti = [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") +
-      `<p class="hint">${S.unrated ? plural(S.unrated, "libro senza voto", "libri senza voto") + "." : ""}${S.fiveStars.length ? ` 5 stelle: ${S.fiveStars.slice(0, 4).map(b => esc(b.title)).join(", ")}${S.fiveStars.length > 4 ? ` e altri ${S.fiveStars.length - 4}` : ""}.` : ""}</p>`;
+    const maxR = Math.max(...Object.values(S.ratings)), rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), f5 = S.fiveStars.map(b => `<b>${esc(b.title)}</b>`);
+    const voti = (rated ? [5, 4, 3, 2, 1].map(n => hbar(`<span class="stars" role="img" aria-label="${n} ${n === 1 ? "stella" : "stelle"}">${"★".repeat(n)}</span>`, S.ratings[n], maxR)).join("") : "") +
+      `<p class="hint">${rated ? "" : "Dai un voto dalla scheda del libro per vedere come giudichi le tue letture."}${f5.length ? `Cinque stelle a ${f5.length > 3 ? f5.slice(0, 3).join(", ") + ` e altri ${f5.length - 3}` : elenco(f5)}.` : ""}${S.unrated && rated ? ` ${plural(S.unrated, "libro senza voto", "libri senza voto")}.` : ""}</p>`;
     const D = S.days;
-    const tempo = D ? `<div class="trio"><div><b>${D.avg}</b><span>giorni in media</span></div>
-        <div><b>${D.fastest.days}</b><span>il più veloce · ${esc(D.fastest.book.title)}</span></div>
-        <div><b>${D.slowest.days}</b><span>il più lento · ${esc(D.slowest.book.title)}</span></div></div>
-        <p class="hint">Su ${plural(D.count, "libro", "libri")} con data di inizio e di fine.</p>`
+    const tempo = D ? `<div class="tm"><b>${D.avg}</b><span>${D.avg === 1 ? "giorno" : "giorni"} in media per libro</span></div>
+        <p class="hint">${D.count === 1 ? `Su un solo libro: <b>${esc(D.fastest.book.title)}</b>.` : `Il più veloce <b>${esc(D.fastest.book.title)}</b>, ${D.fastest.days} ${D.fastest.days === 1 ? "giorno" : "giorni"}. Il più lento <b>${esc(D.slowest.book.title)}</b>, ${D.slowest.days}.`}</p>`
       : `<p class="hint">Aggiungi «Iniziato il» e «Finito il» nella scheda dei libri per sapere quanto tempo ti serve per finirne uno.</p>`;
-    const topM = S.months.indexOf(Math.max(...S.months));
-    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">Leggi di più a ${MONTHS[topM]}. Su ${plural(S.monthsCount, "libro", "libri")} con data di fine.</p>`
+    const mxm = Math.max(...S.months), tms = S.months.map((n, i) => n === mxm ? MONTHS[i] : "").filter(Boolean);
+    const mesi = S.monthsCount ? `${monthsHTML(S.months)}<p class="hint">${tms.length === 1 ? `Leggi di più ${inMese(tms[0])}: ${plural(mxm, "libro", "libri")}.` : tms.length <= 3 ? `Leggi di più ${inMese(elenco(tms))}: ${mxm} libri ciascuno.` : ""}</p>`
       : `<p class="hint">Aggiungi «Finito il» nella scheda dei libri per vedere in quali mesi leggi di più.</p>`;
-    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><span title="${esc(a.name)}">${esc(a.name)}</span><span>${plural(a.count, "libro", "libri")}${a.pages ? ` · ${num(a.pages)} pp` : ""}${a.avgRating ? ` · ★ ${dec(a.avgRating)}` : ""}</span></li>`).join("")}</ul>`
+    const autori = S.authors.length ? `<ul class="list">${S.authors.map(a => `<li><div><b title="${esc(a.name)}">${esc(a.name)}</b><span>${plural(a.count, "libro", "libri")}${a.pages ? `, ${num(a.pages)} pagine` : ""}${a.avgRating ? `, ★ ${dec(a.avgRating)}` : ""}</span></div>${miniSpines(a.books)}</li>`).join("")}</ul>`
       : `<p class="hint">Aggiungi l'autore nella scheda dei libri.</p>`;
     const maxG = S.genres.length ? S.genres[0].count : 0;
     const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
@@ -1167,25 +1186,18 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
           ${a.topAuthor || a.topGenre ? `<div class="pair">${a.topAuthor ? `<div><span class="label">Autore dell'anno</span><b>${esc(a.topAuthor.name)}</b><span>${plural(a.topAuthor.count, "libro", "libri")}</span></div>` : ""}${a.topGenre ? `<div><span class="label">Genere dell'anno</span><b>${esc(a.topGenre.name)}</b><span>${plural(a.topGenre.count, "libro", "libri")}</span></div>` : ""}</div>` : ""}
           ${a.best ? `<div class="best">${coverHTML(a.best, 120)}<div><span class="label">Il preferito</span><b>${esc(a.best.title)}</b><span class="stars">${starStr(a.best.rating)}</span></div></div>` : ""}
         </div></details>`).join("");
-    return `<div class="stats">
-      ${stories ? `<div class="stories">${stories}</div>` : ""}
-      <h2 class="stats-group">Sempre</h2>
-      <div class="stats-grid">
-        ${panel("sintesi", "In sintesi", `<div class="figures">
-          <div class="fig"><b>${num(S.read)}</b><span>${S.read === 1 ? "libro letto" : "libri letti"}</span></div>
-          <div class="fig"><b>${S.pages >= 10000 ? Math.round(S.pages / 1000) + "k" : num(S.pages)}</b><span>pagine</span></div>
-          <div class="fig"><b>${dec(S.avgRating)}</b><span>voto medio</span></div>
-          <div class="fig"><b>${D ? D.avg : "–"}</b><span>giorni per libro</span></div></div>`)}
-        ${panel("voti", "Voti", voti)}
-        ${panel("tempo", "Tempo di lettura", tempo)}
-        ${panel("mesi", "Mesi", mesi)}
-        ${panel("autori", "Autori", autori)}
-        ${panel("generi", "Generi", generi)}
-      </div>
-      ${years ? `<h2 class="stats-group">Anno per anno</h2><div class="years">${years}</div>` : ""}
-      ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
-      ${st.noYear ? `<p class="hint stats-noyear">${st.noYear === 1 ? "1 libro letto non ha un anno" : `${num(st.noYear)} libri letti non hanno un anno`}: aggiungilo dalla scheda del libro («Finito il» oppure solo l'anno).</p>` : ""}
-    </div>`;
+    return `<div class="stats"><h2 class="stats-title" tabindex="-1">Statistiche</h2>${ledeHTML(S)}
+      <div class="stats-cols"><div class="stats-years"><h2 class="sr">Anno per anno</h2>
+        ${stories ? `<div class="stories">${stories}</div>` : ""}${years ? `<div class="years">${years}</div>` : ""}
+        ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
+        ${st.noYear ? `<div class="stats-noyear"><b>${st.noYear === 1 ? "1 libro letto senza anno." : `${num(st.noYear)} libri letti senza anno.`}</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</div>` : ""}
+      </div><div class="sempre"><h2 class="sr">Sempre</h2>
+        ${blk("voti", "Voti", rated ? `${plural(rated, "libro votato", "libri votati")} · media ${dec(S.avgRating)}` : "nessun voto", voti)}
+        ${blk("tempo", "Tempo di lettura", D ? plural(D.count, "libro con le date", "libri con le date") : "", tempo)}
+        ${blk("mesi", "Mesi", S.monthsCount ? plural(S.monthsCount, "libro con la data di fine", "libri con la data di fine") : "", mesi)}
+        ${blk("autori", "Autori", "", autori, " span2")}
+        ${blk("generi", "Generi", "", generi, " span2")}
+      </div></div></div>`;
   }
 
   // Racconto a schermo intero di un anno appena concluso: schermate da sfogliare, senza avanzamento automatico.
