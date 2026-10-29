@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- **Porte dei test:** in questo worktree lancia SEMPRE i test con `TEST_PORT=9300` (es. `TEST_PORT=9300 node test/run.mjs …`): usa le porte 9300 e 9301, così non si scontra con gli altri due agenti che fanno i test in parallelo. Ignora eventuali indicazioni su EADDRINUSE o turni.
 - Lavoro con UN agente dedicato, in un git worktree separato creato dal branch `claude/youthful-ride-ha414a`, branch `impl/prossimo`. Commit solo su `impl/prossimo`, niente push.
 - Due altri agenti lavorano in parallelo (Statistiche, scheda del libro) negli stessi `app.js` e `style.css`: si toccano SOLO i punti della tabella «File toccati» della spec — `toast()` (`app.js:39-46`), `nx`/`nextList`/`nextHTML`/`wireNext`/`fillNext` (`app.js:932-953`) più la nuova `startNext` subito dopo `fillNext`; in `style.css` una riga nuova di token alla fine di `:root` e del blocco scuro (commento `/* scheda del catalogo */`), `.toast`/`.toast button` (`style.css:341-342`), il blocco `.next`/`.ncard` (`style.css:589-601`). Niente riformattazioni né spostamenti di altro codice. `setStatus`, `upsert`, `renderHero`, `refreshChanged`, `patchBook`, `nextBooks`, `wireMain` restano invariate.
 - NON modificare `VERSION` in `sw.js` né `CLAUDE.md` (li aggiorna Diego all'unione). Nessun altro file dell'app (niente `index.html`).

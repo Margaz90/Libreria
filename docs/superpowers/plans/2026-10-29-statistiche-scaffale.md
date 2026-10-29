@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- **Porte dei test:** in questo worktree lancia SEMPRE i test con `TEST_PORT=9100` (es. `TEST_PORT=9100 node test/run.mjs …`): usa le porte 9100 e 9101, così non si scontra con gli altri due agenti che fanno i test in parallelo. Ignora eventuali indicazioni su EADDRINUSE o turni.
 - Tutto in italiano: testi dell'interfaccia, commenti, commit.
 - Lavoro in un git worktree separato creato dal branch `claude/youthful-ride-ha414a`, branch `impl/statistiche` (es. `git worktree add /home/user/Libreria-statistiche -b impl/statistiche claude/youthful-ride-ha414a`); un solo agente esegue tutto il piano.
 - Altri due agenti modificano in parallelo `app.js` e `style.css` (scheda del libro; «Cosa leggo adesso?»). Si toccano SOLO i punti della sezione «File toccati» della spec: `computeStats` (solo `authors[].books`), `window.libreriaStats`, `spineHTML` (parametro `dim`), il blocco tra `window.libreriaStats` e `openStory` (incluse le nuove funzioni), `openStory`, la riga Statistiche di `render()`, i due gestori `[data-more]`/`[data-less]` di `wireMain`, la nuova `replaceYear` (con i due aiutanti del focus) accanto a `replaceShelf`; in `style.css` il blocco Statistiche (`/* Statistiche */` … `.panel .hint…`), `.pager-btn`, il blocco del racconto (`#story` … `#story button:focus-visible`) e il solo token `--board-img` di `:root` (Task 6). Non riformattare, rinominare o spostare altro codice.
