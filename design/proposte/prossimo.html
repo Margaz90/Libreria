@@ -112,8 +112,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-weight: 600; font-size: 14px; color: var(--ink); white-space: nowrap; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.ghost { background: none; border-color: transparent; color: var(--ink); }
-.toast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 14px; box-shadow: 0 12px 24px -12px rgba(0,0,0,.5); }
-.toast .btn { background: none; border: 0; color: var(--bg); text-decoration: underline; text-underline-offset: 3px; }
+/* come il .toast dell'app (style.css): pillola scura centrata sopra la barra in basso */
+.toast { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); width: max-content; padding: 0 6px 0 16px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 13.5px; box-shadow: 0 12px 24px -12px rgba(0,0,0,.5); }
+.toast .btn { min-height: 44px; padding: 0 10px; background: none; border: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 /* Scheda In lettura (stato dopo «Inizia», come v62) */
 .rcard { display: grid; grid-template-columns: 64px 1fr; gap: 10px 14px; align-items: center; padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--rule); box-shadow: 0 10px 24px -18px var(--shadow); }
@@ -429,8 +430,8 @@ body.solo .scaler { border: 0; border-radius: 0; }
       if (!t) return;
       if (t.dataset.i != null) { st.sel = +t.dataset.i; draw(id, `[data-i="${st.sel}"]`); }
       else if (t.hasAttribute("data-more")) { st.set = (st.set + 1) % SETS.length; st.sel = 0; st.anim = true; draw(id, "[data-more]"); }
-      else if (t.hasAttribute("data-later")) { st.mode = "off"; toast(st, "Proposte nascoste fino alla prossima apertura"); draw(id, "[data-undo]"); }
-      else if (t.hasAttribute("data-go")) { const b = SETS[st.set][st.sel]; st.mode = "reading"; toast(st, `«${esc(b.t)}» è in lettura da oggi`); draw(id, "[data-undo]"); }
+      else if (t.hasAttribute("data-later")) { st.mode = "off"; toast(st, "Proposte nascoste"); draw(id, "[data-undo]"); }
+      else if (t.hasAttribute("data-go")) { const b = SETS[st.set][st.sel]; st.mode = "reading"; toast(st, `In lettura: ${esc(b.t)}`); draw(id, "[data-undo]"); }
       else if (t.hasAttribute("data-undo")) { st.mode = "prop"; st.toast = ""; draw(id); }
     });
     // frecce: radio e linguette
