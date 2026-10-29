@@ -52,7 +52,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - Anteprima al passaggio del mouse sui dorsi (solo dispositivi con mouse), menu "Ordina" personalizzato (Recenti, Da leggere prima, Autore, Titolo, Voto; ricordato sul dispositivo; lo scaffale In lettura, se ha libri, resta sempre il primo con qualunque filtro e ordine), selettore stato a tre pulsanti, animazioni con rispetto di prefers-reduced-motion.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v67), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v68), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -96,6 +96,7 @@ App personale di Diego per tracciare i libri letti, in lettura e da leggere. Ris
 - **Diagnostica ricerche** (0b680e2, 678d1e4, v36-v37): "Verifica ricerche" in Altro → Backup; l'esito compare subito sotto il pulsante (prima stava sotto la piega dello schermo).
 - **Nuovo tentativo per Google** (468a173, v38): un 503 di Google riprova una volta dopo 1,5 secondi, sia per il pulsante sia per il completamento automatico.
 - **Ricerche più robuste e Aggiorna informazioni** (v40): `fetchInfo` unisce ISBN e titolo/autore su tre fonti, così le copertine arrivano da Apple Books anche se Google è giù; Google con 503 riprova senza chiave e poi viene saltato per 5 minuti; senza autore si accetta solo un titolo identico. Pulsante "Aggiorna informazioni" nella scheda di ogni libro.
+- **ISBN-10 su Google e versione visibile** (v68): v67 non bastava (stesso ISBN ancora «Nessuna fonte conosce»): Google ha «Across the sand» solo con l'ISBN-10 883474621X, quindi dopo uno 0 per `isbn:` si prova l'altra forma (`isbn10From13`/`isbn13From10`) e poi di nuovo la stessa (13, 10, 13). Altro → Backup mostra in fondo «Versione dell'app: vNN» (`appVersion()`, chiesta al service worker con `MessageChannel`), per controllare che l'aggiornamento sia arrivato.
 - **Secondo tentativo su Google per gli ISBN** (v67): dalla diagnosi, lo stesso ISBN (9788834746219, Howey) dava 0 risultati alla prima richiesta e 1 alla seconda; `googleSearch` con `isbn:` e 0 risultati riprova una volta dopo 0,7 s.
 - **Google dopo un 503 e Apple per ISBN** (v66): dalla diagnosi sull'iPhone Google rispondeva 503 con la chiave e 429 senza chiave (quota anonima comune, sempre finita): ora dopo un 503 si riprova prima con la chiave, poi senza; Apple Books cerca gli ISBN con `lookup?isbn=`.
 - **Nuovo inizio dopo la fine** (v65): prima veniva rifiutato in silenzio (sul telefono l'avviso si notava poco e sembrava che la data non si salvasse); ora la fine si sposta a +20 giorni. `window.libreriaSearch.search` esposta per la prova ISBN di `diagnosi-serie.html`.

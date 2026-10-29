@@ -2,7 +2,7 @@
    - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v67";
+const VERSION = "v68";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
@@ -21,7 +21,10 @@ self.addEventListener("activate", e => {
   })());
 });
 
-self.addEventListener("message", e => { if (e.data === "skip-waiting") self.skipWaiting(); });
+self.addEventListener("message", e => {
+  if (e.data === "skip-waiting") self.skipWaiting();
+  if (e.data === "version" && e.ports[0]) e.ports[0].postMessage(VERSION); // mostrata in Altro → Backup
+});
 
 async function trim(cacheName, max) {
   const c = await caches.open(cacheName);

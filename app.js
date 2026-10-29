@@ -418,8 +418,16 @@
     }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     let j = await r.json();
-    // Per un ISBN Google a volte risponde «niente» e alla richiesta dopo trova il libro: riprovo una volta.
-    if (!(j.items || []).length && /^isbn:/.test(q)) { await sleep(700); try { const r2 = await fetchT(url); if (r2.ok) j = await r2.json(); } catch {} }
+    // Per un ISBN Google a volte risponde «niente» e alla richiesta dopo trova il libro (succede soprattutto quando
+    // ha in archivio solo l'ISBN-10): riprovo con l'altra forma, poi con la stessa.
+    if (!(j.items || []).length && /^isbn:/.test(q)) {
+      const i = q.slice(5), alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i);
+      for (const u of [alt && url.replace(encodeURIComponent(q), encodeURIComponent("isbn:" + alt)), url].filter(Boolean)) {
+        await sleep(700);
+        try { const r2 = await fetchT(u); if (r2.ok) j = await r2.json(); } catch {}
+        if ((j.items || []).length) break;
+      }
+    }
     return (j.items || []).map(normVolume).filter(x => x.title);
   }
 
@@ -2124,6 +2132,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     status.textContent = "Backup scaricato.";
   }
 
+  // La versione del service worker che sta servendo l'app (per capire se l'aggiornamento è arrivato).
+  function appVersion() {
+    const sw = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (!sw) return Promise.resolve("");
+    return new Promise(res => { const ch = new MessageChannel(); ch.port1.onmessage = e => res(String(e.data || "")); sw.postMessage("version", [ch.port2]); setTimeout(() => res(""), 1500); });
+  }
   function openImport() {
     const last = getSet().lastBackup;
     const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
@@ -2158,7 +2172,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button><button class="btn" id="i-seed">Carica i libri Goodreads</button></div>
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
+      <p class="hint" id="i-ver"></p>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    appVersion().then(v => { const el = $("#i-ver", sheet); if (el && v) el.textContent = "Versione dell'app: " + v; });
     const ul = $("#u-list", sheet); let snaps = [];
     const fillCopies = () => listSnapshots().then(l => { // richiamata dopo un import con la scheda aperta
       snaps = l;

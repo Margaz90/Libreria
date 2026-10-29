@@ -27,6 +27,10 @@ export default async function ({ browser }) {
     await p.waitForFunction(() => !window.__prima, null, { timeout: 15000 }).catch(() => {});
     await p.waitForTimeout(1500);
     ok('«Aggiorna» ricarica la pagina e l\'avviso sparisce', !(await p.evaluate(() => !!window.__prima)) && (await p.locator('#upd-bar').count()) === 0);
+    const ver = sw.match(/const VERSION = "([^"]+)"/)[1] + '-test';
+    await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click();
+    const scritta = await p.waitForFunction(() => document.querySelector('#i-ver') && document.querySelector('#i-ver').textContent, null, { timeout: 5000 }).then(h => h.jsonValue(), () => '');
+    ok('dopo l\'aggiornamento Altro → Backup mostra la nuova versione', scritta === "Versione dell'app: " + ver, scritta);
     ok('aggiornamento: nessun errore in console', !errs.length, errs.join(' / '));
   } finally {
     setOverride('sw.js', null);

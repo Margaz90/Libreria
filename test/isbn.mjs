@@ -23,7 +23,9 @@ async function apri(browser, google, { wikidata = [], ...opts } = {}) {
 }
 const cerca = async (p, q) => {
   await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q');
-  await p.fill('#s-q', q); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
+  await p.fill('#s-q', q); await p.keyboard.press('Enter');
+  await p.waitForFunction(() => !/^Cerco/.test(document.querySelector('#s-status').textContent), null, { timeout: 10000 }).catch(() => {});
+  await p.waitForTimeout(200);
   const stato = await p.locator('#s-status').innerText().catch(() => '');
   const titoli = await p.locator('#s-results .result b').allInnerTexts().catch(() => []);
   const primo = (await p.locator('#s-results .result').count()) ? await p.locator('#s-results .result').first().innerText() : '';
@@ -115,6 +117,21 @@ export default async function ({ browser }) {
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
   ok('Google: ISBN con 0 risultati alla prima richiesta → si riprova e si trova', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).length + ' chiamate · ' + r.titoli.join('|'));
+  await p.close2();
+
+  // 5c. Google ha in archivio solo l'ISBN-10 (come «Across the sand», 883474621X): dopo lo 0 si prova la forma ISBN-10
+  p = await apri(browser, u => (/isbn:8806219219/.test(decodeURIComponent(u)) ? { body: EINAUDI } : { body: VUOTO }));
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: ISBN noto solo nella forma ISBN-10 → trovato al secondo tentativo', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).map(u => decodeURIComponent(u).match(/isbn:\w+/)[0]).join(','));
+  await p.close2();
+
+  // 5d. ISBN che Google non conosce: tre richieste (ISBN-13, ISBN-10, di nuovo ISBN-13), poi il messaggio
+  p = await apri(browser, () => ({ body: VUOTO }));
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  const forme = isbnChiamate(p).map(u => decodeURIComponent(u).match(/isbn:\w+/)[0]).join(',');
+  ok('Google: ISBN sconosciuto → 13, 10, 13 e poi «nessuna fonte»', forme === 'isbn:9788806219215,isbn:8806219219,isbn:9788806219215' && /nessuna fonte/i.test(r.stato), forme + ' · ' + r.stato);
   await p.close2();
 
   // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono
