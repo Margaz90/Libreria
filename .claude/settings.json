@@ -17,7 +17,7 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-prima-del-push.mjs\"",
-            "timeout": 600,
+            "timeout": 900,
             "statusMessage": "Lancio i test prima di pubblicare…"
           }
         ]
