@@ -1,6 +1,6 @@
 # Statistiche come «Scaffale degli anni»: design
 
-Data: 2026-10-29 · Stato: da rivedere con Diego · Percorso Superpowers: architetturale (proposte → spec → piano)
+Data: 2026-10-29 · Stato: approvata da Diego il 2026-10-29 (con dorsi toccabili e pulsanti di paginazione a 44 px ovunque) · Percorso Superpowers: architetturale (proposte → spec → piano)
 
 Riferimenti: proposta `design/proposte/statistiche.md`, prototipo `design/proposte/statistiche.html` (variante A, più l'incipit della variante C), screenshot `design/proposte/img/statistiche-A.png`, `statistiche-A-1366.png`, `statistiche-racconto-A.png`. Spec di partenza: `2026-10-25-statistiche-design.md` (v47): i calcoli e le regole sui dati restano quelli.
 
@@ -29,7 +29,7 @@ Criteri di riuscita:
 | Anni con molti libri | 15 dorsi, poi «Mostra altri 15» / «Nascondi» (stessi pulsanti `.pager` degli scaffali) |
 | Racconto | Resta (fino a 9 schermate, regole attuali), nello stile A: dorsi che cadono sull'asse, il preferito che esce dallo scaffale; movimento ridotto rispettato |
 
-## Scelte fatte in questa spec (da confermare con Diego)
+## Scelte fatte in questa spec (confermate da Diego)
 
 | Scelta | Decisione | Perché |
 |---|---|---|
@@ -37,10 +37,10 @@ Criteri di riuscita:
 | «In sintesi» | Il pannello sparisce: libri e pagine stanno nell'incipit, il voto medio nell'intestazione di «Voti», i giorni per libro in «Tempo di lettura» | Il prototipo A non lo ha; evita di ripetere gli stessi numeri |
 | «Anno per anno» (`<details>`) | Sparisce: la mensola è l'anno. Le barre dei mesi dell'anno restano solo nel racconto | Le mensole sostituiscono i pannelli; la pagina resta corta |
 | Ordine dei dorsi | Come `anni[].books`: il più recente a sinistra (fine, poi `updated`); i libri con solo l'anno in fondo | Stesso ordine «Recenti» degli scaffali; con la paginazione i primi 15 sono gli ultimi letti |
-| Dorsi toccabili | No: nelle Statistiche i dorsi sono decorativi (`<span>`, `aria-hidden`), la mensola è un'immagine con etichetta | Un dorso stretto (12–44 px) non arriva a 44 px di bersaglio; il menu rapido e la scheda restano negli scaffali |
+| Dorsi toccabili | **Sì (scelta di Diego)**: ogni dorso è un `<button data-id>` come negli scaffali; tocco = scheda del libro, pressione prolungata = menu rapido, con gli stessi gestori di `wireMain` | Diego vuole aprire il libro dalla mensola. I dorsi sottili restano sotto i 44 px di larghezza (alti almeno 84 px), come negli scaffali: larghezza minima portata a 20 px |
 | Navigazione del racconto | Frecce ‹ › rotonde con «N di M» in basso, visibili anche sul telefono (oggi sono nascoste) | Come nel prototipo; bersagli da 48 px, utili con VoiceOver |
 | Chiusura del racconto | Senza la griglia delle copertine: la mensola in basso mostra già i libri | Meno nodi e meno spazio sui telefoni bassi |
-| `.pager-btn` | Alto 44 px solo dentro le Statistiche | Il resto dell'app (38 px) non si tocca in questo progetto |
+| `.pager-btn` | Alto 44 px ovunque, anche negli scaffali (scelta di Diego) | Più facile da toccare e coerente in tutta l'app |
 
 ## Interfaccia
 
@@ -88,8 +88,8 @@ Una per ogni voce di `st.anni` (dal più recente). Markup (funzione `yearHTML(a,
     <p class="ys-m">2 libri, 551 pagine, <span aria-hidden="true">★</span><span class="sr">voto medio</span> 5,0</p>
     <button class="story-btn" type="button" data-story="2025" aria-label="Il racconto del 2025">Il racconto</button>
   </div>
-  <div class="ys-shelf ribbon" role="img" aria-label="2025: 2 libri, 551 pagine. Sullo scaffale: Le tigri sono in giro, Il signore delle mosche.">
-    <div class="ys-row">…dorsi…</div>
+  <div class="ys-shelf ribbon" role="group" aria-label="2025: 2 libri, 551 pagine">
+    <div class="ys-row">…dorsi: <button class="spine" data-id="…" aria-label="Le tigri sono in giro, Mick Herron">…</div>
   </div>
   …pager (solo oltre 15 libri)…
   <p class="ys-d">Autore dell'anno <b>…</b>. Genere <b>…</b>. Il preferito: <b>…</b>, cinque stelle.</p>
@@ -100,7 +100,7 @@ Una per ogni voce di `st.anni` (dal più recente). Markup (funzione `yearHTML(a,
 - **Riga dei numeri** `.ys-m` (13,5 px, `--muted`): «1 libro» / «N libri», poi «, N pagine» solo se le pagine sono > 0, poi «, ★ 4,2» solo se c'è un voto medio (`dec()`).
 - **Pulsante «Il racconto»** `.story-btn` (etichetta «Il racconto del 2025»): solo per gli anni in `st.racconti` (oggi −1 e oggi −2, rolling come ora). Corallo profondo `--accent`, testo `--accent-ink`, 600 14 px, alto 44 px, raggio 22 px, segnalibro disegnato con `::before` (9×15 px, `currentColor`, `clip-path` con la tacca a V). In alto a destra della testata, centrato sulle due righe. Con il pulsante la mensola ha la classe `ribbon`: un segnalibro `--coral` (12×26 px) pende dall'asse a 26 px dal bordo destro (decorativo, `::after`).
 - **Mensola** `.ys-shelf`: una o più file `.ys-row`. Ogni fila: `display: flex; align-items: flex-end; gap: 2px; padding: 0 10px 16px; min-height: 132px` (167 px da 1024), sfondo `var(--board-img) left bottom -10px / 600px 230px repeat-x` (lo stesso legno degli scaffali, chiaro e scuro). Tra due file 10 px. Ogni fila ha la sua asse, così non serve il trucco del passo da 230 px di `.row`.
-- **Dorsi**: `spineHTML(b, "span", dim)` (vedi «Dorsi delle Statistiche»): foto vera, striscia della copertina o dorso disegnato, come negli scaffali; nascosti autore (`.au`) e pallino «da aggiornare» (con `"span"` non compare già oggi); il bollino della serie resta.
+- **Dorsi**: `spineHTML(b, "button", dim)`, toccabili come negli scaffali (tocco = scheda, pressione prolungata = menu rapido; vedi «Dorsi toccabili») (vedi «Dorsi delle Statistiche»): foto vera, striscia della copertina o dorso disegnato, come negli scaffali; nascosti autore (`.au`) e pallino «da aggiornare» (nascosto con il CSS di `.ys-row`); il bollino della serie resta.
 - **Divisione in file** (`ysRows(books)`, pura): i dorsi si mettono in fila nell'ordine dato finché la somma delle loro unità non supera 300; poi si apre una nuova fila. Le unità sono percentuali della fila (vedi sotto), quindi la divisione non dipende dalla larghezza dello schermo e non serve ricalcolare al cambio di orientamento.
 - **Paginazione**: `state.limit["y" + anno]` (predefinito `PAGE` = 15). Oltre 15 libri, sotto la mensola, `pagerHTML("y2025", mostrati, totale)`: «15 di 32», «Mostra altri 15», «Nascondi» (testi e comportamento degli scaffali). «Mostra altri» ridisegna solo quella mensola (`replaceYear`) e porta il focus sul suo «Mostra altri» (o su «Nascondi» se è finito l'elenco); «Nascondi» torna a 15 e, se la mensola è sopra lo schermo, la riporta in vista (scorrimento morbido salvo movimento ridotto, come per gli scaffali). I limiti si azzerano cambiando sezione (`setView` chiama già `resetLimits`).
 - **Riga dell'anno** `.ys-d` (14 px, `--muted`, nomi in `--ink` 600): pezzi separati da «. », ognuno solo se vale:
@@ -114,11 +114,17 @@ Una per ogni voce di `st.anni` (dal più recente). Markup (funzione `yearHTML(a,
 `spineHTML(b, tag = "button", dim)`: nuovo terzo parametro facoltativo `dim = { w, h }`. Se presente, l'altezza è `dim.h` px e la larghezza è la stringa `dim.w` (una percentuale), anche per le foto (non si usa `spineRatio`: la foto riempie il dorso come oggi con `background-size: 100% 100%`). Senza `dim` nulla cambia per gli scaffali.
 
 `statDim(b)` (pura):
-- unità `u = p > 0 ? clamp(round(p / 14), 16, 44) : 16` (p = pagine; **senza pagine larghezza minima**);
+- unità `u = p > 0 ? clamp(round(p / 14), 20, 44) : 20` (p = pagine; **senza pagine larghezza minima**);
 - `w = (u / 3.4).toFixed(2) + "%"` (300 unità occupano l'88% della fila: restano i 2 px tra i dorsi, anche a 320 px di schermo);
 - `h = p > 0 ? round(84 + min(p, 900) / 900 * 32) : 92` px (84–116 px).
 
-CSS: `.ys-row .spine { flex: none; min-width: 12px; padding: 8px 0 6px; }`, `.ys-row .spine .au { display: none; }`, titolo del dorso 11 px; da 1024 px `.ys-row .spine { height: calc(var(--h) * 1.3) !important; }` (`--h` è già scritto da `spineHTML`). Nessun effetto al passaggio del mouse (non sono pulsanti).
+CSS: `.ys-row .spine { flex: none; min-width: 12px; padding: 8px 0 6px; }`, `.ys-row .spine .au { display: none; }`, titolo del dorso 11 px; da 1024 px `.ys-row .spine { height: calc(var(--h) * 1.3) !important; }` (`--h` è già scritto da `spineHTML`). Anteprima al passaggio del mouse come negli scaffali (solo dispositivi con mouse); focus visibile come negli scaffali.
+
+### Dorsi toccabili
+
+- Ogni dorso della mensola è un `<button class="spine" data-id>` di `spineHTML`; i gestori di tocco, pressione prolungata e anteprima sono quelli di `wireMain` per `#main [data-id]` (nessun gestore nuovo; se le Statistiche non stanno in `#main`, si estende il selettore, non si duplica il codice).
+- Dopo una modifica fatta dalla scheda aperta dalle Statistiche (Salva, menu rapido, Elimina) la vista Statistiche si ricalcola (`computeStats` + `renderStats`), perché il libro può cambiare anno o voto; il focus torna al dorso se esiste ancora, altrimenti al titolo dell'anno.
+- Il bollino della serie resta; il pallino «da aggiornare» non c'è (i libri sulle mensole hanno un anno).
 
 ### Note sotto le mensole
 
@@ -191,10 +197,10 @@ Unica aggiunta: `sempre.authors[i].books`, i libri di quell'autore dal più rece
 ## Accessibilità
 
 - **Titoli**: h2 «Statistiche», h2 nascosti «Anno per anno» e «Sempre», h3 per ogni anno e ogni blocco: si naviga con il rotore di VoiceOver.
-- **Mensole**: `role="img"` con `aria-label` «2025: 3 libri, 800 pagine. Sullo scaffale: Due, Uno, Sette.»; con la paginazione l'elenco comprende solo i dorsi mostrati e finisce con «, e altri 17 non mostrati.»; senza pagine: «2019: 1 libro. Sullo scaffale: Cinque.» Titoli passati da `esc()`. La riga dei numeri legge «voto medio 4,2» invece della stella.
+- **Mensole**: `role="group"` con `aria-label` «2025: 3 libri, 800 pagine» (senza pagine: «2019: 1 libro»); dentro, un pulsante per dorso con etichetta «*Titolo*, *Autore*» (passati da `esc()`), così VoiceOver li legge uno a uno e li apre con il doppio tocco. Con la paginazione si leggono solo i dorsi mostrati; il pager dice «15 di 32». La riga dei numeri legge «voto medio 4,2» invece della stella.
 - **Pulsante**: etichetta «Il racconto del 2025», che contiene il testo visibile «Il racconto» (Controllo vocale lo trova dicendo quello che si vede).
 - **Contrasto**: testi solo con i token controllati dall'hook `contrasto.mjs` (`--ink`, `--muted`, `--title`, `--accent`, `--accent-ink` su `--accent`) in chiaro e scuro; `--coral` solo per linee e segnalibri decorativi. Barre in `--title`/`--accent` (contrasto con il fondo ben oltre 3:1). Nel racconto crema su petrolio scuro > 10:1, #FFB3A9 > 7:1.
-- **Bersagli**: «Il racconto» 44 px, `.stats .pager-btn` 44 px, frecce del racconto 48 px, ✕ 44 px.
+- **Bersagli**: «Il racconto» 44 px, `.pager-btn` 44 px (anche negli scaffali), dorsi alti ≥ 84 px e larghi ≥ 20 px (come negli scaffali, sotto i 44 px di larghezza), frecce del racconto 48 px, ✕ 44 px.
 - **Movimento**: animazioni solo nel racconto e solo con `prefers-reduced-motion: no-preference`; lo scorrimento di «Nascondi» rispetta la stessa preferenza.
 - **Racconto**: focus, Esc, annunci e trappola del Tab come oggi; il palco è `aria-hidden`.
 
@@ -231,9 +237,9 @@ Cambiano:
 Nuovi:
 - `calcoli`: `authors[0].books` di Stephen King = `Cinque,Sei` (ordine `recent`: Cinque ha l'anno 2019, Sei nessuno), la funzione resta pura (nessun accesso al DOM).
 - **Incipit**: libri di prova A1 (X, 5 stelle, 100 pp, fine 2025-03-01), A2 (X, 5, 200 pp, 2025-03-20), A3 (Y, 4, 300 pp, 2025-07-01) → «Hai letto 3 libri, 600 pagine in tutto. Il voto che dai più spesso è cinque stelle, a 2 libri; l'autore che torna di più è X, con 2 titoli. Il mese in cui finisci più libri è marzo.»; un libro senza pagine né voto → «Hai letto un libro.»
-- **Mensole** (con `FIXTURE`): etichetta del 2025 «2025: 3 libri, 800 pagine. Sullo scaffale: Due, Uno, Sette.»; tre `.spine` nella mensola 2025; in una pagina a parte con tre libri del 2025 (senza pagine, 100 e 900 pagine) i primi due hanno la stessa larghezza (minima) e quello da 900 è il più largo; riga `.ys-d` del 2025 con «Don Winslow», «Thriller» e «Uno»; nessuna `.ys-d` nel 2019 (1 libro).
+- **Mensole** (con `FIXTURE`): etichetta del 2025 «2025: 3 libri, 800 pagine»; tre `button.spine[data-id]` nella mensola 2025 con etichetta «Titolo, Autore»; un tocco su «Due» apre la `.sheet` di quel libro; cambiare l'anno di fine di «Due» al 2024 e salvare lo sposta sulla mensola del 2024 senza ricaricare; in una pagina a parte con tre libri del 2025 (senza pagine, 100 e 900 pagine) i primi due hanno la stessa larghezza (minima) e quello da 900 è il più largo; riga `.ys-d` del 2025 con «Don Winslow», «Thriller» e «Uno»; nessuna `.ys-d` nel 2019 (1 libro).
 - **Mostra altri 15**: 32 libri finiti nel 2025 → 15 dorsi e «15 di 32»; «Mostra altri 15» → 30 e il pulsante dice «Mostra altri 2»; poi 32 e solo «Nascondi»; «Nascondi» → 15; la mensola del 2024 è lo stesso nodo prima e dopo (ridisegnata solo quella dell'anno); niente scorrimento orizzontale.
-- **Bersagli**: altezza di `.story-btn` e `.stats .pager-btn` ≥ 44 px a 390 px.
+- **Bersagli**: altezza di `.story-btn` e di `.pager-btn` (Statistiche **e** scaffali) ≥ 44 px a 390 px; aggiornare in `test/interfaccia.mjs` eventuali misure dei pulsanti di paginazione.
 - **Autori**: la riga di Stephen King ha 2 mini-dorsi, `aria-hidden`.
 - **Racconto**: `.story-stage` con 3 dorsi per il 2025 e `aria-hidden="true"`; nella schermata «preferito» il dorso del preferito ha la classe `out`, nelle altre no; con `page.emulateMedia({ reducedMotion: 'reduce' })` nessun dorso ha `animation-name` diverso da `none` e la transizione è nulla; navigazione in basso visibile a 390 px con «1 di 9».
 
@@ -244,7 +250,7 @@ Due altre spec lavorano sugli stessi file (scheda del libro; «Cosa leggo adesso
 | File | Dove |
 |---|---|
 | `app.js` | `computeStats` (solo `authors[].books`); `spineHTML` (terzo parametro `dim`, due righe all'inizio); blocco tra `window.libreriaStats` e `openStory` (nuove `ledeHTML`, `statDim`, `ysRows`, `yearHTML`, `miniSpines`; `renderStats` riscritta; `monthsHTML` invariata); `openStory`; in `render()` la riga della vista Statistiche (`statsLast`); in `wireMain` solo i due gestori `[data-more]`/`[data-less]` (ramo `y…`); nuova `replaceYear` accanto a `replaceShelf` |
-| `style.css` | Blocco Statistiche (oggi da `.stats` a `.panel .hint…`, righe ~122–173): sostituito da un blocco «Statistiche: scaffale degli anni» con `.stats-title`, `.stats-lede`, `.stats-cols`, `.ys*`, `.story-btn`, `.sblk`, mini-dorsi, `.stats .pager-btn`; blocco del racconto (`#story`, `.slide`, `.story-*`, righe ~534–572): aggiunti `.story-stage`, `.story-nav`, `.out`, `@keyframes drop`; tolto `#story::after`. `.hbar`, `.months`, `.mlab`, `.sr` restano (usati anche dal racconto) |
+| `style.css` | Blocco Statistiche (oggi da `.stats` a `.panel .hint…`, righe ~122–173): sostituito da un blocco «Statistiche: scaffale degli anni» con `.stats-title`, `.stats-lede`, `.stats-cols`, `.ys*`, `.story-btn`, `.sblk`, mini-dorsi, `.pager-btn` (44 px ovunque); blocco del racconto (`#story`, `.slide`, `.story-*`, righe ~534–572): aggiunti `.story-stage`, `.story-nav`, `.out`, `@keyframes drop`; tolto `#story::after`. `.hbar`, `.months`, `.mlab`, `.sr` restano (usati anche dal racconto) |
 | `sw.js` | `VERSION` +1 (chi unisce per ultimo la incrementa di nuovo, così ogni pubblicazione ha un numero nuovo) |
 | `test/statistiche.mjs` | Controlli sopra |
 
@@ -253,8 +259,6 @@ Due altre spec lavorano sugli stessi file (scheda del libro; «Cosa leggo adesso
 ## Fuori ambito
 
 - Indice dei nomi con i puntini (variante C) per gli autori.
-- Dorsi toccabili nelle Statistiche (aprire la scheda del libro dalla mensola).
 - Condividere il racconto come immagine.
 - «Serie da continuare» nelle Statistiche, ordine «Serie».
-- Pulsanti `.pager-btn` a 44 px negli scaffali.
 - Nuovi calcoli (pagine al mese, confronto tra anni).

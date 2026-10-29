@@ -1,6 +1,6 @@
 # Scheda del libro «Frontespizio» — design
 
-Data: 2026-10-29 · Stato: da rivedere con Diego · Percorso Superpowers: architetturale (proposte → spec → piano)
+Data: 2026-10-29 · Stato: approvata da Diego il 2026-10-29 · Percorso Superpowers: architetturale (proposte → spec → piano)
 
 Riferimenti: proposta `design/proposte/scheda.md`, prototipo `design/proposte/scheda.html` (variante A), screenshot `design/proposte/img/scheda-A.png`, `scheda-A-scuro.png`, `scheda-A-1366.png`.
 

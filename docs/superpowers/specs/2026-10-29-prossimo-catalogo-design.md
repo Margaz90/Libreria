@@ -1,6 +1,6 @@
 # «Cosa leggo adesso?» come scheda del catalogo — design
 
-Data: 2026-10-29 · Stato: **da rivedere con Diego** · Percorso Superpowers: spec → piano → esecuzione
+Data: 2026-10-29 · Stato: **approvata da Diego il 2026-10-29** · Percorso Superpowers: spec → piano → esecuzione
 Riferimenti: proposta `design/proposte/prossimo.md` (variante **B**), prototipo `design/proposte/prossimo.html`, screenshot `design/proposte/img/prossimo-B*.png` (compresi `prossimo-B-inizia*.png` e `prossimo-B-nonora*.png`, approvati da Diego). Spec originale della funzione: `2026-10-27-tre-funzioni-design.md`, sezione 3.
 
 ## Obiettivo
@@ -269,16 +269,16 @@ Se un'altra spec cambia anche `toast()` o i token, conviene unire prima quella e
 
 ## Fuori ambito
 
-- Qualsiasi cambio a `nextBooks` (criteri, ordine, testi dei motivi) e alle etichette dedotte dal `reason` (es. «Il seguito» per le serie): vedi le domande aperte.
+- Qualsiasi cambio a `nextBooks` (criteri, ordine, testi dei motivi) e alle etichette dedotte dal `reason` (es. «Il seguito» per le serie: escluso da Diego).
 - Aprire la scheda del libro toccando la scheda del catalogo o la copertina (oggi la `.ncard` non è toccabile).
 - Pulsanti freccia visibili per sfogliare (si usano linguette, tastiera e scorrimento).
 - «Non ora» che resta dopo la riapertura dell'app (resta solo in memoria, come oggi).
 - Le varianti A e C, la scheda «In lettura» (v62) e gli altri avvisi oltre alla correzione di larghezza e bersaglio.
 - Il controllo dei token `--paper*` nell'hook `contrasto.mjs` (eventuale proposta alla prossima verifica degli hook).
 
-## Domande aperte per Diego
+## Decisioni di Diego sulle domande aperte (2026-10-29)
 
-1. Su computer la scheda è larga al massimo 600 px (a sinistra nell'hero), invece della griglia a tre colonne di oggi. Va bene?
-2. Quando `nextBooks` dà due proposte «a caso», la seconda linguetta si chiama «Ancora a caso». Va bene, o preferisci un altro nome?
-3. Quando la proposta affine è il seguito di una serie, la linguetta deve dire «Il seguito» invece di «Affine»? Servirebbe dedurlo dal testo del motivo, oppure aggiungere un campo a `nextBooks`, che però oggi non si tocca.
-4. Dopo «Inizia» e «Non ora» il focus passa ad «Annulla» nell'avviso, così si annulla subito anche con VoiceOver. Va bene, o preferisci che il focus resti nella pagina?
+1. Sul computer una sola scheda larga al massimo 600 px: sì.
+2. Seconda proposta a caso chiamata «Ancora a caso»: sì.
+3. Linguetta «Il seguito» per le serie: no, resta «Affine»; il motivo in rosso dice già «Il #4 di Slough House…» e `nextBooks` non si tocca.
+4. Dopo «Inizia» e «Non ora» il focus passa ad «Annulla» nell'avviso: sì.
