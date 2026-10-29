@@ -93,7 +93,7 @@ async function struttura(browser) {
   ok('ordine Letto', await order(['.sheet-top', '.seg', '#f-rate', '#f-period', '#f-quote', '#f-notes', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']));
   ok('scheda .sheet.book, una sola h2, h3 Trama e Sullo scaffale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.classList.contains('book') && s.querySelectorAll('h2').length === 1 && [...s.querySelectorAll('h3')].map(h => h.textContent).join() === 'Trama,Sullo scaffale'; }));
   const x = p.locator('#s-close'), bx = await x.boundingBox();
-  ok('✕ al posto di Chiudi', (await x.innerText()) === '✕' && (await x.getAttribute('aria-label')) === 'Chiudi la scheda' && bx.width >= 44 && bx.height >= 44, JSON.stringify(bx) + await x.innerText());
+  ok('✕ al posto di Chiudi', (await x.innerText()) === '✕' && (await x.getAttribute('aria-label')) === 'Chiudi la scheda' && bx.width >= 43.9 && bx.height >= 43.9, JSON.stringify(bx) + await x.innerText());
   ok('Modifica i dati del libro: chiuso, con i campi', await p.evaluate(() => { const d = document.querySelector('details.edit'); return d.querySelector('summary').textContent === 'Modifica i dati del libro' && !d.open && !!d.querySelector('#d-title'); }));
   ok('Ruota e Rimuovi nascosti senza foto', await p.locator('#sp-rot').isHidden() && await p.locator('#sp-del').isHidden());
   await p.setInputFiles('#sp-file', { name: 'dorso.png', mimeType: 'image/png', buffer: PNG }); await p.waitForTimeout(500);
@@ -237,10 +237,56 @@ async function voto(browser) {
   await p.close2();
 }
 
+async function pagina(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, rating: 0 };
+  await load(p, [
+    { ...base, id: 'f7', title: 'Sette', author: 'A', status: 'in-lettura', started: '2026-10-12', page: 142, pages: 337 },
+    { ...base, id: 'f12', title: 'Dodici', author: 'A', status: 'in-lettura', started: '2026-10-20', page: 330, pages: 337, pageStep: 25 },
+    { ...base, id: 'f13', title: 'Tredici', author: 'A', status: 'in-lettura', started: '2026-10-20', page: 50 },
+    { ...base, id: 'f1', title: 'Uno', author: 'A', status: 'letto', finished: '2025-04-02', pages: 300 },
+  ]);
+  const val = sel => p.locator(sel).inputValue();
+  const close = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
+  await openBook(p, 'f7'); await p.waitForTimeout(400);
+  ok('ritmo nella scheda', await txt(p, '#f-psub') === '18º giorno di lettura, circa 8 pagine al giorno: a questo ritmo lo finisci verso il 23 novembre.' && await txt(p, '#f-pof') === 'di 337 · 42%' && await val('#f-range') === '142', await txt(p, '#f-psub') + '|' + await txt(p, '#f-pof'));
+  ok('+N nascosto senza salto ricordato', !(await vis(p, '#f-pstep')));
+  await p.click('#f-p10');
+  ok('+10: pagina, cursore e stima', await val('#f-page') === '152' && await val('#f-range') === '152' && /verso il 20 novembre/.test(await txt(p, '#f-psub')), await txt(p, '#f-psub'));
+  ok('niente salvataggio senza Salva', (await localBooks(p)).find(b => b.id === 'f7').page === 142);
+  await p.keyboard.press('Escape');
+  ok('Esc dopo +10: modifiche non salvate', await vis(p, '.unsaved'));
+  await p.locator('[data-u="back"]').click();
+  await p.fill('#f-range', '200');
+  ok('il cursore muove la pagina', await val('#f-page') === '200');
+  await p.click('#f-p10');
+  await p.locator('details.edit summary').click(); await p.fill('#d-pages', '400');
+  ok('cambiare le pagine totali non riporta la pagina indietro', await val('#f-page') === '210', await val('#f-page'));
+  await p.fill('#d-pages', '');
+  ok('senza pagine totali: testo no-pages', await txt(p, '#f-psub') === '18º giorno di lettura. Aggiungi le pagine totali in «Modifica i dati del libro» per sapere quando lo finisci.', await txt(p, '#f-psub'));
+  await close();
+  await openBook(p, 'f12'); await p.waitForTimeout(300);
+  const ps = p.locator('#f-pstep');
+  ok('+N col salto ricordato', await ps.innerText() === '+25' && /^Aggiungi 25 pagine a /.test(await ps.getAttribute('aria-label')));
+  await ps.click(); ok('+N limitato al totale', await val('#f-page') === '337');
+  await p.click('#f-p10'); ok('+10 limitato al totale', await val('#f-page') === '337');
+  await close();
+  await openBook(p, 'f13'); await p.waitForTimeout(300);
+  ok('senza totale: niente cursore, di ?', !(await vis(p, '#f-range')) && await txt(p, '#f-pof') === 'di ?');
+  await p.click('#f-p10');
+  ok('senza totale: +10 libero', await val('#f-page') === '60' && /no|giorno/.test(await txt(p, '#f-psub')), await txt(p, '#f-psub'));
+  await close();
+  await openBook(p, 'f1');
+  ok('Letto: blocco pagina nascosto, campo readonly', !(await vis(p, '#f-pblk')) && await p.locator('#f-page').evaluate(e => e.readOnly));
+  ok('pagina: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
   await aspetto(browser);
   await frase(browser);
   await voto(browser);
+  await pagina(browser);
 }

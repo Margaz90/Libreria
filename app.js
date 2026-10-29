@@ -1530,7 +1530,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
         ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div>
-      <div class="pblk" id="f-pblk"><div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div></div>
+      <div class="pblk" id="f-pblk">
+        <div class="pbig"><label for="f-page">pag.</label> <input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"> <span id="f-pof"></span></div>
+        <input type="range" id="f-range" min="0" max="${esc(b.pages || 0)}" value="${esc(b.page || 0)}" aria-label="Avanzamento di ${esc(b.title || "")}">
+        <div class="pq"><button type="button" class="btn" id="f-p10" aria-label="Aggiungi 10 pagine a ${esc(b.title || "")}">+10</button><button type="button" class="btn" id="f-pstep" data-step="${esc(b.pageStep || "")}" aria-label="Aggiungi ${esc(b.pageStep || "")} pagine a ${esc(b.title || "")}"${b.pageStep ? "" : " hidden"}>+${esc(b.pageStep || "")}</button></div>
+      </div>
     </div>`;
   }
   function readingMemo(b) {
@@ -1667,9 +1671,23 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function syncPage(sheet) {
     const pg = $("#f-page", sheet); if (!pg) return;
     if (pg.dataset.orig === undefined) pg.dataset.orig = pg.value;
-    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || 0, done = $("#f-status", sheet).value === "letto" && tot > 0;
-    pg.readOnly = done; pg.value = done ? tot : pg.dataset.orig;
+    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || 0, st = $("#f-status", sheet).value, done = st === "letto" && tot > 0;
+    if (done) { pg.readOnly = true; pg.value = tot; } else { if (pg.readOnly) pg.value = pg.dataset.orig; pg.readOnly = false; } // si riprende il valore di apertura solo tornando da Letto
     pg.placeholder = tot ? "su " + tot : "";
+    const blk = $("#f-pblk", sheet); if (blk) blk.hidden = st !== "in-lettura";
+    const rg = $("#f-range", sheet), cur = parseInt(pg.value, 10) || 0, pct = tot ? Math.min(100, Math.round(cur / tot * 100)) : 0;
+    if (rg) { rg.hidden = !tot; rg.max = tot; rg.value = cur; rg.style.setProperty("--pct", (tot ? Math.min(100, cur / tot * 100) : 0) + "%"); rg.setAttribute("aria-valuetext", `pagina ${cur} di ${tot}`); }
+    const pof = $("#f-pof", sheet); if (pof) pof.textContent = tot ? `di ${tot} · ${pct}%` : "di ?";
+  }
+  // Cursore, +10 e +N nella scheda: cambiano solo il campo della pagina (si salva con Salva) e non toccano `pageStep`.
+  function wirePageCtl(sheet) {
+    const pg = $("#f-page", sheet); if (!pg) return;
+    const fire = () => pg.dispatchEvent(new Event("input", { bubbles: true }));
+    const add = n => { const tot = parseInt($("#d-pages", sheet).value, 10) || 0, v = (parseInt(pg.value, 10) || 0) + n; pg.value = tot ? Math.min(v, tot) : v; fire(); };
+    $("#f-range", sheet).addEventListener("input", e => { pg.value = e.target.value; fire(); });
+    $("#f-p10", sheet).onclick = () => add(10);
+    const st = $("#f-pstep", sheet); st.onclick = () => add(Number(st.dataset.step) || 0);
+    pg.addEventListener("input", () => syncPage(sheet));
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
   function badYear(sheet) {
@@ -1964,7 +1982,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </header>
       <div class="fp-main">${body}</div>
       <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
-    wireRating(sheet, b);
+    wireRating(sheet, b); wirePageCtl(sheet);
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
     const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
     const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.hidden = spDel.hidden = !b.spine; };
@@ -2094,7 +2112,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       ${dataFields(b)}
       ${readingHead(b)}${readingMemo(b)}
       <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
-    wireRating(sheet, b);
+    wireRating(sheet, b); wirePageCtl(sheet);
     wireSearch(sheet, hit => {
       const prev = $("#a-prev", sheet); prev.hidden = false;
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;
