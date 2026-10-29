@@ -188,6 +188,11 @@ async function pagina(browser) {
     await p.waitForTimeout(600);
     await p.screenshot({ path: `/tmp/statistiche-${width}-${dark ? 'scuro' : 'chiaro'}.png`, fullPage: true });
     ok(`${tag}: niente scorrimento orizzontale`, await noHScroll(p));
+    if (width === 1366) {
+      ok(`${tag}: mensole a sinistra e Sempre a destra`, await p.evaluate(() => { const a = document.querySelector('.stats-years').getBoundingClientRect(), b = document.querySelector('.sempre').getBoundingClientRect(); return a.right <= b.left && Math.abs(a.top - b.top) < 4; }));
+      ok(`${tag}: Voti e Tempo affiancati, Autori a tutta larghezza`, await p.evaluate(() => { const r = s => document.querySelector(`[data-panel="${s}"]`).getBoundingClientRect(); return Math.abs(r('voti').top - r('tempo').top) < 4 && r('autori').width > r('voti').width * 1.8; }));
+      ok(`${tag}: file da 167 px`, await p.$eval('.ys-row', e => e.getBoundingClientRect().height >= 167));
+    }
     ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
     await p.close2();
   }
