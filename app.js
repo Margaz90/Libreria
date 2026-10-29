@@ -1817,6 +1817,64 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const t = `<b>${no ? "#" + esc(no) + " " : ""}${esc(x ? x.title : r.title)}</b>`;
     return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} <span aria-hidden="true">›</span></span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next="${esc(r.title)}"${r.no ? ` data-no="${esc(r.no)}"` : ""} aria-label="Aggiungi «${esc(r.title)}» alla lista dei desideri">Lista dei desideri</button>`}</div>`;
   }
+  // ---- Scheda «Frontespizio»: frasi delle date e ritmo di lettura (funzioni pure) ----
+  const DFMT = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
+  const isoOk = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T12:00"));
+  const longDate = (iso, year = true) => { if (!isoOk(iso)) return ""; const t = DFMT.format(new Date(iso + "T12:00")); return year ? t : t.replace(/\s\d{4}$/, ""); };
+  const dayDiff = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
+  const addDays = (iso, n) => { const d = new Date(iso + "T12:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const prep = (base, iso) => { const g = isoOk(iso) ? Number(iso.slice(8)) : 0; return g === 8 || g === 11 ? ({ il: "l'", dal: "dall'", al: "all'" })[base] : base + " "; };
+  const nPages = n => n + (n === 1 ? " pagina" : " pagine");
+  function periodText({ status, started, finished, year, pages }) {
+    const S = isoOk(started) ? started : "", F = isoOk(finished) ? finished : "", ph = "scegli la data", pg = Number(pages) > 0 ? Number(pages) : 0;
+    const r = { lead: "", startWord: "", startText: ph, endWord: "", endText: ph, showStart: false, showEnd: false, sub: "", sr: "" };
+    if (status === "da-leggere") { r.lead = "Ancora da iniziare."; r.sr = r.lead; return r; }
+    if (status === "in-lettura") {
+      r.showStart = true; r.startWord = "In lettura " + prep("dal", S); if (S) r.startText = longDate(S);
+      r.sr = "In lettura dal" + (S ? " " + longDate(S) : ": data da scegliere") + "."; return r;
+    }
+    if (status !== "letto") return r;
+    r.showStart = r.showEnd = true; r.sub = pg ? nPages(pg) : "";
+    const y = year && !F ? Number(year) : 0, sx = S ? longDate(S) : "", fx = F ? longDate(F) : "";
+    if (S && F) {
+      const n = dayDiff(S, F) + 1;
+      r.startWord = "Letto " + prep("dal", S); r.endWord = " " + prep("al", F);
+      r.startText = longDate(S, S.slice(0, 4) !== F.slice(0, 4)); r.endText = fx;
+      r.sub = n < 1 ? r.sub : [n === 1 ? "In un giorno" : n + " giorni", pg ? nPages(pg) : ""].filter(Boolean).join(" · ");
+      r.sr = `Letto dal ${sx} al ${fx}${n < 1 ? "" : n === 1 ? ", in un giorno" : ", " + n + " giorni"}.`; return r;
+    }
+    if (y) r.lead = "Letto nel " + y + ".";
+    r.startWord = "Iniziato " + prep("il", S); r.endWord = " e finito " + prep("il", F);
+    if (S) r.startText = sx; if (F) r.endText = fx;
+    r.sr = (r.lead ? r.lead + " " : "") + `Iniziato il${S ? " " + sx : ": data da scegliere"}; finito il${F ? " " + fx : ": data da scegliere"}.`;
+    return r;
+  }
+  function readingPace({ started, page, pages }, oggi) {
+    if (!isoOk(started) || started > oggi) return { why: "no-start" };
+    const day = dayDiff(started, oggi) + 1, pt = Number(pages) || 0, pa = Number(page) || 0;
+    if (day === 1) return { why: "today", day };
+    if (pt <= 0) return { why: "no-pages", day };
+    if (pa <= 0) return { why: "no-page", day };
+    if (pa >= pt) return { why: "done", day };
+    const perDay = pa / day, left = pt - pa, n = Math.ceil(left / perDay);
+    if (day > 730 || perDay < 1 || perDay > 300 || n > 365) return { why: "odd", day, perDay, left };
+    return { why: "ok", day, perDay, left, eta: addDays(oggi, n) };
+  }
+  function paceText(r, oggi) {
+    const d = `${r.day}º giorno di lettura`;
+    switch (r.why) {
+      case "no-start": return "Scegli la data di inizio: qui comparirà quando potresti finirlo.";
+      case "today": return "Primo giorno di lettura: la stima compare da domani.";
+      case "no-pages": return d + ". Aggiungi le pagine totali in «Modifica i dati del libro» per sapere quando lo finisci.";
+      case "no-page": return d + ". Scrivi a che pagina sei per sapere quando lo finisci.";
+      case "done": return d + ": sei all'ultima pagina, segnalo come Letto.";
+      case "ok": {
+        const when = r.eta === addDays(oggi, 1) ? "domani" : "verso " + prep("il", r.eta) + longDate(r.eta, r.eta.slice(0, 4) !== oggi.slice(0, 4));
+        return `${d}, circa ${nPages(Math.round(r.perDay))} al giorno: a questo ritmo lo finisci ${when}.`;
+      }
+      default: return d + ".";
+    }
+  }
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
     const sheet = openSheet(`
@@ -1971,6 +2029,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     };
     guardSheet(sheet, () => $("#s-save", sheet).click(), () => JSON.stringify(b));
   }
+  window.libreriaScheda = Object.freeze({ period: periodText, pace: readingPace, paceText });
 
   function openAdd({ scan = false } = {}) {
     const b = { status: "da-leggere", rating: 0 };
