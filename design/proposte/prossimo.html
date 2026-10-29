@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cosa leggo adesso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&display=swap" rel="stylesheet">
+<style>
+/* Proposte di design per «Cosa leggo adesso?» (prototipi statici: non è codice dell'app).
+   Token copiati da style.css (v72). */
+:root {
+  --bg: #ECEEE7; --surface: #F8F8F3; --ink: #1C2A2B; --muted: #5B6866; --rule: #CDD2C9;
+  --accent: #B03A30; --accent-ink: #FFF8F2; --title: #2F5457; --coral: #F06A5C;
+  --spine-ink: #FBF6EC; --shadow: rgba(28, 42, 43, .16);
+  --paper: #FBFBF6; --paper-off: #DDE1D7; --paper-line: rgba(47, 84, 87, .10);
+  --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23D68F66'/%3E%3Cstop offset='.25' stop-color='%23B1603F'/%3E%3Cstop offset='1' stop-color='%238A4429'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.24'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --dw: 560;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
+    --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --shadow: rgba(0,0,0,.45);
+    --paper: #222B2C; --paper-off: #182021; --paper-line: rgba(244, 234, 216, .07);
+    --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23B66C4A'/%3E%3Cstop offset='.25' stop-color='%2392472D'/%3E%3Cstop offset='1' stop-color='%236B311E'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.5'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131919; --surface: #1C2425; --ink: #E5E8E1; --muted: #97A29F; --rule: #2E3939;
+  --accent: #F06A5C; --accent-ink: #1A0E0C; --title: #F4EAD8; --shadow: rgba(0,0,0,.45);
+  --paper: #222B2C; --paper-off: #182021; --paper-line: rgba(244, 234, 216, .07);
+  --board-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='230'%3E%3Cdefs%3E%3ClinearGradient id='f' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23B66C4A'/%3E%3Cstop offset='.25' stop-color='%2392472D'/%3E%3Cstop offset='1' stop-color='%236B311E'/%3E%3C/linearGradient%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-opacity='0.5'/%3E%3Cstop offset='1' stop-opacity='0'/%3E%3C/linearGradient%3E%3Cfilter id='d' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.004 1.1' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .05 0 0 0 0 .02 0 0 0 4.5 -2.02'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Cfilter id='l' width='100%' height='100%'%3E%3CfeTurbulence baseFrequency='.007 1.43' numOctaves='5' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .78 0 0 0 0 .62 0 0 0 2.6 -1.43'/%3E%3CfeComposite in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3C/defs%3E%3Crect y='221' width='600' height='12' fill='url(%23s)'/%3E%3Crect y='204' width='600' height='16' fill='url(%23f)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23d)'/%3E%3Crect y='204' width='600' height='16' filter='url(%23l)'/%3E%3Crect y='204' width='600' height='1.4' fill='%23fff' opacity='.28'/%3E%3Crect y='219' width='600' height='1' opacity='.4'/%3E%3C/svg%3E");
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 15px/1.5 var(--body); -webkit-text-size-adjust: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Pagina delle proposte ---------- */
+.doc { max-width: 1320px; margin: 0 auto; padding: 28px 16px 64px; }
+.doc > header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+.doc h1 { font: var(--dw) clamp(28px, 5vw, 40px)/1.05 var(--display); color: var(--title); margin: 0 0 6px; }
+.doc header p { margin: 0; color: var(--muted); max-width: 62ch; }
+.themebtn { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-weight: 600; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 40px 28px; justify-items: center; }
+.variant { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 12px; }
+.variant > h2 { font: var(--dw) 22px/1.2 var(--display); color: var(--title); margin: 0; }
+.variant > h2 small { font: 600 14px var(--body); color: var(--accent); margin-right: 6px; }
+.variant > p { margin: 0; color: var(--muted); font-size: 14px; }
+.how { margin: 4px 0 0; font-size: 13.5px; display: grid; gap: 6px; }
+.how dt { font-weight: 700; color: var(--ink); }
+.how dd { margin: 0 0 4px; color: var(--muted); }
+.reset { align-self: flex-start; min-height: 44px; padding: 8px 14px; border-radius: 10px; border: 1px dashed var(--rule); background: none; font-weight: 600; font-size: 13.5px; }
+.wide-sec { margin-top: 56px; display: flex; flex-direction: column; gap: 12px; }
+.wide-sec h2 { font: var(--dw) 24px var(--display); color: var(--title); margin: 0; }
+.wide-sec > p { margin: 0; color: var(--muted); max-width: 70ch; }
+.scaler { width: 100%; overflow: hidden; border: 1px solid var(--rule); border-radius: 14px; }
+.scaler > .pc { transform-origin: 0 0; }
+
+/* ---------- Cornice del telefono e finta app ---------- */
+.phone { position: relative; width: 100%; max-width: 390px; height: 844px; border: 1px solid var(--rule); border-radius: 28px; overflow: hidden; background: var(--bg); box-shadow: 0 30px 60px -40px var(--shadow); }
+.phone .scr { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 0 16px 110px; display: flex; flex-direction: column; gap: 20px; }
+.app-h { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; }
+.exl { font: 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.app-h .h1 { font: var(--dw) 30px/1.05 var(--display); color: var(--title); margin: 0; white-space: nowrap; }
+.rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 .07em; vertical-align: -.28em; background: linear-gradient(90deg, #F58475, var(--coral) 45%, #C4473B); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
+.tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.goal { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.goal b { color: var(--ink); }
+.ring { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--rule); display: grid; place-items: center; font: 600 12px var(--body); color: var(--ink); }
+.viewsw { display: flex; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.viewsw span { width: 36px; height: 30px; display: grid; place-items: center; }
+.viewsw span:first-child { background: var(--bg); border-radius: 9px 0 0 9px; }
+.viewsw i { width: 14px; height: 12px; border: 1.6px solid var(--muted); border-radius: 2px; }
+.filt { display: grid; grid-template-columns: .8fr 1.2fr .8fr 1.25fr 1fr; padding: 3px; border-radius: 12px; border: 1px solid var(--rule); background: var(--surface); font-size: 13px; }
+.filt span { text-align: center; padding: 8px 0; border-radius: 9px; color: var(--ink); }
+.filt span:first-child { background: var(--ink); color: var(--bg); font-weight: 600; }
+.srch { display: flex; gap: 8px; }
+.srch span { flex: 1; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 14px; }
+.srch span:last-child { flex: none; color: var(--ink); }
+.shelf-h { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid var(--coral); padding-bottom: 4px; }
+.shelf-h h2 { font: var(--dw) 21px var(--display); color: var(--title); margin: 0; }
+.shelf-h span { font: 12px var(--mono); color: var(--muted); }
+.row { display: flex; align-items: flex-end; gap: 3px; flex-wrap: wrap; padding: 14px 8px 16px; background: var(--board-img) left bottom -10px / 600px 230px repeat-x; }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 8px 22px; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--rule); z-index: 4; }
+.dock span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.dock span::before { content: ""; width: 22px; height: 20px; border: 1.7px solid currentColor; border-radius: 4px; }
+.dock span:first-child { color: var(--accent); }
+.dock span.add::before { width: 46px; height: 46px; margin-top: -24px; border: 0; border-radius: 50%; background: var(--accent); box-shadow: 0 6px 14px -6px var(--shadow); }
+
+/* Dorso come nell'app (spineHTML) */
+.spine { position: relative; flex: none; border: 0; padding: 12px 0 8px; border-radius: 3px 3px 1px 1px; color: var(--spine-ink); display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18); }
+.spine .t { flex: 1; min-height: 0; writing-mode: vertical-rl; transform: rotate(180deg); font: 13px/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spine .au { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; white-space: nowrap; max-height: 64px; overflow: hidden; }
+.spine .band { position: absolute; left: 0; right: 0; height: 3px; background: rgba(255,255,255,.28); }
+.spine .band.a { top: 8px; } .spine .band.b { bottom: 8px; }
+/* Copertina disegnata (coverHTML) */
+.cov { position: relative; aspect-ratio: 2 / 3; border-radius: 2px 5px 5px 2px; overflow: hidden; color: var(--spine-ink); padding: 8px 7px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 8px 16px -10px var(--shadow), inset 4px 0 0 rgba(0,0,0,.16); }
+.cov .ct { font: 11px/1.1 var(--display); position: relative; }
+.cov .ca { font-size: 7px; letter-spacing: .1em; text-transform: uppercase; opacity: .9; position: relative; }
+.cov::before { content: ""; position: absolute; inset: 0; background: var(--pat); opacity: .6; }
+
+.btn { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-weight: 600; font-size: 14px; color: var(--ink); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: none; border-color: transparent; color: var(--ink); }
+.toast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 14px; box-shadow: 0 12px 24px -12px rgba(0,0,0,.5); }
+.toast .btn { background: none; border: 0; color: var(--bg); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Scheda In lettura (stato dopo «Inizia», come v62) */
+.rcard { display: grid; grid-template-columns: 64px 1fr; gap: 10px 14px; align-items: center; padding: 14px; border-radius: 18px; background: var(--surface); border: 1px solid var(--rule); box-shadow: 0 10px 24px -18px var(--shadow); }
+.rcard .rl { font-size: 13px; color: var(--accent); font-weight: 600; }
+.rcard h3 { margin: 2px 0; font: var(--dw) 19px/1.2 var(--display); color: var(--title); }
+.rcard .rm { margin: 0; font-size: 13.5px; color: var(--muted); }
+.rcard .rctl { grid-column: 1 / -1; }
+.bar { height: 9px; border-radius: 99px; background: var(--rule); margin: 12px 0; position: relative; }
+.bar::after { content: ""; position: absolute; left: 0; top: 50%; width: 24px; height: 24px; margin-top: -12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.prow { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+.prow .pg { width: 56px; padding: 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); text-align: center; }
+.prow .btn { margin-left: auto; }
+
+.enter { animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+/* =========================================================
+   A · Sfilati dallo scaffale
+   ========================================================= */
+.va { display: flex; flex-direction: column; gap: 10px; }
+.va .hh { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.va h3 { font: var(--dw) 21px/1.2 var(--display); color: var(--title); margin: 0; }
+.va .hh span { font-size: 13px; color: var(--muted); }
+.va .shelf { display: flex; align-items: flex-end; gap: 14px; padding: 22px 10px 16px; background: var(--board-img) left bottom -10px / 600px 230px repeat-x; min-height: 178px; }
+.va .trio { display: flex; align-items: flex-end; gap: 4px; flex: none; padding-left: 2px; }
+.va .spine { cursor: pointer; transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s; }
+.va .spine[aria-checked="true"] { transform: translateY(-16px) rotate(-2deg); box-shadow: inset 2px 0 0 rgba(255,255,255,.14), inset -3px 0 0 rgba(0,0,0,.18), 6px 14px 14px -8px rgba(0,0,0,.45); }
+/* Il segnalibro: pende dal libro scelto fin sopra l'asse */
+.va .spine[aria-checked="true"]::after { content: ""; position: absolute; left: 50%; top: calc(100% - 8px); width: 9px; height: 38px; margin-left: -4.5px; background: linear-gradient(90deg, #F58475, var(--coral) 45%, #C4473B); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); transform: rotate(2deg); transform-origin: top; }
+.va .det { flex: 1; min-width: 0; padding-bottom: 6px; display: flex; flex-direction: column; gap: 3px; align-self: flex-end; }
+.va .why { font: italic 450 14.5px/1.35 var(--display); color: var(--ink); text-wrap: pretty; }
+.va .det b { font: var(--dw) 20px/1.15 var(--display); color: var(--title); }
+.va .meta { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.va .act { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.va .act .btn.primary { width: 100%; }
+.va.swap .spine { animation: slidein .5s cubic-bezier(.2,.8,.2,1) both; }
+.va.swap .spine:nth-child(2) { animation-delay: .06s; } .va.swap .spine:nth-child(3) { animation-delay: .12s; }
+.va.swap .det { animation: fade .4s .15s both; }
+@keyframes slidein { from { transform: translateY(40px); opacity: 0; } }
+@keyframes fade { from { opacity: 0; } }
+/* A su computer: tre gruppi dorso + descrizione sulla stessa asse; «Inizia» solo sotto il libro sfilato */
+.va .spine .au { display: none; }
+.va .spine { min-width: 44px; }
+.va .spine .t { font-size: 13.5px; }
+.va.wide .hh span { display: flex; align-items: center; gap: 8px; }
+.va.wide .hh span .btn { margin-left: 4px; }
+.va.wide .hh span .btn + .btn { margin-left: 0; }
+.va.wide .shelf { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; padding: 30px 24px 16px; min-height: 0; }
+.va.wide .grp { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.va.wide .det { gap: 4px; padding-bottom: 4px; }
+.va.wide .why { font-size: 15px; }
+.va.wide .det b { font-size: 22px; }
+.va.wide .det .btn { align-self: flex-start; margin-top: 8px; min-width: 120px; }
+
+
+/* =========================================================
+   B · La scheda del catalogo
+   ========================================================= */
+.vb { display: flex; flex-direction: column; gap: 10px; }
+.vb h3 { font: var(--dw) 21px/1.2 var(--display); color: var(--title); margin: 0; }
+.vb .drawer { position: relative; padding-bottom: 10px; }
+.vb .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 0 6px; position: relative; z-index: 1; }
+.vb .tab { min-height: 44px; border: 0; border-radius: 12px 12px 0 0; background: var(--paper-off); color: var(--ink); font-size: 13.5px; font-weight: 500; padding: 8px 6px 10px; margin-top: 6px; }
+.vb .tab[aria-selected="true"] { background: var(--paper); color: var(--title); margin-top: 0; box-shadow: 0 -3px 8px -6px var(--shadow); }
+.vb .card { position: relative; z-index: 1; background: var(--paper); border-radius: 4px 4px 6px 6px; padding: 12px 16px 26px; margin-top: -1px; box-shadow: 0 10px 20px -14px var(--shadow);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 25px, var(--paper-line) 25px 26px); background-position: 0 44px; }
+/* Le altre due schede, dietro: si vede il bordo */
+.vb .drawer::before, .vb .drawer::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 5px; height: 30px; border-radius: 0 0 6px 6px; background: var(--paper-off); }
+.vb .drawer::after { left: 20px; right: 20px; bottom: 0; opacity: .7; }
+.vb .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1.5px solid var(--coral); margin-bottom: 10px; }
+.vb .call { font: 13px var(--mono); color: var(--ink); letter-spacing: .02em; }
+.vb .head .n { font-size: 12.5px; color: var(--muted); }
+.vb .body { display: grid; grid-template-columns: 1fr 58px; gap: 4px 14px; align-items: start; }
+.vb .body b { font: var(--dw) 22px/1.15 var(--display); color: var(--title); display: block; }
+.vb .au { font-size: 14px; color: var(--ink); }
+.vb .why { grid-column: 1 / -1; margin-top: 8px; font: italic 450 16px/1.4 var(--display); color: var(--accent); text-wrap: pretty; }
+.vb .meta { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.vb .hole { position: absolute; left: 50%; bottom: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 1px 2px var(--shadow); }
+.vb .act { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.vb.swap .card { animation: flip .35s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes flip { from { transform: translateY(-10px) rotate(-.6deg); opacity: .2; } }
+
+/* =========================================================
+   C · La pila sul comodino
+   ========================================================= */
+.vc { display: flex; flex-direction: column; gap: 8px; }
+.vc .hh { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.vc h3 { font: var(--dw) 21px/1.2 var(--display); color: var(--title); margin: 0; }
+.vc .hh span { font-size: 13px; color: var(--muted); }
+.vc .pile { display: flex; flex-direction: column; gap: 0; padding: 6px 0 16px; background: var(--board-img) left bottom -10px / 600px 230px repeat-x; }
+.vc .lay { display: grid; grid-template-columns: 1fr 86px; align-items: center; gap: 10px; }
+.vc .book { position: relative; height: var(--h); width: var(--w); margin-left: var(--x); border: 0; border-radius: 3px 2px 2px 3px; padding: 0 14px 0 16px; color: var(--spine-ink); display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; transform: rotate(var(--r));
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.16), inset 0 -3px 0 rgba(0,0,0,.22), 0 2px 3px -2px rgba(0,0,0,.4); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+.vc .book::before, .vc .book::after { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(255,255,255,.26); }
+.vc .book::before { left: 7px; } .vc .book::after { right: 7px; }
+.vc .book .t { font: 500 15.5px/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.vc .book .a { font-size: 11px; letter-spacing: .04em; opacity: .92; white-space: nowrap; flex: none; }
+.vc .book[aria-checked="true"] { transform: translateX(8px) rotate(0deg); }
+/* il segnalibro sbuca dalle pagine del libro scelto */
+.vc .lay:has([aria-checked="true"]) { position: relative; z-index: 1; }
+.vc .book[aria-checked="true"] .rb { position: absolute; left: 34%; top: 100%; width: 8px; height: 18px; z-index: 2; background: linear-gradient(90deg, #F58475, var(--coral) 45%, #C4473B); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%); }
+.vc .side { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+.vc .side .btn { width: 100%; padding: 10px 8px; }
+.vc .why { margin: 6px 0 0; font: italic 450 15px/1.4 var(--display); color: var(--ink); text-wrap: pretty; }
+.vc .meta { margin: 0; font-size: 13px; color: var(--muted); }
+.vc .act { display: flex; justify-content: space-between; gap: 8px; }
+.vc.swap .lay { animation: drop .45s cubic-bezier(.2,.8,.2,1) both; }
+.vc.swap .lay:nth-child(2) { animation-delay: .07s; } .vc.swap .lay:nth-child(3) { animation-delay: .14s; }
+@keyframes drop { from { transform: translateY(-26px); opacity: 0; } }
+
+/* ---------- Finto computer (1366 px) ---------- */
+.pc { width: 1366px; height: 860px; display: grid; grid-template-columns: 264px 1fr; background: var(--bg); overflow: hidden; }
+.pc .side { background: var(--surface); border-right: 1px solid var(--rule); padding: 26px 20px; display: flex; flex-direction: column; gap: 6px; }
+.pc .side .h1 { font: var(--dw) 30px/1.05 var(--display); color: var(--title); margin: 4px 0 22px; white-space: nowrap; }
+.pc .side .it { display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 14px; color: var(--ink); }
+.pc .side .it em { font: 12px var(--mono); color: var(--muted); font-style: normal; }
+.pc .side .it.on { background: var(--bg); color: var(--accent); }
+.pc .main { padding: 22px 40px; overflow: hidden; }
+.pc .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.pc .bar2 { display: flex; gap: 10px; align-items: center; }
+.pc .bar2 .srch { flex: 1; }
+.pc .bar2 .filt { width: 470px; }
+
+/* ---------- Solo una cornice (per gli screenshot) ---------- */
+body.solo .doc > header, body.solo .variant > :not(.phone), body.solo .wide-sec > :not(.scaler), body.solo .gallery > .variant:not(.only), body.solo .wide-sec:not(.only), body.solo .gallery:not(.only) { display: none !important; }
+body.solo .doc { padding: 0; max-width: none; }
+body.solo .gallery { display: block; }
+body.solo .variant { max-width: none; }
+body.solo .phone { border: 0; border-radius: 0; box-shadow: none; max-width: none; }
+body.solo .wide-sec { margin: 0; }
+body.solo .scaler { border: 0; border-radius: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="doc">
+  <header>
+    <div>
+      <h1>Cosa leggo adesso? Tre proposte</h1>
+      <p>Prototipi statici per la sezione in cima alla Libreria quando non c'è niente in lettura. Stessi tre libri di nextBooks, presentati in tre modi. Si possono toccare: scegliere un libro, «Altre proposte», «Non ora», «Inizia».</p>
+    </div>
+    <button class="themebtn" id="scuro" type="button" aria-pressed="false">Tema scuro</button>
+  </header>
+
+  <div class="gallery">
+    <section class="variant" data-v="A" aria-labelledby="tA">
+      <h2 id="tA"><small>A</small>Sfilati dallo scaffale</h2>
+      <p>I tre libri stanno in piedi su un'asse di ciliegio come gli scaffali sotto; quello scelto è sfilato in avanti e ha il segnalibro corallo. Un solo «Inizia».</p>
+      <div class="phone" id="phA"></div>
+      <dl class="how">
+        <dt>Altre proposte</dt><dd>I tre dorsi tornano nello scaffale e ne salgono altri tre; il primo è già sfilato.</dd>
+        <dt>Non ora</dt><dd>Lo scaffale sparisce e sale l'obiettivo; un avviso con «Annulla» per qualche secondo (aggiunta piccola).</dd>
+        <dt>Dopo «Inizia»</dt><dd>Al posto dello scaffale compare la scheda In lettura (v62) e l'avviso «… è in lettura da oggi · Annulla».</dd>
+        <dt>Scegli per me</dt><dd>Lo stesso scaffale nella scheda, con «Chiudi» al posto di «Non ora».</dd>
+      </dl>
+      <button class="reset" type="button" data-reset="A">Ricomincia la prova</button>
+    </section>
+
+    <section class="variant" data-v="B" aria-labelledby="tB">
+      <h2 id="tB"><small>B</small>La scheda del catalogo</h2>
+      <p>Una proposta alla volta, scritta su una scheda da biblioteca con la segnatura dattiloscritta e il motivo annotato a penna rossa. Le linguette sono i tre criteri.</p>
+      <div class="phone" id="phB"></div>
+      <dl class="how">
+        <dt>Altre proposte</dt><dd>Il cassetto si rinnova: tre schede nuove, si riparte dalla linguetta «Affine». Si sfoglia anche scorrendo di lato.</dd>
+        <dt>Non ora</dt><dd>Come A: il cassetto si chiude, avviso con «Annulla».</dd>
+        <dt>Dopo «Inizia»</dt><dd>La scheda lascia il posto alla scheda In lettura.</dd>
+        <dt>Scegli per me</dt><dd>La stessa scheda nel foglio, con «Chiudi».</dd>
+      </dl>
+      <button class="reset" type="button" data-reset="B">Ricomincia la prova</button>
+    </section>
+
+    <section class="variant" data-v="C" aria-labelledby="tC">
+      <h2 id="tC"><small>C</small>La pila sul comodino</h2>
+      <p>Tre libri distesi uno sull'altro: lo spessore segue le pagine, così si vede subito quanto impegno chiede ognuno. Il libro scelto sporge e porta il suo «Inizia».</p>
+      <div class="phone" id="phC"></div>
+      <dl class="how">
+        <dt>Altre proposte</dt><dd>La pila si rifà: tre libri nuovi cadono uno sull'altro.</dd>
+        <dt>Non ora</dt><dd>Come A: la pila sparisce, avviso con «Annulla».</dd>
+        <dt>Dopo «Inizia»</dt><dd>Scheda In lettura al posto della pila.</dd>
+        <dt>Scegli per me</dt><dd>La stessa pila nel foglio, con «Chiudi».</dd>
+      </dl>
+      <button class="reset" type="button" data-reset="C">Ricomincia la prova</button>
+    </section>
+  </div>
+
+  <section class="wide-sec" data-v="W" aria-labelledby="tW">
+    <h2 id="tW">A su computer, 1366 px</h2>
+    <p>La variante consigliata nella colonna principale: lo scaffale si allarga, descrizione e pulsanti stanno sulla stessa riga dei dorsi. Le altre sezioni sono solo accennate.</p>
+    <div class="scaler" id="scW"><div class="pc" id="pcW"></div></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // Dati presi da seed.json (pagine, genere, segnatura); «in pila da» e serie come li avrebbe l'app dopo «Cerca le serie».
+  const SETS = [
+    [ { t: "Bad Actors", a: "Mick Herron", p: 344, g: "Spionaggio", c: "823.92 HER", s: "Slough House · 8", col: "#7E2E2A", k: "Affine", why: "Dopo «Le tigri sono in giro», ancora Herron" },
+      { t: "Metropolis", a: "Philip Kerr", p: 392, g: "Giallo storico", c: "823.914 KER", col: "#23395B", k: "Il più vecchio", why: "In pila da marzo 2024" },
+      { t: "Fahrenheit 451", a: "Ray Bradbury", p: 249, g: "Fantascienza", c: "813.54 BRA", col: "#1F6266", k: "A caso", why: "A caso" } ],
+    [ { t: "Slough House", a: "Mick Herron", p: 312, g: "Spionaggio", c: "823.92 HER", s: "Slough House · 7", col: "#5B3557", k: "Affine", why: "Il #7 di Slough House, dopo il #6" },
+      { t: "Greeks Bearing Gifts", a: "Philip Kerr", p: 530, g: "Giallo storico", c: "823.914 KER", col: "#3F4A2B", k: "Il più vecchio", why: "In pila da marzo 2024" },
+      { t: "Uomini e topi", a: "John Steinbeck", p: 107, g: "Romanzo", c: "813.52 STE", col: "#9A4A28", k: "A caso", why: "A caso" } ],
+    [ { t: "L'ombra dello scorpione", a: "Stephen King", p: 1152, g: "Narrativa fantastica", c: "813.54 KIN", col: "#2D4F45", k: "Affine", why: "Stesso genere di «Sand»: Narrativa fantastica" },
+      { t: "Prussian Blue", a: "Philip Kerr", p: 539, g: "Giallo storico", c: "823.914 KER", col: "#6B2F3F", k: "Il più vecchio", why: "In pila da marzo 2024" },
+      { t: "Il buio oltre la siepe", a: "Harper Lee", p: 323, g: "Romanzo", c: "813.54 LEE", col: "#4B5563", k: "A caso", why: "A caso" } ]
+  ];
+  const READ = [["Joe Country","Herron",337,"#2D4F45"],["Violette di marzo","Kerr",245,"#7E2E2A"],["Il signore delle mosche","Golding",182,"#23395B"],["Project Hail Mary","Weir",476,"#9A4A28"],["Sand","Howey",372,"#3F4A2B"],["London Rules","Herron",383,"#5B3557"],["La strada delle spie","Herron",310,"#1F6266"],["Upgrade","Crouch",352,"#6B2F3F"],["Materia oscura","Crouch",342,"#4B5563"],["Le tigri sono in giro","Herron",369,"#2D4F45"]];
+  const PATS = ["repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 2px, transparent 2px 12px)", "radial-gradient(circle at 70% 30%, rgba(255,255,255,.14) 0 18%, transparent 19%)", "linear-gradient(160deg, rgba(255,255,255,.12), transparent 55%)"];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const last = a => a.split(" ").pop();
+  const meta = b => `${b.s ? b.s + " · " : ""}${b.a}`;
+  const meta2 = b => `${b.p} pagine · ${b.g}`;
+  const metaS = b => `${b.s ? b.s + " · " : ""}${b.p} pagine · ${b.g}`;
+
+  // Dorso come spineHTML, con fattore di scala
+  function spine(b, sc = 1, attrs = 'aria-hidden="true"', tag = "span") {
+    const p = Math.min(b.p, 900), h = Math.round((132 + p / 900 * 72) * sc), w = Math.round((26 + p / 900 * 24) * sc * (sc < 1 ? 1.25 : 1));
+    return `<${tag} class="spine" ${attrs} style="height:${h}px;width:${w}px;background:${b.col}"><span class="band a"></span><span class="t">${esc(b.t)}</span><span class="au">${esc(last(b.a))}</span><span class="band b"></span></${tag}>`;
+  }
+  const cover = (b, w) => `<div class="cov" style="width:${w}px;background:${b.col};--pat:${PATS[b.t.length % 3]}" aria-hidden="true"><span class="ct">${esc(b.t)}</span><span class="ca">${esc(last(b.a))}</span></div>`;
+  const readShelf = () => `<section><div class="shelf-h"><h2>Letti</h2><span>83 volumi</span></div><div class="row">${READ.map(([t, a, p, col]) => spine({ t, a, p, col })).join("")}</div></section>`;
+  const reading = b => `<article class="rcard enter"><div>${cover(b, 64)}</div><div><div class="rl">In lettura adesso</div><h3>${esc(b.t)}</h3><p class="rm">${esc(b.s ? b.s + " · " + b.a : b.a)}</p></div>
+    <div class="rctl"><div class="bar" role="img" aria-label="Avanzamento di ${esc(b.t)}: pagina 0 di ${b.p}"></div><div class="prow">pag. <span class="pg">0</span> di ${b.p} · 0% <button class="btn" type="button" aria-label="Aggiungi 10 pagine a ${esc(b.t)}">+10</button></div></div></article>`;
+
+  // ---------- A ----------
+  function heroA(st, wide) {
+    const set = SETS[st.set], b = set[st.sel];
+    const go = x => `<button class="btn primary" type="button" data-go aria-label="Inizia ${esc(x.t)}">Inizia</button>`;
+    const others = `<button class="btn" type="button" data-more>Altre proposte</button><button class="btn ghost" type="button" data-later>Non ora</button>`;
+    const radio = (x, i) => spine(x, wide ? 1 : .84, `role="radio" aria-checked="${i === st.sel}" tabindex="${i === st.sel ? 0 : -1}" data-i="${i}" aria-label="${esc(x.t)} di ${esc(x.a)}. ${esc(x.why)}"`, "button");
+    const txt = x => `<span class="why">${esc(x.why)}</span><b>${esc(x.t)}</b><span class="meta">${esc(meta(x))}<br>${esc(meta2(x))}</span>`;
+    if (wide) return `<section class="va wide${st.anim ? " swap" : ""}" aria-labelledby="ha-${st.id}">
+      <div class="hh"><h3 id="ha-${st.id}">Cosa leggo adesso?</h3><span class="pc-act">3 dei 25 in pila ${others}</span></div>
+      <div class="shelf" role="radiogroup" aria-label="Libri proposti">${set.map((x, i) => `<div class="grp${i === st.sel ? " on" : ""}">${radio(x, i)}<div class="det">${txt(x)}${i === st.sel ? go(x) : ""}</div></div>`).join("")}</div>
+    </section>`;
+    return `<section class="va${st.anim ? " swap" : ""}" aria-labelledby="ha-${st.id}">
+      <div class="hh"><h3 id="ha-${st.id}">Cosa leggo adesso?</h3><span>3 dei 25 in pila</span></div>
+      <div class="shelf">
+        <div class="trio" role="radiogroup" aria-label="Libri proposti">${set.map(radio).join("")}</div>
+        <div class="det" aria-live="polite">${txt(b)}</div>
+      </div>
+      <div class="act">${go(b)}${others}</div>
+    </section>`;
+  }
+  // ---------- B ----------
+  function heroB(st) {
+    const set = SETS[st.set], b = set[st.sel];
+    return `<section class="vb${st.anim ? " swap" : ""}" aria-labelledby="hb-${st.id}">
+      <h3 id="hb-${st.id}">Cosa leggo adesso?</h3>
+      <div class="drawer">
+        <div class="tabs" role="tablist" aria-label="Criteri della proposta">${set.map((x, i) => `<button class="tab" type="button" role="tab" id="tb-${st.id}-${i}" aria-controls="cb-${st.id}" aria-selected="${i === st.sel}" tabindex="${i === st.sel ? 0 : -1}" data-i="${i}">${esc(x.k)}</button>`).join("")}</div>
+        <div class="card" role="tabpanel" id="cb-${st.id}" aria-labelledby="tb-${st.id}-${st.sel}">
+          <div class="head"><span class="call" aria-label="Segnatura ${esc(b.c)}">${esc(b.c)}</span><span class="n">${st.sel + 1} di 3</span></div>
+          <div class="body"><div><b>${esc(b.t)}</b><span class="au">${esc(b.a)}</span></div>${cover(b, 58)}
+            <span class="why">${esc(b.why)}.</span>
+            <span class="meta">${esc(metaS(b))}</span></div>
+          <span class="hole" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="act"><button class="btn primary" type="button" data-go aria-label="Inizia ${esc(b.t)}">Inizia</button><button class="btn" type="button" data-more>Altre proposte</button><button class="btn ghost" type="button" data-later>Non ora</button></div>
+    </section>`;
+  }
+  // ---------- C ----------
+  const GEO = [{ w: 94, x: 0, r: -.7 }, { w: 100, x: 0, r: .5 }, { w: 89, x: 6, r: -.3 }];
+  function heroC(st) {
+    const set = SETS[st.set], b = set[st.sel];
+    return `<section class="vc${st.anim ? " swap" : ""}" aria-labelledby="hc-${st.id}">
+      <div class="hh"><h3 id="hc-${st.id}">Cosa leggo adesso?</h3><span>3 dei 25 in pila</span></div>
+      <div class="pile" role="radiogroup" aria-label="Libri proposti">${set.map((x, i) => {
+        const g = GEO[i], h = Math.round(44 + Math.max(0, Math.min(x.p, 1152) - 100) / 1052 * 48); // 44 px (≤100 pagine) … 92 px (1152)
+        return `<div class="lay"><button class="book" type="button" role="radio" aria-checked="${i === st.sel}" tabindex="${i === st.sel ? 0 : -1}" data-i="${i}" aria-label="${esc(x.t)} di ${esc(x.a)}, ${x.p} pagine. ${esc(x.why)}" style="--h:${h}px;--w:${g.w - g.x}%;--x:${g.x}%;--r:${g.r}deg;background:${x.col}"><span class="t">${esc(x.t)}</span><span class="a">${esc(last(x.a))}</span><span class="rb" aria-hidden="true"></span></button>
+          <div class="side">${i === st.sel ? `<button class="btn primary" type="button" data-go aria-label="Inizia ${esc(x.t)}">Inizia</button>` : `${x.p} pagine`}</div></div>`;
+      }).join("")}</div>
+      <div aria-live="polite"><p class="why">${esc(b.why)}.</p><p class="meta">${esc(metaS(b))}</p></div>
+      <div class="act"><button class="btn" type="button" data-more>Altre proposte</button><button class="btn ghost" type="button" data-later>Non ora</button></div>
+    </section>`;
+  }
+
+  const HERO = { A: heroA, B: heroB, C: heroC, W: st => heroA(st, true) };
+  const state = {};
+  const fresh = id => ({ id, set: 0, sel: 0, mode: "prop", anim: false, toast: "" });
+
+  function chrome(st) {
+    const hero = st.mode === "prop" ? HERO[st.id](st) : st.mode === "reading" ? reading(SETS[st.set][st.sel]) : "";
+    const toast = st.toast ? `<div class="toast" role="status"><span>${st.toast}</span><button class="btn" type="button" data-undo>Annulla</button></div>` : "";
+    const tally = `<div class="tally"><div class="goal"><span class="ring">0</span><span><b>0 libri</b> letti nel 2026</span></div><div class="viewsw" aria-hidden="true"><span><i></i></span><span><i></i></span></div></div>`;
+    const filt = `<div class="filt" aria-hidden="true"><span>Tutti</span><span>In lettura</span><span>Letti</span><span>Da leggere</span><span>Desideri</span></div>`;
+    if (st.id === "W") {
+      return `<aside class="side"><span class="exl">Libreria di Margaira Diego</span><div class="h1">My<span class="rib" aria-hidden="true"></span>Library</div>
+        <div class="it on">Libreria <em>108</em></div><div class="it">In lettura <em>0</em></div><div class="it">Letti <em>83</em></div><div class="it">Da leggere <em>25</em></div><div class="it">Desideri <em>0</em></div><div class="it">Statistiche</div></aside>
+        <div class="main"><div class="wrap"><div class="bar2"><div class="srch"><span>Cerca titolo, autore o genere</span><span>Recenti</span></div><div class="filt" aria-hidden="true"><span>Tutti</span><span>In lettura</span><span>Letti</span><span>Da leggere</span><span>Desideri</span></div></div>
+        ${hero}${tally}${readShelf()}</div></div>${toast}`;
+    }
+    return `<div class="scr"><header class="app-h"><span class="exl">Libreria di Margaira Diego</span><div class="h1">My<span class="rib" aria-hidden="true"></span>Library</div></header>
+      ${hero}${tally}${filt}<div class="srch" aria-hidden="true"><span>Cerca titolo, autore o genere</span><span>Recenti</span></div>${readShelf()}</div>
+      ${toast}<nav class="dock" aria-hidden="true"><span>Libreria</span><span>Cerca</span><span class="add">Aggiungi</span><span>Statistiche</span><span>Altro</span></nav>`;
+  }
+  function draw(id, focusSel) {
+    const st = state[id], el = document.getElementById(id === "W" ? "pcW" : "ph" + id);
+    el.innerHTML = chrome(st);
+    st.anim = false;
+    if (focusSel) { const f = el.querySelector(focusSel); if (f) f.focus(); }
+  }
+  let timer = {};
+  function toast(st, msg) { st.toast = msg; clearTimeout(timer[st.id]); timer[st.id] = setTimeout(() => { st.toast = ""; draw(st.id); }, 6000); }
+  function wire(id) {
+    const el = document.getElementById(id === "W" ? "pcW" : "ph" + id);
+    el.addEventListener("click", e => {
+      const st = state[id], t = e.target.closest("button");
+      if (!t) return;
+      if (t.dataset.i != null) { st.sel = +t.dataset.i; draw(id, `[data-i="${st.sel}"]`); }
+      else if (t.hasAttribute("data-more")) { st.set = (st.set + 1) % SETS.length; st.sel = 0; st.anim = true; draw(id, "[data-more]"); }
+      else if (t.hasAttribute("data-later")) { st.mode = "off"; toast(st, "Proposte nascoste fino alla prossima apertura"); draw(id, "[data-undo]"); }
+      else if (t.hasAttribute("data-go")) { const b = SETS[st.set][st.sel]; st.mode = "reading"; toast(st, `«${esc(b.t)}» è in lettura da oggi`); draw(id, "[data-undo]"); }
+      else if (t.hasAttribute("data-undo")) { st.mode = "prop"; st.toast = ""; draw(id); }
+    });
+    // frecce: radio e linguette
+    el.addEventListener("keydown", e => {
+      const t = e.target; if (t.dataset.i == null) return;
+      const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]; if (!d) return;
+      e.preventDefault(); const st = state[id]; st.sel = (st.sel + d + 3) % 3; draw(id, `[data-i="${st.sel}"]`);
+    });
+    // B: si sfoglia scorrendo di lato
+    if (id === "B") { let x0 = null;
+      el.addEventListener("pointerdown", e => { if (e.target.closest(".card")) x0 = e.clientX; });
+      el.addEventListener("pointerup", e => { if (x0 == null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) { const st = state.B; st.sel = (st.sel + (dx < 0 ? 1 : 2)) % 3; st.anim = true; draw("B"); } });
+    }
+  }
+  ["A", "B", "C", "W"].forEach(id => { state[id] = fresh(id); draw(id); wire(id); });
+  document.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => { const id = b.dataset.reset; state[id] = fresh(id); draw(id); });
+
+  // Computer in scala dentro la pagina
+  const sc = document.getElementById("scW"), pc = document.getElementById("pcW");
+  const fit = () => { const k = Math.min(1, sc.clientWidth / 1366); pc.style.transform = `scale(${k})`; sc.style.height = 860 * k + "px"; };
+  addEventListener("resize", fit); fit();
+
+  // Tema: #scuro nell'indirizzo, ?tema=scuro|chiaro, oppure il pulsante
+  const q = new URLSearchParams(location.search), root = document.documentElement, btn = document.getElementById("scuro");
+  const dark = () => root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const sync = () => { btn.setAttribute("aria-pressed", dark()); btn.textContent = dark() ? "Tema chiaro" : "Tema scuro"; };
+  if (location.hash === "#scuro" || q.get("tema") === "scuro") root.dataset.theme = "dark";
+  if (q.get("tema") === "chiaro") root.dataset.theme = "light";
+  btn.onclick = () => { root.dataset.theme = dark() ? "light" : "dark"; sync(); };
+  sync();
+  // ?solo=A|B|C|W: solo quella cornice (screenshot)
+  const solo = q.get("solo");
+  if (solo) { document.body.classList.add("solo"); const v = document.querySelector(`[data-v="${solo}"]`); v.classList.add("only"); if (v.parentElement.classList.contains("gallery")) v.parentElement.classList.add("only"); fit(); }
+})();
+</script>
+</body>
+</html>
