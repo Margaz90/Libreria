@@ -48,7 +48,7 @@ export default async function ({ browser }) {
     p = await apri(browser, u => (/isbn/.test(decodeURIComponent(u)) && !/langRestrict/.test(u) ? { body: EINAUDI } : { body: VUOTO }));
     await p.goto(APP + '/'); await p.waitForTimeout(300);
     r = await cerca(p, q);
-    ok(`ISBN «${q}»: cercato come ISBN e trovato`, isbnChiamate(p).length > 0 && isbnChiamate(p).every(u => /isbn:9788806219215/.test(decodeURIComponent(u)) && !/langRestrict/.test(u)) && r.titoli.includes('Underworld'), isbnChiamate(p).join(' ; ') + ' | ' + r.stato);
+    ok(`ISBN «${q}»: cercato come ISBN e trovato`, isbnChiamate(p).length > 0 && isbnChiamate(p).every(u => /isbn:(9788806219215|8806219219)/.test(decodeURIComponent(u)) && !/langRestrict/.test(u)) && r.titoli.includes('Underworld'), isbnChiamate(p).join(' ; ') + ' | ' + r.stato);
     await p.close2();
   }
   p = await apri(browser, u => (/isbn/.test(decodeURIComponent(u)) ? { body: { items: [] } } : { body: VUOTO }));
@@ -112,36 +112,43 @@ export default async function ({ browser }) {
   ok('Google: dopo un 503 si riprova con la chiave e si trova il libro', /Underworld/.test(r.titoli.join('|')) && p.googleUrls.length >= 2 && p.googleUrls.slice(0, 2).every(u => /key=/.test(u)), p.googleUrls.map(u => /key=/.test(u) ? 'chiave' : 'senza').join(','));
   await p.close2();
 
-  // 5b. Google risponde 0 risultati per un ISBN che conosce (succede: la volta dopo lo trova): si riprova una volta
+  // 5b-5e. Google per lo stesso ISBN risponde a caso con il libro, 0 risultati o 503 (diagnosi sull'iPhone di Diego):
+  // giri di tre richieste in parallelo (ISBN-13, ISBN-10, ISBN-13), al massimo tre giri.
+  const forma = u => new URL(u).searchParams.get('q');
+  const formeDi = p => isbnChiamate(p).map(forma).join(',');
+  // 5b. Prima risposta 0, le altre del giro trovano il libro
   p = await apri(browser, (() => { let n = 0; return u => (/isbn/.test(decodeURIComponent(u)) && n++ === 0 ? { body: VUOTO } : { body: EINAUDI }); })());
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Google: ISBN con 0 risultati alla prima richiesta → si riprova e si trova', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).length + ' chiamate · ' + r.titoli.join('|'));
+  ok('Google: ISBN con 0 risultati alla prima richiesta → trovato nello stesso giro', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 3, formeDi(p) + ' · ' + r.titoli.join('|'));
   await p.close2();
 
-  // 5c. Google ha in archivio solo l'ISBN-10 (come «Across the sand», 883474621X): dopo lo 0 si prova la forma ISBN-10
+  // 5c. Google conosce solo la forma ISBN-10
   p = await apri(browser, u => (/isbn:8806219219/.test(decodeURIComponent(u)) ? { body: EINAUDI } : { body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Google: ISBN noto solo nella forma ISBN-10 → trovato al secondo tentativo', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).map(u => decodeURIComponent(u).match(/isbn:\w+/)[0]).join(','));
+  ok('Google: ISBN noto solo nella forma ISBN-10 → trovato al primo giro', /Underworld/.test(r.titoli.join('|')) && formeDi(p) === 'isbn:9788806219215,isbn:8806219219,isbn:9788806219215', formeDi(p));
   await p.close2();
 
-  // 5d. ISBN che Google non conosce: isbn:13, isbn:10, solo il numero, di nuovo isbn:13, poi il messaggio
-  const forma = u => new URL(u).searchParams.get('q');
+  // 5d. Come sull'iPhone: 503 e 0 per due giri, il libro al terzo
+  p = await apri(browser, (() => { let n = 0; return u => { if (!/isbn/.test(decodeURIComponent(u))) return { body: VUOTO }; n++; return n <= 6 ? (n % 2 ? { status: 503, body: { error: { code: 503 } } } : { body: VUOTO }) : { body: EINAUDI }; }; })());
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: 503 e 0 risultati alternati → trovato al terzo giro, senza richieste senza chiave', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 9 && isbnChiamate(p).every(u => /key=/.test(u)), isbnChiamate(p).length + ' chiamate · ' + r.titoli.join('|') + ' · ' + r.stato);
+  await p.close2();
+
+  // 5e. ISBN che Google non conosce: tre giri da tre richieste, poi il messaggio
   p = await apri(browser, () => ({ body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  const forme = p.googleUrls.map(forma).join(',');
-  ok('Google: ISBN sconosciuto → isbn:13, isbn:10, numero, isbn:13 e poi «nessuna fonte»', forme === 'isbn:9788806219215,isbn:8806219219,9788806219215,isbn:9788806219215' && /nessuna fonte/i.test(r.stato), forme + ' · ' + r.stato);
+  ok('Google: ISBN sconosciuto → 9 richieste e poi «nessuna fonte»', isbnChiamate(p).length === 9 && /nessuna fonte/i.test(r.stato), isbnChiamate(p).length + ' · ' + r.stato);
   await p.close2();
 
-  // 5e. Trovato solo con il numero senza «isbn:»: si tiene il volume con quell'ISBN (anche se lo ha solo a 10 cifre), non gli altri
-  const ALTRO = { volumeInfo: { title: 'Libro qualunque', authors: ['X'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780000000002' }] } };
-  const SOLO10 = { volumeInfo: { title: 'Underworld', authors: ['Don DeLillo'], industryIdentifiers: [{ type: 'ISBN_10', identifier: '8806219219' }] } };
-  p = await apri(browser, u => (forma(u) === '9788806219215' ? { body: { items: [ALTRO, SOLO10] } } : { body: VUOTO }));
+  // 5f. Google sempre in 503: si dice che non ha risposto (non «nessuna fonte conosce»)
+  p = await apri(browser, u => (/isbn/.test(decodeURIComponent(u)) ? { status: 503, body: { error: { code: 503 } } } : { body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Google: trovato con il solo numero, tenuto solo il volume con quell\'ISBN', r.titoli.join('|') === 'Underworld', p.googleUrls.map(forma).join(',') + ' · ' + r.titoli.join('|'));
+  ok('Google sempre 503 per un ISBN: «alcune fonti non hanno risposto (google-503)»', /google-503/.test(r.stato) && !/nessuna fonte/i.test(r.stato), r.stato);
   await p.close2();
 
   // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono

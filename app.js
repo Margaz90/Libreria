@@ -212,7 +212,7 @@
   async function fetchInfo(b, errors = {}) {
     const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
     const byIsbn = isbn ? await settle([
-      () => googleSearch("isbn:" + isbn, { italian: false, max: 3 }).then(tag("Google Books")),
+      () => googleSearch("isbn:" + isbn, { italian: false, max: 3, rounds: 2 }).then(tag("Google Books")),
       () => openLibrarySearch("isbn:" + isbn, "", 3).then(tag("Open Library")),
       () => wikidataSearch(isbn).then(tag("Wikidata"))
     ], errors) : [];
@@ -397,7 +397,8 @@
   // --- fonte 1: Google Books ---
   // Il messaggio con cui Google spiega l'errore (per capire la causa).
   async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
-  async function googleSearch(q, { italian = true, max = 12 } = {}) {
+  async function googleSearch(q, { italian = true, max = 12, rounds } = {}) {
+    if (/^isbn:/.test(q)) return googleIsbn(q.slice(5), { max, rounds });
     if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
@@ -417,25 +418,30 @@
       throw { code: "google-" + r.status, msg: await googleMsg(r) };
     }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
-    let j = await r.json();
-    // Per un ISBN Google a volte risponde «niente» e alla richiesta dopo trova il libro (succede soprattutto quando
-    // ha in archivio solo l'ISBN-10): riprovo con l'altra forma, poi con il solo numero, poi con la stessa dopo una pausa.
-    // Ultimo tentativo: il solo numero (ricerca a testo libero, altro indice), tenendo solo i volumi con quell'ISBN.
-    if (!(j.items || []).length && /^isbn:/.test(q)) {
-      const i = q.slice(5), alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i), mine = new Set([i, alt].filter(Boolean));
-      const withQ = x => url.replace("&q=" + encodeURIComponent(q), "&q=" + encodeURIComponent(x));
-      for (const [u, ms, plain] of [[alt && withQ("isbn:" + alt), 700], [withQ(i), 700, true], [url, 1500]]) {
-        if (!u) continue;
-        await sleep(ms);
-        try {
-          const r2 = await fetchT(u); if (!r2.ok) continue;
-          const j2 = await r2.json();
-          j = plain ? { items: (j2.items || []).filter(it => ((it.volumeInfo || {}).industryIdentifiers || []).some(x => mine.has(String(x.identifier || "").replace(/[^\dX]/gi, "").toUpperCase()))) } : j2;
-        } catch {}
-        if ((j.items || []).length) break;
-      }
-    }
+    const j = await r.json();
     return (j.items || []).map(normVolume).filter(x => x.title);
+  }
+  // ISBN su Google: per lo stesso ISBN Google risponde a caso con il libro, con «0 risultati» o con un 503 (misurato
+  // sull'iPhone di Diego). Quindi tre richieste in parallelo (ISBN-13, ISBN-10, ISBN-13) per giro, fino a `rounds` giri:
+  // vince la prima con risultati; 0 e 503 si ritentano; quota o chiave rifiutata fermano tutto come nelle altre ricerche.
+  async function googleIsbn(i, { max = 12, rounds = 3 } = {}) { // rounds: 2 nei completamenti in sottofondo (meno richieste)
+    if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
+    const alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i), forms = [i, alt || i, i];
+    const url = f => "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max + "&q=" + encodeURIComponent("isbn:" + f);
+    let answered = false, lastBad = null;
+    for (let k = 0; k < rounds; k++) {
+      if (k) await sleep(600);
+      const res = await Promise.all(forms.map(f => fetchT(url(f)).then(async r => ({ r, j: r.ok ? await r.json().catch(() => null) : null }), () => ({}))));
+      const hit = res.find(x => x.j && (x.j.items || []).length);
+      if (hit) return hit.j.items.map(normVolume).filter(x => x.title);
+      const stop = res.find(x => x.r && (x.r.status === 429 || x.r.status === 403));
+      if (stop) { state.googleDown = { code: stop.r.status, until: Date.now() + 864e5 }; throw { code: "google-" + stop.r.status, msg: await googleMsg(stop.r) }; }
+      if (res.some(x => x.j)) answered = true;
+      lastBad = res.find(x => x.r && !x.r.ok) || lastBad;
+    }
+    if (answered) return []; // Google ha risposto (anche solo una volta) senza il libro
+    if (lastBad && lastBad.r.status === 503) { state.googleDown = { code: 503, until: Date.now() + 5 * 60e3 }; throw { code: "google-503" }; }
+    throw { code: lastBad ? "google-" + lastBad.r.status : "google-rete" };
   }
 
   // --- fonte 2: Apple Books (negozio italiano, via JSONP) ---

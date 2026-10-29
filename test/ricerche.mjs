@@ -44,7 +44,7 @@ export default async function ({ browser }) {
   const b1 = await saved(p, 'b1'), b2 = await saved(p, 'b2');
   ok('Google giù: autore e copertina arrivano da Apple Books', b1.author === 'Don Winslow' && !!b1.cover && b1.year === 2023);
   ok('senza autore accetta solo il titolo identico (Black Money → Roversi)', b2.author === 'Paolo Roversi' && (b2.cover || '').includes('Pub/y'), b2.author);
-  ok('Google giù viene saltato invece di riprovarlo per ogni libro', gcalls <= 3, 'chiamate: ' + gcalls);
+  ok('Google giù viene saltato invece di riprovarlo per ogni libro (un ISBN: al massimo due giri da tre)', gcalls <= 6, 'chiamate: ' + gcalls);
 
   await p.locator('#main [data-id="b3"]').first().click();
   await p.click('#s-refresh'); await refStatus(p);
@@ -56,12 +56,13 @@ export default async function ({ browser }) {
   ok('scheda: libro sconosciuto → «Nessuna informazione trovata»', /Nessuna informazione trovata/.test(await p.textContent('#s-ref-status')));
   const errs1 = p.errs; await p.close2();
 
-  // 2. Google con chiave in 503, senza chiave risponde: arrivano i dati dell'edizione esatta
+  // 2. ISBN: Google in 503 al primo giro, poi risponde: arrivano i dati dell'edizione esatta (sempre con la chiave:
+  // senza chiave Google risponde 429, quota comune a tutti)
   const q = await newPage(browser, { external: 'mock' });
-  const calls = [];
+  const calls = []; let n503 = 0;
   await mock(q, r => {
     const u = r.request().url(); calls.push(/key=/.test(u) ? 'chiave' : 'senza');
-    if (/key=/.test(u)) return r.fulfill(E503);
+    if (/isbn%3A/.test(u) && n503++ < 3) return r.fulfill(E503);
     const hit = /isbn%3A9788806258047/.test(u);
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: hit ? [{ volumeInfo: { title: 'Il confine', authors: ['Don Winslow'], publishedDate: '2019', pageCount: 928, language: 'it', categories: ['Fiction'], description: 'Art Keller contro il cartello.', imageLinks: { thumbnail: 'http://books.google.com/books/content?id=abc&img=1&zoom=1&edge=curl' }, industryIdentifiers: [{ type: 'ISBN_13', identifier: '9788806258047' }] } }] : [] }) });
   });
@@ -72,8 +73,8 @@ export default async function ({ browser }) {
   await q.click('#s-refresh'); await refStatus(q);
   await q.click('#s-save'); await q.waitForTimeout(900);
   const c1 = await saved(q, 'c1');
-  ok('Google senza chiave dopo due 503: pagine, genere e copertina', c1.pages === 928 && c1.genre === 'Narrativa' && /books\.google/.test(c1.cover || ''), JSON.stringify({ p: c1.pages, g: c1.genre }));
-  ok('dopo un 503 si riprova con la chiave, poi senza chiave', calls.slice(0, 3).join(',') === 'chiave,chiave,senza', calls.join(','));
+  ok('ISBN dopo un giro di 503: pagine, genere e copertina', c1.pages === 928 && c1.genre === 'Narrativa' && /books\.google/.test(c1.cover || ''), JSON.stringify({ p: c1.pages, g: c1.genre }));
+  ok('ISBN dopo un 503: si riprova sempre con la chiave', calls.length >= 4 && !calls.includes('senza'), calls.join(','));
 
   // 3. «Verifica ricerche»: esito visibile sotto il pulsante
   await q.locator('.dock .more').click(); await q.locator('[data-m=backup]').click();
