@@ -24,6 +24,9 @@
 <button id="var">Confronta le interrogazioni</button>
 <button id="det">Dettagli dei casi difficili</button>
 <button id="copy" class="alt">Copia il risultato</button>
+<details open><summary>Prova la ricerca per ISBN</summary>
+  <input id="isbn" placeholder="ISBN (es. 9788806219215)" inputmode="numeric"><button id="isbn-go">Prova questo ISBN</button>
+</details>
 <details><summary>Prova un altro libro</summary>
   <input id="t" placeholder="Titolo"><input id="a" placeholder="Autore"><input id="i" placeholder="ISBN (facoltativo)">
   <button id="one" class="alt">Prova questo libro</button>
@@ -61,7 +64,9 @@
             info = b.length + " righe" + (sim.length ? `; simili a «${key}»: ` + sim.slice(0, 3).map(x => [x.s, x.n, x.names].map(v => v && v.value ? String(v.value).slice(0, 80) : "").filter(Boolean).join(" / ")).join(" | ") : `; nessuna simile a «${key}»`) + (b.length ? " — prime: " + b.slice(0, 2).map(x => [x.s, x.n, x.names].map(v => v && v.value ? String(v.value).slice(0, 60) : "").filter(Boolean).join(" / ")).join(" | ") : "");
           } else if (j.search) info = j.search.length + " candidati: " + j.search.slice(0, 3).map(x => x.id + " " + (x.label || "") + (x.description ? " (" + x.description.slice(0, 30) + ")" : "")).join("; ");
           else if (j.title) info = "titolo: " + j.title;
-          else if (j.items) info = j.items.length + " risultati";
+          else if ("totalItems" in j) info = (j.items || []).length + " risultati (" + (j.items || []).slice(0, 3).map(x => x.volumeInfo && x.volumeInfo.title + " · " + ((x.volumeInfo.industryIdentifiers || [])[0] || {}).identifier).join(" | ") + ")";
+          else if (j.docs) info = j.docs.length + " risultati" + (j.docs.length ? " (" + j.docs.slice(0, 3).map(d => d.title).join(" | ") + ")" : "");
+          else if (j.error) info = "errore: " + JSON.stringify(j.error).slice(0, 160);
         } catch { info = "(risposta non JSON)"; }
         log(`   · ${k}: ${r.status} in ${ms} ms — ${info}`);
         return r;
@@ -172,6 +177,17 @@ OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } FILTER NOT EXISTS { ?
     out.textContent = `Dettagli del ${new Date().toLocaleString("it-IT")}\n`;
     for (const [t, a] of [["Leoni morti", "Mick Herron"], ["Un covo di bastardi", "Mick Herron"], ["Harry Potter e la pietra filosofale", "J.K. Rowling"], ["Il trono di spade", "George R.R. Martin"], ["Le tigri sono in giro", "Mick Herron"]]) await dettagli(t, a);
     log("\nFine.");
+  };
+  // Prova ISBN: la stessa ricerca di «Nuovo libro», con ogni richiesta registrata; Apple (JSONP) si vede dai risultati.
+  document.getElementById("isbn-go").onclick = async () => {
+    const w = frame.contentWindow, q = document.getElementById("isbn").value.trim();
+    if (!q || !w.libreriaSearch) { log(w.libreriaSearch ? "Scrivi un ISBN." : "La pagina dell'app non è ancora pronta: riprova tra un attimo."); return; }
+    log(`\n▶ ISBN ${q}`);
+    try {
+      const rs = await w.libreriaSearch.search(q);
+      log(`  = ${rs.length} risultati${rs.errors && rs.errors.length ? " · errori: " + rs.errors.join(", ") : ""}`);
+      rs.slice(0, 8).forEach(r => log(`    · ${r.title} — ${r.author || "?"} · ISBN ${r.isbn || "-"}${r.ita ? " · italiano" : ""}`));
+    } catch (e) { log("  = errore " + (e && (e.code || e.message) || e)); }
   };
   document.getElementById("copy").onclick = async () => {
     try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Copiato"; }

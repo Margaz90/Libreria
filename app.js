@@ -1474,10 +1474,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sta = $("#f-started", sheet), fin = $("#f-finished", sheet), err = $("#f-date-err", sheet), est = $("#f-date-est", sheet), yr = $("#f-year", sheet);
     if (!sta || !fin) return;
     const say = (field, msg) => { err.hidden = !msg; err.textContent = msg || ""; [sta, fin].forEach(x => x.removeAttribute("aria-invalid")); if (msg && field) field.setAttribute("aria-invalid", "true"); };
-    const limits = () => { const t = today(); sta.max = fin.value && fin.value < t ? fin.value : t; fin.min = sta.value || ""; fin.max = t; };
+    const limits = () => { const t = today(); sta.max = t; fin.min = sta.value || ""; fin.max = t; }; // l'inizio può superare la fine: la fine si sposta
     [sta, fin].forEach(el => {
       el.dataset.ok = el.value; // ultimo valore coerente: se la nuova scelta non lo è, si torna a questo
       el.addEventListener("change", () => {
+        // Nuovo inizio dopo la fine già scritta: tengo l'inizio e sposto la fine (sotto), invece di rifiutare la scelta.
+        const moved = el === sta && sta.value && fin.value && !fin.disabled && sta.value > fin.value && sta.value <= today();
+        if (moved) fin.value = "";
         const pr = dateProblem(sta.value, fin.value, el === sta ? "started" : "finished");
         if (pr) { el.value = el.dataset.ok; say(el, pr.msg); } else { el.dataset.ok = el.value; say(null); }
         est.hidden = true;
@@ -1487,6 +1490,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
           const d = new Date(sta.value + "T12:00"); d.setDate(d.getDate() + 20);
           const v = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
           fin.value = fin.dataset.ok = v < today() ? v : today(); fin.dataset.auto = "1"; est.hidden = false;
+          est.textContent = (moved ? "Fine spostata a 20 giorni dopo il nuovo inizio" : "Fine stimata: 20 giorni dopo l'inizio") + ", modificala se serve.";
         }
         limits(); syncYearRow(sheet);
       });
@@ -2395,4 +2399,5 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
   }
   window.libreriaSeries = Object.freeze({ sameTitle, seriesKey, findSeries, next: nextInSeries });
+  window.libreriaSearch = Object.freeze({ search: searchBooks }); // per diagnosi-serie.html (prova ISBN)
 })();

@@ -110,15 +110,14 @@ export default async function ({ browser }) {
     { ...base, id: 'd4', title: 'Riletto', author: 'D', status: 'letto', pages: 250, started: '2024-01-01', finished: '2024-01-20', page: 250 },
     { ...base, id: 'd5', title: 'Aperto', author: 'E', status: 'letto', pages: 120 },
     { ...base, id: 'd6', title: 'Rilettura rapida', author: 'F', status: 'letto', pages: 90, started: '2024-02-01', finished: '2024-02-09', page: 90 },
+    { ...base, id: 'd7', title: 'Inizio da spostare', author: 'G', status: 'letto', pages: 90, started: '2025-03-01', finished: '2025-03-10' },
   ]);
 
   // Date: la fine non può precedere l'inizio (il valore sbagliato torna com'era, con un avviso)
   await openBook(p, 'd1');
-  ok('date: i limiti del selettore seguono l\'altra data', (await p.getAttribute('#f-finished', 'min')) === '2025-03-01' && (await p.getAttribute('#f-started', 'max')) === '2025-03-10');
+  ok('date: i limiti del selettore seguono l\'altra data', (await p.getAttribute('#f-finished', 'min')) === '2025-03-01' && (await p.getAttribute('#f-started', 'max')) === iso());
   await p.fill('#f-finished', '2025-02-01');
   ok('fine prima dell\'inizio: rifiutata, torna il valore precedente, con avviso', (await val(p, '#f-finished')) === '2025-03-10' && /non può precedere/.test(await errText(p)) && (await p.getAttribute('#f-finished', 'aria-invalid')) === 'true', await errText(p));
-  await p.fill('#f-started', '2025-04-01');
-  ok('inizio dopo la fine: rifiutato, torna il valore precedente', (await val(p, '#f-started')) === '2025-03-01' && /non può seguire/.test(await errText(p)), await errText(p));
   await p.fill('#f-finished', iso(1));
   ok('data nel futuro: rifiutata', (await val(p, '#f-finished')) === '2025-03-10' && /futuro/.test(await errText(p)), await errText(p));
   await p.fill('#f-started', '2025-03-05');
@@ -126,6 +125,13 @@ export default async function ({ browser }) {
   await save(p);
   const d1 = await book(p, 'd1');
   ok('date coerenti: salvate', d1.started === '2025-03-05' && d1.finished === '2025-03-10', JSON.stringify(d1));
+
+  // Nuovo inizio dopo una fine già scritta: accettato, la fine si sposta a 20 giorni dopo (con la nota) e si salva
+  await openBook(p, 'd7'); await p.fill('#f-started', '2025-06-01');
+  ok('inizio dopo la fine: accettato, la fine si sposta a +20 giorni con la nota', (await val(p, '#f-started')) === '2025-06-01' && (await val(p, '#f-finished')) === '2025-06-21' && !(await errText(p)) && /spostata/.test(await p.locator('#f-date-est').innerText().catch(() => '')), await errText(p));
+  await save(p);
+  const d7 = await book(p, 'd7');
+  ok('inizio dopo la fine: nuove date salvate', d7.started === '2025-06-01' && d7.finished === '2025-06-21', JSON.stringify(d7));
 
   // Dati già storti (da prima di questo controllo): non si salva finché non si correggono
   await openBook(p, 'd2');
