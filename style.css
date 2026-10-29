@@ -277,7 +277,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; margin: 14px 0 0; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 14px; }
 .pager-count { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pager-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
-.pager-btn { border: 1px solid var(--rule); background: var(--surface); color: var(--ink); padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; min-height: 38px; transition: background .15s ease, border-color .15s ease; }
+.pager-btn { border: 1px solid var(--rule); background: var(--surface); color: var(--ink); padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; min-height: 44px; transition: background .15s ease, border-color .15s ease; }
 .pager-btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .pager-btn:hover { border-color: var(--muted); }
 .pager-btn:active { transform: scale(.98); }

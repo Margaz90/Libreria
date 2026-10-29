@@ -1327,11 +1327,17 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.more;
       state.limit[key] = (state.limit[key] || PAGE) + PAGE;
+      if (/^y\d{4}$/.test(key)) { const n = replaceYear(Number(key.slice(1))); const f = n && (n.querySelector("[data-more]") || n.querySelector("[data-less]")); if (f) f.focus({ preventScroll: true }); return; }
       if (key === "covers") { swapIn(); render(); } else replaceShelf(key);
     });
     root.querySelectorAll("[data-less]").forEach(btn => btn.onclick = () => {
       const key = btn.dataset.less;
       state.limit[key] = PAGE;
+      if (/^y\d{4}$/.test(key)) {
+        const n = replaceYear(Number(key.slice(1)));
+        if (n) { const f = n.querySelector("[data-more]"); if (f) f.focus({ preventScroll: true }); if (n.getBoundingClientRect().top < 0) n.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+        return;
+      }
       if (key === "covers") { render(); $("#toolbar").scrollIntoView({ block: "start" }); return; }
       const sh = document.querySelector(`[data-shelf="${key}"]`);
       replaceShelf(key);
@@ -1379,6 +1385,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       replaceShelf(st);
     }
     renderTally(); renderNav();
+  }
+  // Ridisegna una sola mensola dell'anno da statsLast (niente ricalcolo); restituisce la nuova sezione.
+  function replaceYear(year) {
+    const old = $("#main").querySelector(`section.ys[data-year="${year}"]`), a = statsLast && statsLast.anni.find(x => x.year === year);
+    if (!old || !a) return null;
+    const t = document.createElement("template"); t.innerHTML = yearHTML(a, statsLast.racconti.includes(year)).trim();
+    const n = t.content.firstElementChild; old.replaceWith(n); wireMain(n); return n;
   }
   function replaceShelf(st) {
     const main = $("#main"), old = main.querySelector(`[data-shelf="${st}"]`);

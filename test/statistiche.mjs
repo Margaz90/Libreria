@@ -238,6 +238,39 @@ async function mensole(browser) {
   await p.close2();
 }
 
+async function paginazione(browser) {
+  const L = (id, y, d) => ({ id, title: id, author: 'A', status: 'letto', finished: `${y}-${d}`, pages: 200, added: 1, rating: 0 });
+  const books = [...Array.from({ length: 32 }, (_, i) => L('L' + i, 2025, `05-${String(i % 28 + 1).padStart(2, '0')}`)), L('Vecchio', 2024, '03-03')];
+  let p = await statsPage(browser, books);
+  const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
+  const n = () => p.locator('section.ys[data-year="2025"] .spine').count();
+  ok('32 libri: 15 dorsi e «15 di 32»', await n() === 15 && /15 di 32/.test(await txt('section.ys[data-year="2025"] .pager')));
+  const y24a = await p.$('section.ys[data-year="2024"]');
+  await p.click('section.ys[data-year="2025"] [data-more]');
+  ok('la mensola del 2024 non è stata ridisegnata', await y24a.evaluate(e => e.isConnected));
+  ok('Mostra altri: 30 dorsi, il pulsante dice «Mostra altri 2»', await n() === 30 && (await txt('section.ys[data-year="2025"] [data-more]')) === 'Mostra altri 2');
+  ok('focus sul nuovo «Mostra altri»', await p.evaluate(() => document.activeElement?.dataset?.more) === 'y2025');
+  // un dorso della seconda pagina: cambio il voto e salvo
+  await p.locator('section.ys[data-year="2025"] .spine').nth(20).click(); await p.waitForSelector('.sheet');
+  await p.locator('.rate button[data-n="4"]').click(); await save(p);
+  ok('dopo un salvataggio restano 30 dorsi', await n() === 30);
+  const y24 = await p.$('section.ys[data-year="2024"]');
+  await p.click('section.ys[data-year="2025"] [data-more]');
+  ok('32 dorsi e solo «Nascondi»', await n() === 32 && !(await p.locator('section.ys[data-year="2025"] [data-more]').count()) && await p.locator('section.ys[data-year="2025"] [data-less]').count() === 1);
+  ok('la mensola del 2024 non è stata ridisegnata', await y24.evaluate(e => e.isConnected));
+  await p.click('section.ys[data-year="2025"] [data-less]');
+  ok('Nascondi: di nuovo 15', await n() === 15);
+  ok('paginazione: niente scorrimento orizzontale', await noHScroll(p));
+  ok('pulsanti di paginazione delle Statistiche alti almeno 44 px', (await p.locator('section.ys .pager-btn').first().boundingBox()).height >= 44);
+  ok('paginazione: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+
+  p = await newPage(browser);
+  await load(p, Array.from({ length: 16 }, (_, i) => ({ id: 'D' + i, title: 'D' + i, author: 'A', status: 'da-leggere', added: i + 1, rating: 0 })));
+  ok('pulsanti di paginazione degli scaffali alti almeno 44 px', (await p.locator('#main .pager-btn').first().boundingBox()).height >= 44);
+  await p.close2();
+}
+
 async function incipit(browser) {
   const A = (id, author, rating, pages, finished) => ({ id, title: id, author, rating, pages, finished, status: 'letto', added: 1 });
   const lede = async (books) => { const p = await statsPage(browser, books); const x = (await p.locator('.stats-lede').innerText()).replace(/\s+/g, ' ').trim(); return [p, x]; };
@@ -319,5 +352,6 @@ export default async function ({ browser }) {
   await pagina(browser);
   await incipit(browser);
   await mensole(browser);
+  await paginazione(browser);
   await racconto(browser);
 }
