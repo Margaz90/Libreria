@@ -37,6 +37,11 @@ async function paginaRapida(browser) {
   await add10('p1').click(); await until(p, 'p1', { page: 110 });
   ok('+10 salva subito', (await book(p, 'p1')).page === 110, (await book(p, 'p1')).page);
   ok('toast «Pagina 110»', /Pagina 110/.test(await p.locator('.toast').innerText()));
+  const tb = await p.locator('.toast').boundingBox(), ab = await p.locator('.dock .tab.add .ico').boundingBox();
+  const meet = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  ok('avviso: «Annulla» alto almeno 44 px', (await toastBtn().boundingBox()).height >= 44);
+  ok('avviso a una riga', tb.height <= 46, tb.height);
+  ok('avviso lontano dal pulsante Aggiungi', !meet(tb, ab));
   await toastBtn().click(); await until(p, 'p1', { page: 100 });
   ok('Annulla torna a 100', (await book(p, 'p1')).page === 100 && (await book(p, 'p1')).pageStep === undefined);
 

@@ -36,13 +36,22 @@
   const snoHTML = b => b.seriesNo ? `<span class="sno${/\.|.../.test(b.seriesNo) ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
   const surname3 = a => { const p = String(a || "").trim().split(/\s+/); return (p[p.length - 1] || "").replace(/[^A-Za-zÀ-ÿ]/g, "").slice(0, 3).toUpperCase(); };
 
-  function toast(msg, action) {
+  function toast(msg, action, opts = {}) {
     document.querySelectorAll(".toast").forEach(t => t.remove());
     const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status");
     const span = document.createElement("span"); span.textContent = msg; t.append(span);
-    if (action) { const b = document.createElement("button"); b.textContent = action.label; b.onclick = () => { t.remove(); action.run(); }; t.append(b); }
+    let ab;
+    if (action) { ab = document.createElement("button"); ab.textContent = action.label; ab.onclick = () => { t.remove(); action.run(); }; t.append(ab); }
     document.body.append(t);
-    setTimeout(() => t.remove(), action ? 10000 : 2800);
+    if (ab && opts.focus) ab.focus();
+    setTimeout(() => {
+      if (ab && document.activeElement === ab) { // il focus non resta nel vuoto: torna all'hero o al filtro attivo
+        const h = $("#hero");
+        const to = (!h.hidden && $("button, [tabindex='0']", h)) || $('[data-filter][aria-checked="true"], [data-filter][aria-pressed="true"]');
+        if (to) to.focus();
+      }
+      t.remove();
+    }, action ? 10000 : 2800);
   }
 
   /* ---------- impostazioni ---------- */
