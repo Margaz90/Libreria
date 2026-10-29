@@ -24,7 +24,7 @@ async function apri(browser, google, { wikidata = [], ...opts } = {}) {
 const cerca = async (p, q) => {
   await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q');
   await p.fill('#s-q', q); await p.keyboard.press('Enter');
-  await p.waitForFunction(() => !/^Cerco/.test(document.querySelector('#s-status').textContent), null, { timeout: 10000 }).catch(() => {});
+  await p.waitForFunction(() => !/^Cerco/.test(document.querySelector('#s-status').textContent), null, { timeout: 25000 }).catch(() => {});
   await p.waitForTimeout(200);
   const stato = await p.locator('#s-status').innerText().catch(() => '');
   const titoli = await p.locator('#s-results .result b').allInnerTexts().catch(() => []);
@@ -141,7 +141,25 @@ export default async function ({ browser }) {
   p = await apri(browser, () => ({ body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Google: ISBN sconosciuto → 9 richieste e poi «nessuna fonte»', isbnChiamate(p).length === 9 && /nessuna fonte/i.test(r.stato), isbnChiamate(p).length + ' · ' + r.stato);
+  const qu = isbnChiamate(p).map(u => new URL(u).searchParams.get('quotaUser'));
+  ok('Google: ISBN sconosciuto → 5 giri da 3 richieste e poi «nessuna fonte»', isbnChiamate(p).length === 15 && /nessuna fonte/i.test(r.stato), isbnChiamate(p).length + ' · ' + r.stato);
+  ok('Google: ogni richiesta ha un indirizzo diverso (quotaUser), così nessuna cache ripete lo «0»', qu.every(Boolean) && new Set(qu).size === qu.length, qu.slice(0, 4).join(','));
+  await p.close2();
+
+  // 5e2. Mentre ritenta, la riga di stato lo dice
+  p = await apri(browser, () => ({ body: VUOTO }));
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q');
+  await p.fill('#s-q', ISBN); await p.keyboard.press('Enter');
+  const attesa = await p.waitForFunction(() => /tentativo \d di 5/.test(document.querySelector('#s-status').textContent), null, { timeout: 8000 }).then(h => p.locator('#s-status').innerText(), () => '');
+  ok('Google: durante i nuovi tentativi la riga di stato chiede di aspettare', /intermittenza: tentativo \d di 5/.test(attesa), attesa);
+  await p.close2();
+
+  // 5e3. Limite al minuto (429 «per minute»): si ritenta, non si spegne Google per il giorno
+  p = await apri(browser, (() => { let n = 0; return u => (/isbn/.test(decodeURIComponent(u)) && n++ < 3 ? { status: 429, body: { error: { message: "Quota exceeded for quota metric 'Queries' and limit 'Queries per minute per user'" } } } : { body: EINAUDI }); })());
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: 429 al minuto → nuovo giro e libro trovato', /Underworld/.test(r.titoli.join('|')), r.stato);
   await p.close2();
 
   // 5f. Google sempre in 503: si dice che non ha risposto (non «nessuna fonte conosce»)

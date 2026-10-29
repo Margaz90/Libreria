@@ -209,10 +209,10 @@
   }
   // Tutte le informazioni su un libro: prima per ISBN (Google Books, Open Library), poi per titolo e autore
   // (Apple Books Italia, Google Books, Open Library), così basta che una fonte risponda.
-  async function fetchInfo(b, errors = {}) {
+  async function fetchInfo(b, errors = {}, rounds = 2) { // rounds: giri di Google per l'ISBN (2 in sottofondo, tutti da «Aggiorna informazioni»)
     const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
     const byIsbn = isbn ? await settle([
-      () => googleSearch("isbn:" + isbn, { italian: false, max: 3, rounds: 2 }).then(tag("Google Books")),
+      () => googleSearch("isbn:" + isbn, { italian: false, max: 3, rounds }).then(tag("Google Books")),
       () => openLibrarySearch("isbn:" + isbn, "", 3).then(tag("Open Library")),
       () => wikidataSearch(isbn).then(tag("Wikidata"))
     ], errors) : [];
@@ -397,8 +397,8 @@
   // --- fonte 1: Google Books ---
   // Il messaggio con cui Google spiega l'errore (per capire la causa).
   async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
-  async function googleSearch(q, { italian = true, max = 12, rounds } = {}) {
-    if (/^isbn:/.test(q)) return googleIsbn(q.slice(5), { max, rounds });
+  async function googleSearch(q, { italian = true, max = 12, rounds, onTry } = {}) {
+    if (/^isbn:/.test(q)) return googleIsbn(q.slice(5), { max, rounds, onTry });
     if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
       (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
@@ -422,25 +422,33 @@
     return (j.items || []).map(normVolume).filter(x => x.title);
   }
   // ISBN su Google: per lo stesso ISBN Google risponde a caso con il libro, con «0 risultati» o con un 503 (misurato
-  // sull'iPhone di Diego). Quindi tre richieste in parallelo (ISBN-13, ISBN-10, ISBN-13) per giro, fino a `rounds` giri:
-  // vince la prima con risultati; 0 e 503 si ritentano; quota o chiave rifiutata fermano tutto come nelle altre ricerche.
-  async function googleIsbn(i, { max = 12, rounds = 3 } = {}) { // rounds: 2 nei completamenti in sottofondo (meno richieste)
+  // sull'iPhone di Diego). Quindi giri di tre richieste in parallelo (ISBN-13, ISBN-10, ISBN-13), distanziati sempre di più
+  // (i disturbi di Google durano qualche secondo), fino a `rounds` giri: vince la prima con risultati; 0, 503 e il limite
+  // al minuto si ritentano; quota del giorno o chiave rifiutata fermano tutto come nelle altre ricerche.
+  // Ogni richiesta ha un quotaUser diverso (parametro standard di Google): l'indirizzo cambia e nessuna cache ripete lo «0».
+  const ISBN_WAIT = [0, 800, 1500, 2500, 4000];
+  async function googleIsbn(i, { max = 12, rounds = ISBN_WAIT.length, onTry } = {}) { // rounds: 2 nei completamenti in sottofondo (meno richieste)
     if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i), forms = [i, alt || i, i];
-    const url = f => "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max + "&q=" + encodeURIComponent("isbn:" + f);
+    const url = f => "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
+      "&quotaUser=ml" + Math.random().toString(36).slice(2, 10) + "&q=" + encodeURIComponent("isbn:" + f);
+    const one = f => fetchT(url(f), { cache: "no-store" }).then(async r => {
+      if (r.ok) return { r, j: await r.json().catch(() => null) };
+      return { r, msg: r.status === 429 || r.status === 403 ? await googleMsg(r) : "" };
+    }, () => ({}));
     let answered = false, lastBad = null;
     for (let k = 0; k < rounds; k++) {
-      if (k) await sleep(600);
-      const res = await Promise.all(forms.map(f => fetchT(url(f)).then(async r => ({ r, j: r.ok ? await r.json().catch(() => null) : null }), () => ({}))));
+      if (k) { if (onTry) onTry(k + 1, rounds); await sleep(ISBN_WAIT[k] || 4000); }
+      const res = await Promise.all(forms.map(one));
       const hit = res.find(x => x.j && (x.j.items || []).length);
       if (hit) return hit.j.items.map(normVolume).filter(x => x.title);
-      const stop = res.find(x => x.r && (x.r.status === 429 || x.r.status === 403));
-      if (stop) { state.googleDown = { code: stop.r.status, until: Date.now() + 864e5 }; throw { code: "google-" + stop.r.status, msg: await googleMsg(stop.r) }; }
+      const stop = res.find(x => x.r && (x.r.status === 403 || (x.r.status === 429 && !/minute/i.test(x.msg))));
+      if (stop) { state.googleDown = { code: stop.r.status, until: Date.now() + 864e5 }; throw { code: "google-" + stop.r.status, msg: stop.msg }; }
       if (res.some(x => x.j)) answered = true;
       lastBad = res.find(x => x.r && !x.r.ok) || lastBad;
     }
     if (answered) return []; // Google ha risposto (anche solo una volta) senza il libro
-    if (lastBad && lastBad.r.status === 503) { state.googleDown = { code: 503, until: Date.now() + 5 * 60e3 }; throw { code: "google-503" }; }
+    if (lastBad && (lastBad.r.status === 503 || lastBad.r.status === 429)) { state.googleDown = { code: lastBad.r.status, until: Date.now() + 5 * 60e3 }; throw { code: "google-" + lastBad.r.status }; }
     throw { code: lastBad ? "google-" + lastBad.r.status : "google-rete" };
   }
 
@@ -657,11 +665,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (nb && nb.series) toast(`«${nb.title}»: serie ${nb.series}${nb.seriesNo ? " · " + nb.seriesNo : ""}`);
     }).catch(() => {});
   }
-  async function searchBooks(q) {
+  async function searchBooks(q, { onTry } = {}) { // onTry(n, tot): Google sta ritentando un ISBN (per la riga di stato)
     const errors = []; let out = [];
     const isbn = parseIsbn(q);
     const google = async () => {
-      if (isbn) return googleSearch("isbn:" + isbn, { italian: false }); // un ISBN identifica già l'edizione
+      if (isbn) return googleSearch("isbn:" + isbn, { italian: false, onTry }); // un ISBN identifica già l'edizione
       const it = await googleSearch(q);
       return it.length ? it : googleSearch(q, { italian: false }); // alcune edizioni italiane non hanno la lingua indicata
     };
@@ -1638,7 +1646,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const mine = ++seq;
       status.textContent = "Cerco tra le edizioni italiane…"; box.innerHTML = "";
       try {
-        const found = await searchBooks(q);
+        const found = await searchBooks(q, { onTry: (n, tot) => { if (mine === seq) status.textContent = `Cerco… Google risponde a intermittenza: tentativo ${n} di ${tot}, aspetta qualche secondo.`; } });
         if (mine !== seq) return;
         results = found;
         status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
@@ -1822,10 +1830,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const cur = { ...b }; readData(sheet, cur); // usa titolo e autore come sono ora nei campi
       refBtn.disabled = true; refSt.textContent = "Cerco le informazioni…";
       const errors = {};
-      const info0 = await fetchInfo(cur, errors).catch(() => null), info = info0 || {};
+      const info0 = await fetchInfo(cur, errors, ISBN_WAIT.length).catch(() => null), info = info0 || {};
       let wdDown = false; // serie scritta a mano con il seguito: niente da cercare
       const sr = cur.seriesManual && cur.seriesNext ? null : await findSeries({ ...cur, author: cur.author || info.author, isbn: cur.isbn || info.isbn }).catch(e => { wdDown = /^wikidata-/.test(e && e.code); return null; });
-      const wdNote = wdDown ? " Wikidata non risponde: serie non cercata." : "";
+      const wdNote = wdDown ? " Wikidata non risponde: serie non cercata."
+        : !sr && !cur.series ? " Serie: Wikidata non collega questo libro a una serie (se ne fa parte, scrivila in Modifica dati)." : "";
       refBtn.disabled = false;
       if (!info0 && !sr) {
         const err = Object.keys(errors).join(", ");

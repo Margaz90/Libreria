@@ -246,6 +246,10 @@ async function ricerca(browser) {
   ok('passo 2: titolo italiano contro alias inglese dell\'opera', r && r.series === 'Slough House' && r.no === '3', JSON.stringify(r));
   const qa = p.q.filter(q => /P50/.test(q)).pop() || '';
   ok('passo 2: interrogazione per autore veloce (ordine fissato, senza GROUP_CONCAT né rdfs:label|skos:altLabel)', qa.includes('hint:Query hint:optimizer "None"') && !qa.includes('GROUP_CONCAT') && !qa.includes('rdfs:label|skos:altLabel'), qa.slice(0, 300));
+  // Caso reale (Across the sand): titolo con il sottotitolo dopo il punto, ISBN-10 da Google, edizione italiana assente da Wikidata
+  p.cfg.isbn = []; p.cfg.works = [W('Q30', 'Across the Sand', 'Sand', '2'), W('Q31', 'Sand', 'Sand', '1')];
+  r = await find(p, { title: 'Across the sand. Oltre le dune', author: 'Hugh Howey', isbn: '883474621X' });
+  ok('titolo con sottotitolo dopo il punto e ISBN-10: serie trovata per autore', r && r.series === 'Sand' && r.no === '2', JSON.stringify(r));
   // Passo 3: titolo originale da Open Library
   p.cfg.works = [W('Q12', 'Spook Street', 'Slough House', '4')]; p.cfg.ol = { translation_of: 'Spook Street' };
   r = await find(p, { ...MH, title: 'Il gatto di Pitt', isbn: '9788845299997' });
