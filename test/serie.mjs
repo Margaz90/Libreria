@@ -657,8 +657,8 @@ async function prossimo(browser) {
   const row = () => p.locator('.sheet .snext').innerText().catch(() => '');
   await open('h1');
   const t1 = await row(), lk = p.locator('.sheet .snext [data-next-open]'), bb = await lk.boundingBox().catch(() => null);
-  const before = await p.evaluate(() => { const s = document.querySelector('.sheet .snext'), r = document.querySelector('.sheet .refresh'); return !!(s && r && s.nextElementSibling === r); });
-  ok('in pila: riga «Prossimo della serie» prima di Aggiorna informazioni', /Prossimo della serie/i.test(t1) && /#2 Leoni morti/.test(t1) && /· in pila/.test(t1) && before, t1);
+  const before = await p.evaluate(() => { const s = document.querySelector('.sheet .snext'), y = document.querySelector('.sheet #s-syn-b'), c = document.querySelector('.sheet #s-colo'); return !!(s && y && c && (y.compareDocumentPosition(s) & 4) && (s.compareDocumentPosition(c) & 4)); });
+  ok('in pila: riga «Prossimo della serie» dopo la trama e prima del colophon', /Prossimo della serie/i.test(t1) && /#2 Leoni morti/.test(t1) && /· in pila/.test(t1) && before, t1);
   await lk.click(); await p.waitForFunction(() => /Leoni morti/.test((document.querySelector('.sheet h2') || {}).textContent || ''), null, { timeout: 3000 }).catch(() => {});
   ok('in pila: tocco apre la scheda (≥ 44 px)', await p.locator('.sheet h2').innerText() === 'Leoni morti' && bb && bb.height >= 44, bb && bb.height);
   ok('nessuna riga nella scheda di un libro non letto', await p.locator('.sheet .snext').count() === 0);

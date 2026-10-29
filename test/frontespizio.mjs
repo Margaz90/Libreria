@@ -1,6 +1,17 @@
 // Scheda «Frontespizio»: frasi delle date, ritmo di lettura, struttura, aspetto, pagina, colophon, computer.
 import { APP, ok, newPage, localBooks } from './lib.mjs';
 
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+const PNGURL = 'data:image/png;base64,' + PNG.toString('base64');
+const load = async (p, books) => {
+  await p.clock.setFixedTime(FIXED_);
+  await p.goto(APP + '/');
+  await p.evaluate(b => localStorage.setItem('libreria-diego-v1', JSON.stringify(b)), books);
+  await p.reload(); await p.waitForTimeout(300);
+};
+const FIXED_ = new Date('2026-10-29T12:00:00');
+const openBook = async (p, id) => { await p.locator(`#main [data-id="${id}"], #hero [data-id="${id}"]`).first().click(); await p.waitForSelector('.sheet'); };
+
 const FIXED = new Date('2026-10-29T12:00:00');
 
 async function puri(browser) {
@@ -66,6 +77,50 @@ async function puri(browser) {
   await p.close2();
 }
 
+async function struttura(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, rating: 0, synopsis: 'Una trama.' };
+  await load(p, [
+    { ...base, id: 't1', title: 'Letto', author: 'A', status: 'letto', finished: '2025-01-02' },
+    { ...base, id: 't2', title: 'In corso', author: 'B', status: 'in-lettura', started: '2026-10-12', pages: 300, page: 100 },
+    { ...base, id: 't3', title: 'Pila', author: 'C', status: 'da-leggere' },
+    { ...base, id: 't4', title: 'Desiderio', author: 'D', status: 'desiderato' },
+    { ...base, id: 't5', title: 'Senza trama', author: 'E', status: 'letto', finished: '2025-01-02', synopsis: '', cover: PNGURL },
+  ]);
+  const order = (sels) => p.evaluate(ss => { const e = ss.map(s => document.querySelector('.sheet ' + s)); return e.every(Boolean) && e.every((x, i) => !i || (e[i - 1].compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING)); }, sels);
+  const closeAll = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
+  await openBook(p, 't1');
+  ok('ordine Letto', await order(['.sheet-top', '.seg', '#f-rate', '#f-period', '#f-quote', '#f-notes', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']));
+  ok('scheda .sheet.book, una sola h2, h3 Trama e Sullo scaffale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.classList.contains('book') && s.querySelectorAll('h2').length === 1 && [...s.querySelectorAll('h3')].map(h => h.textContent).join() === 'Trama,Sullo scaffale'; }));
+  const x = p.locator('#s-close'), bx = await x.boundingBox();
+  ok('✕ al posto di Chiudi', (await x.innerText()) === '✕' && (await x.getAttribute('aria-label')) === 'Chiudi la scheda' && bx.width >= 44 && bx.height >= 44, JSON.stringify(bx) + await x.innerText());
+  ok('Modifica i dati del libro: chiuso, con i campi', await p.evaluate(() => { const d = document.querySelector('details.edit'); return d.querySelector('summary').textContent === 'Modifica i dati del libro' && !d.open && !!d.querySelector('#d-title'); }));
+  ok('Ruota e Rimuovi nascosti senza foto', await p.locator('#sp-rot').isHidden() && await p.locator('#sp-del').isHidden());
+  await p.setInputFiles('#sp-file', { name: 'dorso.png', mimeType: 'image/png', buffer: PNG }); await p.waitForTimeout(500);
+  ok('Ruota e Rimuovi visibili con la foto', await p.locator('#sp-rot').isVisible() && await p.locator('#sp-del').isVisible());
+  await closeAll();
+  await openBook(p, 't2');
+  ok('ordine In lettura', await order(['.sheet-top', '.seg', '#f-period', '#f-pblk', '#f-quote', '#f-notes', '#f-rate', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']));
+  await closeAll();
+  await openBook(p, 't3');
+  ok('ordine Da leggere', await order(['.sheet-top', '.seg', '#f-period', '#s-syn-b', '#f-quote', '#f-notes', '#f-rate', '#s-colo', '.looks', '.sheet-bar']));
+  await closeAll();
+  await openBook(p, 't4');
+  ok('ordine Desiderato', await order(['.sheet-top', '.wish-box', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']) && !(await p.locator('#f-status').count()));
+  await closeAll();
+  await openBook(p, 't5');
+  ok('trama vuota: sezione nascosta', await p.locator('#s-syn-b').isHidden());
+  ok('copertina presente in frontespizio e Sullo scaffale', await p.locator('.sheet-top .cover img').count() === 1 && await p.locator('.looks-cover img').count() === 1);
+  await p.locator('details.edit summary').click(); await p.locator('#cv-clear').click();
+  ok('copertina disegnata: frontespizio e Sullo scaffale insieme', await p.locator('.sheet-top .cover img').count() === 0 && await p.locator('.looks-cover img').count() === 0);
+  await closeAll();
+  await p.keyboard.press('n'); await p.waitForSelector('.sheet');
+  ok('Nuovo libro: niente .book, due .rf', await p.evaluate(() => { const s = document.querySelector('.sheet'); return !s.classList.contains('book') && s.querySelectorAll('.rf').length === 2; }));
+  ok('struttura: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
+  await struttura(browser);
 }

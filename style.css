@@ -310,8 +310,6 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .sheet-top .cover { padding: 10px 8px; }
 .sheet-top .cover .ct { font-size: 12px; }
 .sheet-top .cover .ca { font-size: 8px; }
-.kv { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.kv .callno { font-family: var(--mono); color: var(--ink); }
 .synopsis { font-size: 14px; color: var(--muted); margin: 0; white-space: pre-line; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label, .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -628,3 +626,9 @@ html { scroll-behavior: smooth; }
 .snext .btn { min-height: 44px; margin-left: auto; }
 .snext .snb { min-height: 44px; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .grid-serie { display: grid; grid-template-columns: 1fr 84px; gap: 10px; }
+
+/* Scheda del libro: frontespizio */
+.rf { display: flex; flex-direction: column; gap: 14px; }
+.sheet.book [hidden] { display: none !important; }
+.sheet.book .x { width: 44px; height: 44px; min-height: 44px; align-self: flex-end; border: 0; background: none; font-size: 20px; color: var(--muted); }
+.sheet.book .fp-main { display: flex; flex-direction: column; gap: 14px; }

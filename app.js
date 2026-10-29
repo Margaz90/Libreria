@@ -1462,11 +1462,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   /* ---------- schede ---------- */
   let lastFocus = null, sheetGuard = null, sheetCancel = null;
-  function openSheet(html) {
+  function openSheet(html, cls = "") {
     lastFocus = document.activeElement; sheetGuard = null;
     document.querySelectorAll(".toast").forEach(t => t.remove());
     const layer = $("#layer");
-    layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+    layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cls ? " " + cls : ""}" role="dialog" aria-modal="true">${html}</div></div>`;
     $("#scrim").onclick = e => { if (e.target.id === "scrim") dismissSheet(); };
     document.addEventListener("keydown", escClose);
     document.body.style.overflow = "hidden";
@@ -1509,25 +1509,40 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
 
-  function readingFields(b) {
-    return `
+  const rateHTML = b => `<div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div></div>`;
+  // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
+  function readingHead(b) {
+    return `<div class="rf rf-head">
       <div class="field"><span class="label" id="f-status-l">Stato</span>
         <input type="hidden" id="f-status" value="${esc(b.status || "da-leggere")}">
         <div class="seg" role="radiogroup" aria-labelledby="f-status-l">${["da-leggere", "in-lettura", "letto"].map(k => `<button type="button" role="radio" data-v="${k}" aria-checked="${b.status === k}">${STATUS_ONE[k]}</button>`).join("")}<span class="seg-ink"></span></div>
       </div>
-      <div>
-        <div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div></div>
+      ${b.status === "letto" ? rateHTML(b) : ""}
+      <div class="period" id="f-period">
+        <div class="grid2">
+          <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
+          <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></div>
+        </div>
+        <p class="hint err" id="f-date-err" role="alert" hidden></p>
+        <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
+        <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
+        ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div>
-      <div class="grid2">
-        <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
-        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></div>
-      </div>
-      <p class="hint err" id="f-date-err" role="alert" hidden></p>
-      <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
-      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
-      <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
+      <div class="pblk" id="f-pblk"><div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div></div>
+    </div>`;
+  }
+  function readingMemo(b) {
+    return `<div class="rf rf-memo">
+      <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
-      <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
+      ${b.status !== "letto" ? rateHTML(b) : ""}
+    </div>`;
+  }
+  // Copertina del frontespizio e quella di «Sullo scaffale» insieme.
+  const lookCover = b => coverHTML(b).replace('class="cover', 'class="looks-cover cover');
+  function coverSync(sheet, b) {
+    const a = $(".sheet-top .cover", sheet); if (a) a.outerHTML = coverHTML(b);
+    const l = $(".looks-cover", sheet); if (l) l.outerHTML = lookCover(b);
   }
   function dataFields(b) {
     return `
@@ -1689,7 +1704,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const head = (b.synopsis || "").split("\n")[0];
       b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", hit.synopsis].filter(Boolean).join("\n");
     }
-    const prev = $(".sheet-top .cover", sheet); if (prev) prev.outerHTML = coverHTML({ ...b, title: hit.title || b.title, author: hit.author || b.author });
+    coverSync(sheet, { ...b, title: hit.title || b.title, author: hit.author || b.author });
+    const colo = $("#s-colo", sheet); if (colo) colo.dataset.isbn = b.isbn || "";
   }
 
   function searchBlock(prefill, scan = false) {
@@ -1877,48 +1893,49 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
-    const sheet = openSheet(`
-      <div class="sheet-top">${coverHTML(b)}<div>
-        <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
-        ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
-        <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
-        ${b.finished ? `<p class="hint">Finito il ${esc(fmtDate(b.finished))}</p>` : ""}
-        ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
-      </div></div>
-      <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
-      ${snextHTML(b)}<div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
-      ${b.status === "desiderato" ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>` : readingFields(b)}
-      <div class="cover-edit">
-        <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
-        <div class="status-line" id="cv-status" aria-live="polite"></div>
-        <div class="cover-picks" id="cv-picks" hidden></div>
-      </div>
-      <div class="spine-edit">
-        <span class="label">Dorso sullo scaffale</span>
-        <div class="spine-row">
-          <div class="spine-prev" id="sp-prev">${spineHTML(b, "div")}</div>
-          <div class="spine-actions">
+    const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p></section>`;
+    const colo = `<section class="colo" id="s-colo" data-isbn="${esc(b.isbn || "")}">
+        <div id="s-colo-facts"></div>
+        <p id="s-colo-fin"><span class="l1"></span><span class="l2">nella libreria di Diego</span></p>
+        <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
+        <details class="edit"><summary>Modifica i dati del libro</summary><div class="inner">
+          ${searchBlock(b.title + " " + (b.author || ""))}
+          ${dataFields(b)}
+          <div class="actions"><button class="btn" id="cv-clear" type="button">${b.cover ? "Usa copertina disegnata" : "Nessuna copertina trovata"}</button></div>
+        </div></details>
+      </section>`;
+    const looks = `<section class="looks"><h3>Sullo scaffale</h3>
+        <div class="looks-grid">
+          <div class="looks-l">${lookCover(b)}<button class="btn" id="cv-more" type="button">Altra copertina</button></div>
+          <div class="looks-r">
+            <div class="spine-prev" id="sp-prev">${spineHTML(b, "div")}</div>
             <label class="btn" for="sp-file">${b.spine ? "Cambia foto del dorso" : "Fotografa il dorso"}</label>
             <input type="file" id="sp-file" accept="image/*" hidden>
             <span class="actions"><button class="btn" id="sp-rot" type="button">Ruota</button><button class="btn danger" id="sp-del" type="button">Rimuovi</button></span>
-            <p class="hint">Inquadra solo il dorso, da vicino e con buona luce. Va bene anche in orizzontale: lo raddrizzo io.</p>
           </div>
         </div>
-      </div>
-      <details class="edit"><summary>Modifica dati e copertina</summary><div class="inner">
-        ${searchBlock(b.title + " " + (b.author || ""))}
-        ${dataFields(b)}
-        <div class="actions"><button class="btn" id="cv-clear" type="button">${b.cover ? "Usa copertina disegnata" : "Nessuna copertina trovata"}</button></div>
-      </div></details>
-      <div class="actions">
-        <button class="btn primary" id="s-save">Salva</button>
-        <button class="btn ghost" id="s-close">Chiudi</button>
-        <button class="btn danger" id="s-del">Elimina</button>
-      </div>`);
+        <div class="status-line" id="cv-status" aria-live="polite"></div>
+        <div class="cover-picks" id="cv-picks" hidden></div>
+        <p class="hint">Per il dorso: inquadra solo il dorso, da vicino e con buona luce. Va bene anche in orizzontale: lo raddrizzo io.</p>
+      </section>`;
+    const nx = snextHTML(b);
+    const body = b.status === "desiderato"
+      ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>${synB}${colo}${looks}`
+      : b.status === "da-leggere" ? `${readingHead(b)}${synB}${readingMemo(b)}${colo}${looks}`
+      : `${readingHead(b)}${readingMemo(b)}${synB}${nx}${colo}${looks}`;
+    const sheet = openSheet(`
+      <button class="x" id="s-close" type="button" aria-label="Chiudi la scheda">✕</button>
+      <header class="sheet-top fp">${coverHTML(b)}
+        <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
+        ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
+        <i class="rib" aria-hidden="true"></i>
+      </header>
+      <div class="fp-main">${body}</div>
+      <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
     wireRating(sheet, b);
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
     const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
-    const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.disabled = spDel.disabled = !b.spine; };
+    const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.hidden = spDel.hidden = !b.spine; };
     spSync();
     $("#sp-file", sheet).onchange = async e => {
       const f = e.target.files[0]; if (!f) return;
@@ -1940,7 +1957,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (i < 0) { delete b.cover; b.noCover = true; } else { b.cover = cands[i].cover; delete b.noCover; }
         b.coverManual = true;
         cvPicks.querySelectorAll(".pick").forEach(x => x.classList.toggle("on", x === el));
-        const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b);
+        coverSync(sheet, b);
         spSync(); cvStatus.textContent = "Tocca Salva per tenere questa copertina.";
       });
     };
@@ -1949,7 +1966,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       cvMore.disabled = true; cvStatus.textContent = "Cerco le copertine…";
       cands = await coverCandidates(b);
       if (b.cover && !cands.some(c => c.cover === b.cover)) cands.unshift({ cover: b.cover, src: "attuale" });
-      cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica dati.";
+      cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica i dati del libro.";
       drawPicks(); cvMore.disabled = false; cvMore.textContent = "Cerca di nuovo";
     };
     // Aggiorna informazioni: cerca il libro su tutte le fonti e riempie la scheda; si conferma con Salva.
@@ -1963,11 +1980,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       let wdDown = false; // serie scritta a mano con il seguito: niente da cercare
       const sr = cur.seriesManual && cur.seriesNext ? null : await findSeries({ ...cur, author: cur.author || info.author, isbn: cur.isbn || info.isbn }).catch(e => { wdDown = /^wikidata-/.test(e && e.code); return null; });
       const wdNote = wdDown ? " Wikidata non risponde: serie non cercata."
-        : !sr && !cur.series ? " Serie: Wikidata non collega questo libro a una serie (se ne fa parte, scrivila in Modifica dati)." : "";
+        : !sr && !cur.series ? " Serie: Wikidata non collega questo libro a una serie (se ne fa parte, scrivila in Modifica i dati del libro)." : "";
       refBtn.disabled = false;
       if (!info0 && !sr) {
         const err = Object.keys(errors).join(", ");
-        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.` + wdNote;
+        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica i dati del libro.` + wdNote;
         return;
       }
       const got = [];
@@ -1981,11 +1998,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       put("#d-pages", info.pages, "pagine");
       put("#d-genre", info.genre, "genere", true);
       put("#d-call", info.author && surname3(info.author), "segnatura", true);
-      if (info.isbn && !b.isbn) { b.isbn = info.isbn; got.push("ISBN"); }
+      if (info.isbn && !b.isbn) { b.isbn = info.isbn; $("#s-colo", sheet).dataset.isbn = b.isbn; got.push("ISBN"); }
       if (info.synopsis && !(b.synopsis || "").includes(info.synopsis)) {
         const head = (b.synopsis || "").split("\n")[0];
         b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", info.synopsis].filter(Boolean).join("\n");
-        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; syn.hidden = false; got.push("trama");
+        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; $("#s-syn-b", sheet).hidden = false; got.push("trama");
       }
       if (sr) { // si tiene con Salva
         const nb = applySeries(cur, sr);
@@ -1993,7 +2010,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (nb.seriesNext && nb.seriesNext !== b.seriesNext) { b.seriesNext = nb.seriesNext; got.push("seguito"); }
       }
       if (info.cover && info.cover !== b.cover && !b.coverManual) { b.cover = info.cover; delete b.noCover; cvc.disabled = false; got.push("copertina"); }
-      const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML({ ...b, author: $("#d-author", sheet).value });
+      coverSync(sheet, { ...b, author: $("#d-author", sheet).value });
       $(".sheet-top .sub", sheet).textContent = $("#d-author", sheet).value || "Autore sconosciuto";
       spSync();
       if (got.some(g => ["autore", "anno", "pagine", "genere", "segnatura", "serie"].includes(g))) $("details.edit", sheet).open = true;
@@ -2001,7 +2018,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
-    cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
+    cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; coverSync(sheet, b); };
     $("#s-close", sheet).onclick = dismissSheet;
     const ser = $("[data-series]", sheet); // serie → ricerca nella libreria
     if (ser) ser.onclick = () => dismissSheet(() => searchFor(book.series));
@@ -2043,7 +2060,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="cover-picks" id="a-cv-picks" hidden></div>
       </div>
       ${dataFields(b)}
-      ${readingFields(b)}
+      ${readingHead(b)}${readingMemo(b)}
       <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
     wireRating(sheet, b);
     wireSearch(sheet, hit => {
