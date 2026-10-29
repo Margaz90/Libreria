@@ -36,13 +36,22 @@
   const snoHTML = b => b.seriesNo ? `<span class="sno${/\.|.../.test(b.seriesNo) ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
   const surname3 = a => { const p = String(a || "").trim().split(/\s+/); return (p[p.length - 1] || "").replace(/[^A-Za-zÀ-ÿ]/g, "").slice(0, 3).toUpperCase(); };
 
-  function toast(msg, action) {
+  function toast(msg, action, opts = {}) {
     document.querySelectorAll(".toast").forEach(t => t.remove());
     const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status");
     const span = document.createElement("span"); span.textContent = msg; t.append(span);
-    if (action) { const b = document.createElement("button"); b.textContent = action.label; b.onclick = () => { t.remove(); action.run(); }; t.append(b); }
+    let ab;
+    if (action) { ab = document.createElement("button"); ab.textContent = action.label; ab.onclick = () => { t.remove(); action.run(); }; t.append(ab); }
     document.body.append(t);
-    setTimeout(() => t.remove(), action ? 10000 : 2800);
+    if (ab && opts.focus) ab.focus();
+    setTimeout(() => {
+      if (ab && document.activeElement === ab) { // il focus non resta nel vuoto: torna all'hero o al filtro attivo
+        const h = $("#hero");
+        const to = (!h.hidden && $("button, [tabindex='0']", h)) || $('[data-filter][aria-checked="true"], [data-filter][aria-pressed="true"]');
+        if (to) to.focus();
+      }
+      t.remove();
+    }, action ? 10000 : 2800);
   }
 
   /* ---------- impostazioni ---------- */
@@ -929,9 +938,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (show) { hero.innerHTML = readingCards(reading); wireMain(hero); } else { hero.innerHTML = nextHTML(list); wireNext(hero); }
   }
   // Proposte mostrate: restano le stesse finché i libri sono ancora in pila; «Altre proposte» le esclude (esaurita la pila si ricomincia).
-  const nx = { ex: [], list: [], off: false };
+  const nx = { ex: [], list: [], off: false, sel: null };
   function nextList(more) {
-    if (more) nx.ex.push(...nx.list.map(x => x.book.id));
+    if (more) { nx.ex.push(...nx.list.map(x => x.book.id)); nx.sel = null; }
     const pile = state.books.filter(b => b.status === "da-leggere");
     if (more || !nx.list.length || nx.list.some(x => !pile.some(b => b.id === x.book.id))) {
       nx.list = nextBooks(state.books, nx.ex);
@@ -939,18 +948,91 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     return nx.list = nx.list.map(x => ({ ...x, book: pile.find(b => b.id === x.book.id) || x.book })); // dati aggiornati (titolo, copertina…)
   }
-  function nextHTML(list, h = "h3") {
-    const more = state.books.filter(b => b.status === "da-leggere").length > list.length, hero = h === "h3";
-    return `<section class="next"><${h}>Cosa leggo adesso?</${h}><div class="nlist">${list.map(({ book: b, reason }) => `<div class="ncard" data-next="${esc(b.id)}">${coverHTML(b, 120)}<div><span class="why">${esc(reason)}</span><b>${esc(b.title)}</b><span class="meta">${esc([b.author, b.pages && b.pages + " pp."].filter(Boolean).join(" · "))}</span></div><button class="btn primary" type="button" data-start="${esc(b.id)}" aria-label="Inizia ${esc(b.title)}">Inizia</button></div>`).join("")}</div>
-      <div class="nfoot">${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
+  const tabLabel = (list, i) => { const k = list[i].kind; return k === "affine" ? "Affine" : k === "vecchio" ? "Il più vecchio" : list.slice(0, i).some(x => x.kind === "caso") ? "Ancora a caso" : "A caso"; };
+  function nextHTML(list, h = "h3", sel = null) {
+    const hero = h === "h3", px = hero ? "nh-" : "ns-", n = list.length;
+    if (hero && sel === null) sel = nx.sel;
+    const more = state.books.filter(b => b.status === "da-leggere").length > n, at = Math.max(0, list.findIndex(x => x.book.id === sel));
+    const tabs = n < 2 ? "" : `<div class="ntabs" role="tablist" aria-label="Criteri della proposta" style="--nt:${n}">${list.map(({ book: b }, i) => `<button class="ntab" type="button" role="tab" id="${px}t${i}" aria-controls="${px}p${i}" aria-selected="${i === at}" tabindex="${i === at ? 0 : -1}" data-tab="${esc(b.id)}">${tabLabel(list, i)}</button>`).join("")}</div>`;
+    const cards = list.map(({ book: b, reason }, i) => `<div class="ncard" data-next="${esc(b.id)}" ${n < 2 ? 'role="region" aria-label="Proposta"' : `role="tabpanel" id="${px}p${i}" aria-labelledby="${px}t${i}" tabindex="0"`}${i === at ? "" : " hidden"}>
+        <div class="nhead"><span class="call">${b.callNo ? `<span class="sr">Segnatura </span>${esc(b.callNo)}` : ""}</span>${n < 2 ? "" : `<span class="n" aria-hidden="true">${i + 1} di ${n}</span>`}</div>
+        <div class="nbody"><div><b>${esc(b.title)}</b>${b.author ? `<span class="au">${esc(b.author)}</span>` : ""}</div>${coverHTML(b, 120)}<span class="why">${esc(reason)}</span>${(m => m ? `<span class="meta">${esc(m)}</span>` : "")([serLabel(b), b.pages && b.pages + " pagine", b.genre].filter(Boolean).join(" · "))}</div>
+        <span class="hole" aria-hidden="true"></span></div>`).join("");
+    const cur = list[at].book;
+    return `<section class="next"><${h}>Cosa leggo adesso?</${h}><div class="drawer${n > 1 ? " many" : ""}">${tabs}<div class="nstack">${cards}</div></div>
+      <div class="nfoot"><button class="btn primary" type="button" data-start="${esc(cur.id)}" aria-label="Inizia ${esc(cur.title)}">Inizia</button>${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
   }
+  function announce(text) {
+    let l = $("#n-live"); if (!l) { l = document.createElement("div"); l.id = "n-live"; l.className = "sr"; l.setAttribute("aria-live", "polite"); document.body.append(l); }
+    l.textContent = text;
+  }
+  const flipCard = c => { if (!c) return; c.classList.remove("flip"); void c.offsetWidth; c.classList.add("flip"); };
   function wireNext(root, sheet) {
-    root.querySelectorAll("[data-start]").forEach(btn => btn.onclick = () => { const b = state.books.find(x => x.id === btn.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); });
+    const tabs = [...root.querySelectorAll(".ntab")], cards = [...root.querySelectorAll(".ncard")], start = $("[data-start]", root);
+    let cur = Math.max(0, tabs.findIndex(t => t.getAttribute("aria-selected") === "true"));
+    const pick = (id, anim) => {
+      cur = Math.max(0, cards.findIndex(c => c.dataset.next === id));
+      cards.forEach((c, i) => c.hidden = i !== cur);
+      tabs.forEach((t, i) => { t.setAttribute("aria-selected", i === cur); t.tabIndex = i === cur ? 0 : -1; });
+      start.dataset.start = id; start.setAttribute("aria-label", "Inizia " + $("b", cards[cur]).textContent);
+      if (!sheet) nx.sel = id;
+      if (anim) flipCard(cards[cur]);
+    };
+    const go = (i, focus) => { i = (i + tabs.length) % tabs.length; pick(tabs[i].dataset.tab, true); if (focus) tabs[i].focus(); };
+    tabs.forEach(t => t.onclick = () => pick(t.dataset.tab, true));
+    const tl = $("[role=tablist]", root);
+    if (tl) tl.onkeydown = e => {
+      const i = tabs.indexOf(document.activeElement), to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (i < 0 || to === undefined) return;
+      e.preventDefault(); go(to, true);
+    };
+    const stack = $(".nstack", root);
+    if (stack && tabs.length > 1) {
+      let g = null;
+      stack.addEventListener("pointerdown", e => {
+        if (g || e.pointerType === "mouse" || e.clientX < 24 || e.clientX > innerWidth - 24) { if (g) g = null; return; } // un secondo dito annulla il gesto
+        g = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      }, { passive: true });
+      stack.addEventListener("pointercancel", () => { g = null; }, { passive: true });
+      stack.addEventListener("pointerup", e => {
+        if (!g || g.id !== e.pointerId) return;
+        const dx = e.clientX - g.x, dy = e.clientY - g.y; g = null;
+        if (Math.abs(dx) >= 48 && Math.abs(dx) >= 2 * Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
+      }, { passive: true });
+    }
+    start.onclick = () => startNext(start.dataset.start, sheet);
     const m = $("[data-n=more]", root);
-    if (m) m.onclick = () => { nextList(true); if (sheet) fillNext(root); else renderHero(); const n = $("[data-n=more]", root); if (n) n.focus(); };
-    $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
+    if (m) m.onclick = () => {
+      nextList(true); if (sheet) fillNext(root); else renderHero();
+      flipCard($(".ncard", root)); announce("Nuove proposte: " + nx.list.map(x => x.book.title).join(", "));
+      const n = $("[data-n=more]", root); if (n) n.focus();
+    };
+    $("[data-n=later]", root).onclick = () => {
+      if (sheet) { closeSheet(); return; }
+      nx.off = true; renderHero();
+      toast("Proposte nascoste", { label: "Annulla", run: () => { nx.off = false; renderHero(); const f = $("#hero [role=tab][aria-selected=true]") || $("#hero [data-start]"); if (f) f.focus(); } }, { focus: true });
+    };
   }
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
+  // «Inizia» con Annulla: rimette i campi di lettura com'erano prima (assenti restano assenti).
+  const NX_FIELDS = ["status", "started", "finished", "finishedYear", "finishedAuto", "page", "pageStep"];
+  function startNext(id, sheet) {
+    const b = state.books.find(x => x.id === id), before = {};
+    if (sheet) closeSheet();
+    if (!b || b.status !== "da-leggere") { renderHero(); return; }
+    NX_FIELDS.forEach(f => { if (f in b) before[f] = b[f]; });
+    setStatus(b, "in-lettura");
+    const short = b.title.length > 40 ? b.title.slice(0, 40) + "…" : b.title;
+    toast("In lettura: «" + short + "»", { label: "Annulla", run: () => {
+      const k = state.books.findIndex(x => x.id === id), cur = state.books[k];
+      if (!cur || cur.status !== "in-lettura") { toast("Non annullato: «" + short + "» è cambiato nel frattempo"); return; }
+      const nb = { ...cur }; NX_FIELDS.forEach(f => delete nb[f]);
+      state.books[k] = { ...clean({ ...nb, ...before }), id, updated: Date.now() };
+      schedulePersist(); cloudHook("changed", id); nx.sel = id;
+      refreshChanged([{ id, from: "in-lettura", to: "da-leggere", moved: true }]);
+      const f = $("#hero [role=tab][aria-selected=true]") || $("#hero [data-start]"); if (f) f.focus();
+    } }, { focus: true });
+  }
   // Pagina rapida sotto la barra: cursore (solo con pagine totali), +10 e «+N» (ultimo salto scritto a mano).
   function pquickHTML(b) {
     const id = esc(b.id), t = esc(b.title), step = Number(b.pageStep) || 0;

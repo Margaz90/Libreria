@@ -37,6 +37,11 @@ async function paginaRapida(browser) {
   await add10('p1').click(); await until(p, 'p1', { page: 110 });
   ok('+10 salva subito', (await book(p, 'p1')).page === 110, (await book(p, 'p1')).page);
   ok('toast «Pagina 110»', /Pagina 110/.test(await p.locator('.toast').innerText()));
+  const tb = await p.locator('.toast').boundingBox(), ab = await p.locator('.dock .tab.add .ico').boundingBox();
+  const meet = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  ok('avviso: «Annulla» alto almeno 44 px', (await toastBtn().boundingBox()).height >= 44);
+  ok('avviso a una riga', tb.height <= 46, tb.height);
+  ok('avviso lontano dal pulsante Aggiungi', !meet(tb, ab));
   await toastBtn().click(); await until(p, 'p1', { page: 100 });
   ok('Annulla torna a 100', (await book(p, 'p1')).page === 100 && (await book(p, 'p1')).pageStep === undefined);
 
@@ -242,22 +247,74 @@ async function prossimo(browser) {
 
   // Interfaccia
   const base = { rating: 0 };
-  await load(p, [...pila, ...letti].map(b => ({ ...base, pages: 300, ...b })));
+  await load(p, [...pila, ...letti].map(b => ({ ...base, pages: 300, callNo: '823.92 HER', ...b })));
   const hero = p.locator('#hero .next');
+  const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
   ok('hero senza letture mostra Cosa leggo adesso?', await hero.isVisible() && /Cosa leggo adesso\?/.test(await hero.innerText()) && await hero.locator('.ncard').count() === 3
-    && /Mick Herron · 300 pp\./.test(await hero.locator('.ncard').first().innerText()));
+    && await hero.locator('.ncard').first().evaluate(n => /Mick Herron/.test(n.textContent) && /300 pagine/.test(n.textContent)));
+  const tabsT = await hero.locator('[role=tab]').allTextContents(), ctrs = await p.locator('#hero .ncard:visible .n').first();
+  ok('linguette: tablist con Affine, Il più vecchio, A caso', await hero.locator('[role=tablist]').getAttribute('aria-label') === 'Criteri della proposta'
+    && tabsT.join('|') === 'Affine|Il più vecchio|A caso' && await hero.locator('[role=tab]').first().getAttribute('aria-selected') === 'true'
+    && await hero.locator('.ncard:visible').count() === 1 && await hero.locator('[data-start]').count() === 1, tabsT.join('|'));
+  const l1 = await ids(hero);
+  ok('aria-controls e aria-labelledby collegati', await p.locator('#nh-t1').getAttribute('aria-controls') === 'nh-p1' && await p.locator('#nh-p1').getAttribute('aria-labelledby') === 'nh-t1' && await p.locator('#nh-p1').getAttribute('data-next') === l1[1]);
+  ok('contatore 1 di 3 nascosto a VoiceOver', (await ctrs.textContent()) === '1 di 3' && await ctrs.getAttribute('aria-hidden') === 'true');
+  ok('segnatura con «Segnatura» solo per VoiceOver', await hero.locator('.ncard:visible .call .sr').textContent() === 'Segnatura ');
+  const why0 = await next([...pila, ...letti]);
+  ok('motivo senza punto nel testo', await hero.locator('.ncard').first().locator('.why').textContent() === why0[0].reason);
+  // Linguette interattive
+  const tabEl = i => p.locator('#hero [role=tab]').nth(i), sel = i => tabEl(i).getAttribute('aria-selected');
+  const titleOf = id => p.locator(`#hero .ncard[data-next="${id}"] b`).textContent();
+  await tabEl(1).click();
+  ok('clic sulla seconda linguetta: mostra il secondo libro', await sel(1) === 'true' && await hero.locator('.ncard:visible').getAttribute('data-next') === l1[1]
+    && await hero.locator('[data-start]').getAttribute('data-start') === l1[1] && await hero.locator('[data-start]').getAttribute('aria-label') === 'Inizia ' + await titleOf(l1[1]));
+  const act = () => p.evaluate(() => document.activeElement.id);
+  await p.keyboard.press('ArrowRight');
+  ok('ArrowRight: linguetta successiva con focus e selezione', await act() === 'nh-t2' && await sel(2) === 'true' && await sel(1) === 'false');
+  await p.keyboard.press('ArrowRight');
+  ok('ArrowRight dall\'ultima: la prima', await act() === 'nh-t0' && await sel(0) === 'true');
+  await p.keyboard.press('ArrowLeft');
+  ok('ArrowLeft dalla prima: l\'ultima', await act() === 'nh-t2');
+  await p.keyboard.press('Home'); const h0 = await act(); await p.keyboard.press('End');
+  ok('Home e End', h0 === 'nh-t0' && await act() === 'nh-t2');
+  ok('tabindex mobile e pannello focalizzabile', await tabEl(2).getAttribute('tabindex') === '0' && await tabEl(0).getAttribute('tabindex') === '-1' && await tabEl(1).getAttribute('tabindex') === '-1'
+    && await hero.locator('.ncard:visible').getAttribute('tabindex') === '0');
+  await tabEl(1).click();
+  await p.evaluate(id => { const H = window.libreriaHost, b = H.books().find(x => x.id === id); H.setLocal(id, { ...b, title: b.title + ' bis' }); H.refreshChanged([{ id, from: 'da-leggere', to: 'da-leggere' }]); }, l1[2]);
+  ok('selezione ricordata dopo un cambio di titolo', await sel(1) === 'true' && /bis$/.test(await titleOf(l1[2])));
+  await tabEl(0).click();
+  // Scorrimento laterale
+  const swipe = (x0, y0, x1, y1, o = {}) => p.evaluate(([x0, y0, x1, y1, o]) => {
+    const el = document.querySelector('#hero .nstack'), ev = (t, id, x, y) => el.dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: o.type || 'touch', clientX: x, clientY: y, bubbles: true }));
+    ev('pointerdown', 1, x0, y0); if (o.second) ev('pointerdown', 2, x0 + 30, y0);
+    if (o.cancel) ev('pointercancel', 1, x1, y1); else ev('pointerup', 1, x1, y1);
+  }, [x0, y0, x1, y1, o]);
+  const cur = async () => (await p.locator('#hero [role=tab]').evaluateAll(t => t.findIndex(x => x.getAttribute('aria-selected') === 'true')));
+  await swipe(250, 400, 150, 405);
+  ok('scorrimento a sinistra: linguetta successiva', await cur() === 1);
+  await tabEl(0).click(); await swipe(150, 400, 250, 400);
+  ok('scorrimento a destra dalla prima: l\'ultima', await cur() === 2);
+  await tabEl(0).click();
+  await swipe(200, 400, 140, 480); ok('gesto obliquo ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { cancel: true }); ok('pointercancel ignorato', await cur() === 0);
+  await swipe(30, 400, 5, 400); await swipe(380, 400, 280, 400); ok('gesto dal bordo ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { type: 'mouse' }); ok('mouse ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { second: true }); ok('due dita: nessun cambio', await cur() === 0);
+  await tabEl(0).focus(); await swipe(250, 400, 150, 400);
+  ok('scorrimento: il focus non si sposta', await cur() === 1 && await act() === 'nh-t0');
+  await tabEl(0).click();
   const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
   ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
   await p.locator('#main [data-id="n2"]').first().click(); await p.waitForSelector('.sheet details.edit');
   await p.locator('.sheet details.edit summary').click(); await p.locator('#d-title').fill('Joe Country (nuovo)'); await p.locator('#s-save').click();
   await p.waitForFunction(() => /Joe Country \(nuovo\)/.test(document.querySelector('#hero .ncard[data-next="n2"]')?.textContent || ''), null, { timeout: 3000 }).catch(() => {});
-  ok('titolo di un libro proposto modificato: l\'hero mostra il nuovo', /Joe Country \(nuovo\)/.test(await p.locator('#hero .ncard[data-next="n2"]').innerText().catch(() => '')));
-  const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
+  ok('titolo di un libro proposto modificato: l\'hero mostra il nuovo', /Joe Country \(nuovo\)/.test(await p.locator('#hero .ncard[data-next="n2"]').textContent().catch(() => '')));
   const before = await ids(hero);
   const moved = prev => p.waitForFunction(prev => [...document.querySelectorAll('#hero .ncard')].map(x => x.dataset.next).join() !== prev, prev, { timeout: 3000 }).catch(() => {});
   await p.locator('#n-more').click(); await moved(before.join());
   const after = await ids(p.locator('#hero .next'));
   ok('Altre proposte cambia i libri', after.length > 0 && after.every(x => !before.includes(x)), `${before} → ${after}`);
+  ok('Altre proposte: prima linguetta, annuncio e focus', await sel(0) === 'true' && /^Nuove proposte: /.test(await p.locator('#n-live').textContent()) && await act() === 'n-more');
   await p.locator('#n-more').click(); await moved(after.join());
   ok('pila esaurita: si ricomincia', (await ids(p.locator('#hero .next'))).length === 3);
   await p.locator('[data-filter="letto"]').first().click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
@@ -265,8 +322,12 @@ async function prossimo(browser) {
   await p.locator('[data-filter="da-leggere"]').first().click(); await p.locator('#hero .next').waitFor({ timeout: 3000 }).catch(() => {});
   ok('filtro Da leggere: proposte visibili', await p.locator('#hero .next').isVisible());
   await p.locator('[data-filter="tutti"]').first().click(); await p.locator('#n-later').waitFor({ timeout: 3000 }).catch(() => {});
-  await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
+  await tabEl(1).click(); await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
   ok('Non ora nasconde la proposta', await p.locator('#hero .next').count() === 0);
+  ok('Non ora: avviso «Proposte nascoste» con Annulla a fuoco', /^Proposte nascoste/.test(await toastText(p)) && await p.evaluate(() => document.activeElement.matches('.toast button')));
+  await p.keyboard.press('Enter'); await p.locator('#hero .next').waitFor({ timeout: 3000 }).catch(() => {});
+  ok('Annulla di Non ora: stesse proposte, stessa linguetta, focus sulla linguetta', await p.locator('#hero .next').isVisible() && await sel(1) === 'true' && await act() === 'nh-t1');
+  await tabEl(0).click(); await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
 
   const choose = p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]');
   const cs = await choose.boundingBox();
@@ -283,10 +344,113 @@ async function prossimo(browser) {
   ok('con letture in corso l\'hero non propone', await p.locator('#hero .next').count() === 0);
   await choose.click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
   ok('Scegli per me funziona anche con letture in corso', await p.locator('.sheet .next .ncard').count() >= 1);
+  {
+    const w = await newPage(browser); await w.clock.install();
+    await load(w, [...pila, ...letti].map(b => ({ ...base, ...b })));
+    await w.locator('#n-later').click();
+    await w.clock.fastForward(10500);
+    ok('avviso scaduto: focus sul filtro attivo, proposte ancora nascoste', await w.locator('.toast').count() === 0 && await w.evaluate(() => document.activeElement.matches('[data-filter][aria-checked="true"], [data-filter][aria-pressed="true"]')) && await w.locator('#hero .next').count() === 0);
+    await w.close2();
+  }
   await p.keyboard.press('Escape'); await closed(p);
 
+  // Inizia con Annulla
+  const S = (id, o) => ({ id, title: 'Pila ' + id, author: 'Autore ' + id, status: D, rating: 0, ...o });
+  const stato = id => p.evaluate(id => JSON.parse(JSON.stringify(window.libreriaHost.books().find(x => x.id === id))), id);
+  const sans = b => { const { updated, ...r } = b; return JSON.stringify(Object.entries(r).sort()); };
+  const tbtn = p.locator('.toast button');
+  for (const i of [0, 1, 2]) {
+    await load(p, [S('s1', { added: 1, started: '2025-03-01', page: 12, pageStep: 5 }), S('s2', { added: 2 }), S('s3', { added: 3, finishedYear: 2019 }), ...letti.map(b => ({ ...b, rating: 0 }))]);
+    if (i === 0) await p.evaluate(() => { window.__ch = []; window.libreriaCloud = { connected: true, changed: id => window.__ch.push(id) }; });
+    const idsN = await ids(p.locator('#hero .next')), id = idsN[i], prima = await stato(id);
+    await tabEl(i).click(); await p.locator('#hero [data-start]').click();
+    ok(`Inizia dalla linguetta ${i + 1}: avviso «In lettura» con Annulla a fuoco`, /^In lettura: «/.test(await toastText(p)) && await p.evaluate(() => document.activeElement.matches('.toast button')));
+    ok('Inizia: il libro è In lettura', (await stato(id)).status === 'in-lettura');
+    await p.keyboard.press('Enter');
+    await p.waitForFunction(id => window.libreriaHost.books().find(x => x.id === id).status === 'da-leggere', id, { timeout: 3000 }).catch(() => {});
+    const dopo = await stato(id);
+    ok(`Annulla (linguetta ${i + 1}): libro com'era`, sans(dopo) === sans(prima) && dopo.updated > prima.updated, `${sans(prima)} / ${sans(dopo)}`);
+    ok('Annulla: proposte con la stessa linguetta e focus', await sel(i) === 'true' && await p.evaluate(i => document.activeElement === document.querySelectorAll('#hero [role=tab]')[i], i));
+    if (i === 0) {
+      ok('Annulla arriva al cloud', await p.evaluate(id => window.__ch.filter(x => x === id).length >= 2, id));
+      await p.evaluate(() => { delete window.libreriaCloud; });
+    }
+  }
+  {
+    const id = (await ids(p.locator('#hero .next')))[0];
+    await tabEl(0).click(); await p.locator('#hero [data-start]').click();
+    await p.evaluate(id => { const H = window.libreriaHost, b = H.books().find(x => x.id === id); H.setLocal(id, { ...b, status: 'letto' }); H.refreshChanged([{ id, from: 'in-lettura', to: 'letto', moved: true }]); }, id);
+    await p.locator('.toast button').click();
+    ok('Annulla dopo un cambio: libro invariato e avviso', (await stato(id)).status === 'letto' && /^Non annullato: «/.test(await toastText(p)), (await stato(id)).status + ' ' + await toastText(p));
+  }
+  await load(p, [S('b1', { added: 1, title: 'Bad Actors' }), S('b2', { added: 2, title: 'T'.repeat(60) }), S('b3', { added: 3 })]);
+  const bad = (await ids(p.locator('#hero .next'))), badTab = bad.indexOf('b1');
+  await tabEl(badTab).click(); await p.locator('#hero [data-start]').click();
+  const tbx = await p.locator('.toast').boundingBox(), addB = await p.locator('.dock .tab.add .ico').boundingBox();
+  ok('avviso «In lettura: «Bad Actors»» su una riga, lontano da Aggiungi', /In lettura: «Bad Actors»/.test(await toastText(p)) && tbx.height <= 46 && tbx.width > 195
+    && !(tbx.x < addB.x + addB.width && addB.x < tbx.x + tbx.width && tbx.y < addB.y + addB.height && addB.y < tbx.y + tbx.height), JSON.stringify(tbx));
+  await p.locator('.toast button').click();
+  await tabEl(bad.indexOf('b2')).click(); await p.locator('#hero [data-start]').click();
+  ok('titolo di 60 caratteri tagliato a 40 con «…»', (await toastText(p)).includes('«' + 'T'.repeat(40) + '…»'), await toastText(p));
+  // Scegli per me: Inizia dalla terza linguetta e Annulla
+  await load(p, [S('c1', { added: 1 }), S('c2', { added: 2 }), S('c3', { added: 3 })]);
+  await p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]').click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
+  const cid = (await ids(p.locator('.sheet .next')))[2];
+  await p.locator('.sheet #ns-t2').click(); await p.locator('.sheet [data-start]').click(); await closed(p);
+  ok('Scegli per me: Inizia dalla terza linguetta', (await stato(cid)).status === 'in-lettura' && await p.locator('.sheet').count() === 0);
+  await p.locator('.toast button').click();
+  ok('Scegli per me: Annulla rimette il libro in pila', (await stato(cid)).status === 'da-leggere');
+  // Scegli per me insieme all'hero, titolo con virgolette, movimento ridotto
+  await load(p, [...pila, ...letti].map(b => ({ ...base, ...b })));
+  await p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]').click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
+  ok('scheda con la sua tablist ns-*', await p.locator('.sheet [role=tablist]').count() === 1 && await p.locator('.sheet #ns-t0').count() === 1);
+  ok('nessun id duplicato con hero e scheda aperti', await p.evaluate(() => { const a = [...document.querySelectorAll('[id]')].map(x => x.id); return a.length === new Set(a).size; }));
+  const heroSel = () => p.locator('#hero [role=tab][aria-selected=true]').getAttribute('id');
+  const h1 = await heroSel(); await p.locator('.sheet #ns-t2').click();
+  ok('cambiare linguetta nella scheda non cambia quella dell\'hero', await heroSel() === h1 && await p.locator('.sheet #ns-t2').getAttribute('aria-selected') === 'true');
+  await p.keyboard.press('Escape'); await closed(p);
+  await load(p, [{ id: 'q1', title: 'Primo', author: 'A', status: D, added: 1 }, { id: 'q2', title: 'Due "virgolette" <i>', author: 'B', status: D, added: 2 }]);
+  await tabEl(1).click();
+  ok('aria-label di Inizia con virgolette e HTML', await p.locator('#hero [data-start]').getAttribute('aria-label') === 'Inizia Due "virgolette" <i>');
+  await p.emulateMedia({ reducedMotion: 'reduce' }); await tabEl(0).click();
+  ok('movimento ridotto: nessuna animazione al cambio', await p.locator('#hero .ncard:visible').evaluate(n => getComputedStyle(n).animationName) === 'none');
+  await p.emulateMedia({ reducedMotion: null });
   await load(p, [{ id: 'u1', title: 'Unico <b>', author: 'A', status: D, added: 1 }]);
   ok('un solo libro in pila: una proposta, testo con esc', await p.locator('#hero .ncard').count() === 1 && /Unico <b>/.test(await p.locator('#hero .ncard b').innerText()));
+  ok('un solo libro: niente linguette né contatore, regione «Proposta»', await p.locator('#hero [role=tablist]').count() === 0 && await p.locator('#hero .n').count() === 0
+    && await p.locator('#hero .ncard').getAttribute('role') === 'region' && await p.locator('#hero .ncard').getAttribute('aria-label') === 'Proposta');
+  await load(p, [{ id: 'g1', title: 'Uno', author: 'A', status: D, added: 1 }, { id: 'g2', title: 'Due', author: 'B', status: D, added: 2 }]);
+  ok('due libri in pila: 2 linguette e «1 di 2»', await p.locator('#hero [role=tab]').count() === 2 && await p.locator('#hero .ncard:visible .n').textContent() === '1 di 2');
+  await load(p, pila.map(b => ({ ...base, ...b })));
+  ok('senza letti: terza linguetta «Ancora a caso»', (await p.locator('#hero [role=tab]').allTextContents()).join('|') === 'Il più vecchio|A caso|Ancora a caso', (await p.locator('#hero [role=tab]').allTextContents()).join('|'));
+  const lungo = 'Supercalifragilistichespiralidosoeancorapiulungoancoraunpo'.padEnd(70, 'x');
+  await load(p, [{ id: 'lg', title: lungo, author: 'A', status: D, added: 1 }]);
+  ok('titolo di 70 caratteri senza spazi: niente scorrimento laterale, Inizia da 44 px', (await p.evaluate(() => document.documentElement.scrollWidth <= 390)) && (await p.locator('#hero [data-start]').boundingBox()).height >= 44);
+  const wide = await newPage(browser, { width: 1366, height: 860 });
+  await load(wide, [...pila, ...letti].map(b => ({ ...base, ...b })));
+  const wb = await wide.locator('#hero .next').boundingBox();
+  ok('computer: scheda larga al massimo 600 px, una sola proposta visibile', wb.width <= 600 && await wide.locator('#hero .ncard:visible').count() === 1, wb.width);
+  await wide.close2();
+  // contrasto in chiaro e scuro
+  const contrasto = () => {
+    const rgb = s => { const m = String(s).match(/[\d.]+/g).map(Number); return m.slice(0, 3); };
+    const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+    const hex = v => { const h = getComputedStyle(document.documentElement).getPropertyValue(v).trim(); return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    const out = [];
+    for (const [sel, bg] of [['.ncard:not([hidden]) .why', '--paper'], ['.ncard:not([hidden]) .meta', '--paper'], ['.ntab[aria-selected=false]', '--paper-off']]) {
+      const el = document.querySelector('#hero ' + sel); if (!el) { out.push(0); continue; }
+      out.push(ratio(rgb(getComputedStyle(el).color), hex(bg)));
+    }
+    return out;
+  };
+  for (const dark of [false, true]) {
+    const q = await newPage(browser, { dark });
+    await load(q, [...pila, ...letti].map(b => ({ ...base, pages: 300, ...b })));
+    const r = await q.evaluate(contrasto);
+    ok(`contrasto scheda del catalogo (${dark ? 'scuro' : 'chiaro'}) almeno 4,5:1`, r.every(x => x >= 4.5), r.join(' '));
+    await q.close2();
+  }
   await load(p, letti);
   ok('pila vuota: niente hero né Scegli per me', await p.locator('#hero .next').count() === 0 && await p.locator('[data-choose]').count() === 0);
   ok('prossimo libro: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
