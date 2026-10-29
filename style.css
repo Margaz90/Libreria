@@ -564,9 +564,6 @@ html { scroll-behavior: smooth; }
 .slide .months { height: 140px; margin-top: auto; border-color: rgba(244, 234, 216, .25); }
 .slide .months i { background: rgba(240, 106, 92, .55); } .slide .months i.top { background: #F06A5C; }
 .slide .mlab { color: rgba(244, 234, 216, .7); margin-bottom: 30px; }
-.slide .fav { display: flex; gap: 16px; align-items: center; margin-top: 24px; min-width: 0; }
-.slide .fav .cover { width: 110px; flex: none; }
-.slide .fav > div { min-width: 0; }
 .story-votes { margin-top: auto; margin-bottom: 30px; display: flex; flex-direction: column; gap: 10px; }
 .story-votes .hbar { grid-template-columns: 80px 1fr 30px; font-size: 14px; }
 .story-votes .ht { background: rgba(244, 234, 216, .18); }
