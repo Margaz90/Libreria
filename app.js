@@ -1413,6 +1413,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.status === "letto" ? "" : " disabled"}></div>
       </div>
       <p class="hint err" id="f-date-err" role="alert" hidden></p>
+      <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
       <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
       <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
       <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
@@ -1469,7 +1470,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return null;
   }
   function wireDates(sheet) {
-    const sta = $("#f-started", sheet), fin = $("#f-finished", sheet), err = $("#f-date-err", sheet);
+    const sta = $("#f-started", sheet), fin = $("#f-finished", sheet), err = $("#f-date-err", sheet), est = $("#f-date-est", sheet), yr = $("#f-year", sheet);
     if (!sta || !fin) return;
     const say = (field, msg) => { err.hidden = !msg; err.textContent = msg || ""; [sta, fin].forEach(x => x.removeAttribute("aria-invalid")); if (msg && field) field.setAttribute("aria-invalid", "true"); };
     const limits = () => { const t = today(); sta.max = fin.value && fin.value < t ? fin.value : t; fin.min = sta.value || ""; fin.max = t; };
@@ -1478,6 +1479,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       el.addEventListener("change", () => {
         const pr = dateProblem(sta.value, fin.value, el === sta ? "started" : "finished");
         if (pr) { el.value = el.dataset.ok; say(el, pr.msg); } else { el.dataset.ok = el.value; say(null); }
+        est.hidden = true;
+        // Libro letto senza fine né anno: dall'inizio stimo la fine 20 giorni dopo (mai oltre oggi).
+        if (el === sta && sta.value && !pr && !fin.value && !fin.disabled && !(yr && yr.value)) {
+          const d = new Date(sta.value + "T12:00"); d.setDate(d.getDate() + 20);
+          const v = new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+          fin.value = fin.dataset.ok = v < today() ? v : today(); est.hidden = false;
+        }
         limits(); syncYearRow(sheet);
       });
     });

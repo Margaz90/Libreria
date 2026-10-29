@@ -47,8 +47,42 @@ async function segnale(browser) {
   await p.close2();
 }
 
+// Fine stimata: per un libro letto senza fine, scegliere l'inizio propone la fine 20 giorni dopo (mai nel futuro, mai sopra una fine o un anno già scritti).
+async function stima(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, rating: 0, pages: 200 };
+  await load(p, [
+    { ...base, id: 'e1', title: 'Letto senza date', author: 'A', status: 'letto' },
+    { ...base, id: 'e2', title: 'Letto con fine', author: 'B', status: 'letto', finished: '2025-05-01' },
+    { ...base, id: 'e3', title: 'Letto di recente', author: 'C', status: 'letto' },
+    { ...base, id: 'e4', title: 'In lettura', author: 'D', status: 'in-lettura', page: 10 },
+    { ...base, id: 'e5', title: 'Solo anno', author: 'E', status: 'letto', finishedYear: 2019 },
+  ]);
+  const close = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(200); const d = p.locator('.sheet [data-u="drop"], .sheet button:has-text("Scarta")'); if (await d.count()) await d.first().click(); await p.waitForSelector('.sheet', { state: 'detached' }).catch(() => {}); };
+  await openBook(p, 'e1'); await p.fill('#f-started', '2025-03-01');
+  const hint = await p.locator('#f-date-est').isVisible().catch(() => false);
+  ok('letto senza fine: scegliendo l\'inizio la fine diventa +20 giorni, con la nota', (await val(p, '#f-finished')) === '2025-03-21' && hint && await p.locator('#f-year-row').isHidden(), await val(p, '#f-finished'));
+  await save(p);
+  ok('fine stimata salvata con Salva', (await book(p, 'e1')).finished === '2025-03-21', JSON.stringify(await book(p, 'e1')));
+  await openBook(p, 'e2'); await p.fill('#f-started', '2025-04-01');
+  ok('fine già presente: non cambia', (await val(p, '#f-finished')) === '2025-05-01' && await p.locator('#f-date-est').isHidden());
+  await close();
+  await openBook(p, 'e3'); await p.fill('#f-started', iso(-5));
+  ok('inizio recente: la fine stimata non va nel futuro (oggi)', (await val(p, '#f-finished')) === iso(), await val(p, '#f-finished'));
+  await close();
+  await openBook(p, 'e4'); await p.fill('#f-started', iso(-30));
+  ok('in lettura: nessuna fine stimata', (await val(p, '#f-finished')) === '');
+  await close();
+  await openBook(p, 'e5'); await p.fill('#f-started', '2019-02-01');
+  ok('solo l\'anno già scritto: nessuna fine stimata', (await val(p, '#f-finished')) === '' && (await val(p, '#f-year')) === '2019');
+  await close();
+  ok('fine stimata: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await segnale(browser);
+  await stima(browser);
   const p = await newPage(browser);
   const base = { added: 1, rating: 0 };
   await load(p, [
