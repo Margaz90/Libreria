@@ -1176,6 +1176,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       ${d.length ? `<p class="ys-d">${d.join(". ")}.</p>` : ""}
     </section>`;
   }
+  let statsLast = null; // ultimi calcoli, per ridisegnare una sola mensola
   function renderStats(st) {
     const S = st.sempre;
     if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
@@ -1293,7 +1294,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function render() {
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
-    if (state.view === "stats") main.innerHTML = renderStats(computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
+    const sk = state.view === "stats" ? statsFocusKey() : null;
+    if (state.view === "stats") main.innerHTML = renderStats(statsLast = computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
@@ -1301,6 +1303,22 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     $("#toolbar").hidden = state.view === "stats";
     wireMain(main);
+    if (sk) statsFocusRestore(sk);
+  }
+  // Ridisegnando le Statistiche il focus non si perde: torna sul dorso (o sul titolo dell'anno, o su «Statistiche»).
+  const sheetOpen = () => !!document.querySelector("#scrim:not(.closing)");
+  function statsFocusKey() {
+    const inYs = el => el && el.closest && el.closest("#main section.ys");
+    const a = document.activeElement;
+    const el = inYs(a) ? a : sheetOpen() && inYs(lastFocus) ? lastFocus : null;
+    if (!el) return null;
+    const sec = el.closest("section.ys");
+    return { id: el.dataset ? el.dataset.id || null : null, year: Number(sec.dataset.year) };
+  }
+  function statsFocusRestore(k) {
+    const m = $("#main"), t = (k.id && m.querySelector(`section.ys [data-id="${CSS.escape(k.id)}"]`)) || m.querySelector(`#ys-${k.year}`) || m.querySelector(".stats-title");
+    if (!t) return;
+    if (sheetOpen()) lastFocus = t; else t.focus({ preventScroll: true });
   }
   function wireMain(root) {
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
@@ -1399,7 +1417,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const cancel = () => { clearTimeout(t); t = null; };
     el.addEventListener("pointerdown", e => {
       x0 = e.clientX; y0 = e.clientY; cancel();
-      t = setTimeout(() => { t = null; el.dataset.lp = "1"; const b = state.books.find(x => x.id === el.dataset.id); if (b) openQuick(b); }, 480);
+      t = setTimeout(() => { t = null; el.dataset.lp = "1"; const b = state.books.find(x => x.id === el.dataset.id); if (el.closest("section.ys")) el.focus({ preventScroll: true }); if (b) openQuick(b); }, 480);
     });
     el.addEventListener("pointermove", e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
     ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, cancel));

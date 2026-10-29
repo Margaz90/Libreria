@@ -203,6 +203,16 @@ async function mensole(browser) {
   ok('nessuna riga dell\'anno nel 2019 (1 libro)', !(await p.locator('section.ys[data-year="2019"] .ys-d').count()));
   ok('segnalibro sulla mensola con il racconto', await p.locator('section.ys[data-year="2025"] .ys-shelf.ribbon').count() === 1 && !(await p.locator('section.ys[data-year="2019"] .ribbon').count()));
   ok('pulsante «Il racconto» alto almeno 44 px', (await p.locator('.story-btn').first().boundingBox()).height >= 44);
+  await p.locator('section.ys[data-year="2025"] [data-id="Due"]').click();
+  ok('tocco su un dorso: si apre la scheda di «Due»', await p.locator('.sheet').isVisible() && /Due/.test(await p.locator('.sheet').innerText()));
+  await p.fill('#f-started', '2024-08-20'); await p.fill('#f-finished', '2024-08-22'); await save(p);
+  ok('«Due» passa sulla mensola del 2024 senza ricaricare', await p.locator('section.ys[data-year="2024"] [data-id="Due"]').count() === 1 && !(await p.locator('section.ys[data-year="2025"] [data-id="Due"]').count()));
+  ok('dopo il salvataggio il focus torna sul dorso', await p.evaluate(() => document.activeElement?.dataset?.id) === 'Due');
+  const lp = p.locator('section.ys[data-year="2019"] [data-id="Cinque"]');
+  await lp.dispatchEvent('pointerdown', { clientX: 5, clientY: 5 }); await p.waitForTimeout(700);
+  await p.locator('.quick [data-st="da-leggere"]').click(); await p.waitForTimeout(500);
+  ok('unico libro dell\'anno tolto: niente mensola 2019, focus sul titolo', !(await p.locator('section.ys[data-year="2019"]').count()) && await p.evaluate(() => document.activeElement?.classList.contains('stats-title')));
+  ok('mensole: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 
   const B = (id, extra) => ({ id, title: id, author: 'A', status: 'letto', finished: '2025-05-05', added: 1, rating: 0, ...extra });
