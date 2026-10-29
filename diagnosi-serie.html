@@ -26,6 +26,7 @@
 <button id="copy" class="alt">Copia il risultato</button>
 <details open><summary>Prova la ricerca per ISBN</summary>
   <input id="isbn" placeholder="ISBN (es. 9788806219215)" inputmode="numeric"><button id="isbn-go">Prova questo ISBN</button>
+  <button id="isbn-g" class="alt">Solo Google, 3 volte per forma</button>
 </details>
 <details><summary>Prova un altro libro</summary>
   <input id="t" placeholder="Titolo"><input id="a" placeholder="Autore"><input id="i" placeholder="ISBN (facoltativo)">
@@ -68,7 +69,8 @@
           else if (j.docs) info = j.docs.length + " risultati" + (j.docs.length ? " (" + j.docs.slice(0, 3).map(d => d.title).join(" | ") + ")" : "");
           else if (j.error) info = "errore: " + JSON.stringify(j.error).slice(0, 160);
         } catch { info = "(risposta non JSON)"; }
-        log(`   · ${k}: ${r.status} in ${ms} ms — ${info}`);
+        const gq = k === "Google" ? " [" + (new URL(u).searchParams.get("q") || "") + "]" : "";
+        log(`   · ${k}${gq}: ${r.status} in ${ms} ms — ${info}`);
         return r;
       } catch (e) { log(`   · ${k}: ERRORE ${e && e.name || e} dopo ${Date.now() - t0} ms`); throw e; }
     };
@@ -188,6 +190,20 @@ OPTIONAL { ?st pq:P1545 ?no } OPTIONAL { ?st pq:P156 ?nx } FILTER NOT EXISTS { ?
       log(`  = ${rs.length} risultati${rs.errors && rs.errors.length ? " · errori: " + rs.errors.join(", ") : ""}`);
       rs.slice(0, 8).forEach(r => log(`    · ${r.title} — ${r.author || "?"} · ISBN ${r.isbn || "-"}${r.ita ? " · italiano" : ""}`));
     } catch (e) { log("  = errore " + (e && (e.code || e.message) || e)); }
+  };
+  // Google con ogni forma dell'ISBN, 3 volte ciascuna: per vedere se risponde in modo incostante.
+  document.getElementById("isbn-g").onclick = async () => {
+    const w = frame.contentWindow, i = document.getElementById("isbn").value.replace(/[^\dXx]/g, "").toUpperCase();
+    if (!/^(\d{9}[\dX]|\d{13})$/.test(i)) { log("Scrivi un ISBN valido."); return; }
+    const t10 = x => { const c = x.slice(3, 12), s = [...c].reduce((t, d, k) => t + Number(d) * (10 - k), 0), k = (11 - s % 11) % 11; return c + (k === 10 ? "X" : k); };
+    const t13 = x => { const c = "978" + x.slice(0, 9), s = [...c].reduce((t, d, k) => t + Number(d) * (k % 2 ? 3 : 1), 0); return c + (10 - s % 10) % 10; };
+    const i13 = i.length === 13 ? i : t13(i), i10 = i.length === 10 ? i : t10(i);
+    log(`\n▶ Google, ISBN ${i13} / ${i10}`);
+    for (const q of ["isbn:" + i13, "isbn:" + i10, i13, i10]) for (let n = 0; n < 3; n++) {
+      await w.fetch("https://www.googleapis.com/books/v1/volumes?key=AIzaSyDsTZ7a1APohAMSTQ_eUuVOKKwoe7ozeLE&printType=books&maxResults=12&q=" + encodeURIComponent(q)).catch(() => {});
+      await new Promise(r => setTimeout(r, 800));
+    }
+    log("Fine.");
   };
   document.getElementById("copy").onclick = async () => {
     try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Copiato"; }

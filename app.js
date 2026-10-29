@@ -419,12 +419,19 @@
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
     let j = await r.json();
     // Per un ISBN Google a volte risponde «niente» e alla richiesta dopo trova il libro (succede soprattutto quando
-    // ha in archivio solo l'ISBN-10): riprovo con l'altra forma, poi con la stessa.
+    // ha in archivio solo l'ISBN-10): riprovo con l'altra forma, poi con il solo numero, poi con la stessa dopo una pausa.
+    // Ultimo tentativo: il solo numero (ricerca a testo libero, altro indice), tenendo solo i volumi con quell'ISBN.
     if (!(j.items || []).length && /^isbn:/.test(q)) {
-      const i = q.slice(5), alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i);
-      for (const u of [alt && url.replace(encodeURIComponent(q), encodeURIComponent("isbn:" + alt)), url].filter(Boolean)) {
-        await sleep(700);
-        try { const r2 = await fetchT(u); if (r2.ok) j = await r2.json(); } catch {}
+      const i = q.slice(5), alt = i.length === 13 ? isbn10From13(i) : isbn13From10(i), mine = new Set([i, alt].filter(Boolean));
+      const withQ = x => url.replace("&q=" + encodeURIComponent(q), "&q=" + encodeURIComponent(x));
+      for (const [u, ms, plain] of [[alt && withQ("isbn:" + alt), 700], [withQ(i), 700, true], [url, 1500]]) {
+        if (!u) continue;
+        await sleep(ms);
+        try {
+          const r2 = await fetchT(u); if (!r2.ok) continue;
+          const j2 = await r2.json();
+          j = plain ? { items: (j2.items || []).filter(it => ((it.volumeInfo || {}).industryIdentifiers || []).some(x => mine.has(String(x.identifier || "").replace(/[^\dX]/gi, "").toUpperCase()))) } : j2;
+        } catch {}
         if ((j.items || []).length) break;
       }
     }

@@ -126,12 +126,22 @@ export default async function ({ browser }) {
   ok('Google: ISBN noto solo nella forma ISBN-10 → trovato al secondo tentativo', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).map(u => decodeURIComponent(u).match(/isbn:\w+/)[0]).join(','));
   await p.close2();
 
-  // 5d. ISBN che Google non conosce: tre richieste (ISBN-13, ISBN-10, di nuovo ISBN-13), poi il messaggio
+  // 5d. ISBN che Google non conosce: isbn:13, isbn:10, solo il numero, di nuovo isbn:13, poi il messaggio
+  const forma = u => new URL(u).searchParams.get('q');
   p = await apri(browser, () => ({ body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  const forme = isbnChiamate(p).map(u => decodeURIComponent(u).match(/isbn:\w+/)[0]).join(',');
-  ok('Google: ISBN sconosciuto → 13, 10, 13 e poi «nessuna fonte»', forme === 'isbn:9788806219215,isbn:8806219219,isbn:9788806219215' && /nessuna fonte/i.test(r.stato), forme + ' · ' + r.stato);
+  const forme = p.googleUrls.map(forma).join(',');
+  ok('Google: ISBN sconosciuto → isbn:13, isbn:10, numero, isbn:13 e poi «nessuna fonte»', forme === 'isbn:9788806219215,isbn:8806219219,9788806219215,isbn:9788806219215' && /nessuna fonte/i.test(r.stato), forme + ' · ' + r.stato);
+  await p.close2();
+
+  // 5e. Trovato solo con il numero senza «isbn:»: si tiene il volume con quell'ISBN (anche se lo ha solo a 10 cifre), non gli altri
+  const ALTRO = { volumeInfo: { title: 'Libro qualunque', authors: ['X'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780000000002' }] } };
+  const SOLO10 = { volumeInfo: { title: 'Underworld', authors: ['Don DeLillo'], industryIdentifiers: [{ type: 'ISBN_10', identifier: '8806219219' }] } };
+  p = await apri(browser, u => (forma(u) === '9788806219215' ? { body: { items: [ALTRO, SOLO10] } } : { body: VUOTO }));
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: trovato con il solo numero, tenuto solo il volume con quell\'ISBN', r.titoli.join('|') === 'Underworld', p.googleUrls.map(forma).join(',') + ' · ' + r.titoli.join('|'));
   await p.close2();
 
   // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono
