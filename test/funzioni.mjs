@@ -247,17 +247,27 @@ async function prossimo(browser) {
 
   // Interfaccia
   const base = { rating: 0 };
-  await load(p, [...pila, ...letti].map(b => ({ ...base, pages: 300, ...b })));
+  await load(p, [...pila, ...letti].map(b => ({ ...base, pages: 300, callNo: '823.92 HER', ...b })));
   const hero = p.locator('#hero .next');
+  const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
   ok('hero senza letture mostra Cosa leggo adesso?', await hero.isVisible() && /Cosa leggo adesso\?/.test(await hero.innerText()) && await hero.locator('.ncard').count() === 3
-    && /Mick Herron · 300 pp\./.test(await hero.locator('.ncard').first().innerText()));
+    && await hero.locator('.ncard').first().evaluate(n => /Mick Herron/.test(n.textContent) && /300 pagine/.test(n.textContent)));
+  const tabsT = await hero.locator('[role=tab]').allTextContents(), ctrs = await p.locator('#hero .ncard:visible .n').first();
+  ok('linguette: tablist con Affine, Il più vecchio, A caso', await hero.locator('[role=tablist]').getAttribute('aria-label') === 'Criteri della proposta'
+    && tabsT.join('|') === 'Affine|Il più vecchio|A caso' && await hero.locator('[role=tab]').first().getAttribute('aria-selected') === 'true'
+    && await hero.locator('.ncard:visible').count() === 1 && await hero.locator('[data-start]').count() === 1, tabsT.join('|'));
+  const l1 = await ids(hero);
+  ok('aria-controls e aria-labelledby collegati', await p.locator('#nh-t1').getAttribute('aria-controls') === 'nh-p1' && await p.locator('#nh-p1').getAttribute('aria-labelledby') === 'nh-t1' && await p.locator('#nh-p1').getAttribute('data-next') === l1[1]);
+  ok('contatore 1 di 3 nascosto a VoiceOver', (await ctrs.textContent()) === '1 di 3' && await ctrs.getAttribute('aria-hidden') === 'true');
+  ok('segnatura con «Segnatura» solo per VoiceOver', await hero.locator('.ncard:visible .call .sr').textContent() === 'Segnatura ');
+  const why0 = await next([...pila, ...letti]);
+  ok('motivo senza punto nel testo', await hero.locator('.ncard').first().locator('.why').textContent() === why0[0].reason);
   const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
   ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
   await p.locator('#main [data-id="n2"]').first().click(); await p.waitForSelector('.sheet details.edit');
   await p.locator('.sheet details.edit summary').click(); await p.locator('#d-title').fill('Joe Country (nuovo)'); await p.locator('#s-save').click();
   await p.waitForFunction(() => /Joe Country \(nuovo\)/.test(document.querySelector('#hero .ncard[data-next="n2"]')?.textContent || ''), null, { timeout: 3000 }).catch(() => {});
-  ok('titolo di un libro proposto modificato: l\'hero mostra il nuovo', /Joe Country \(nuovo\)/.test(await p.locator('#hero .ncard[data-next="n2"]').innerText().catch(() => '')));
-  const ids = async root => root.locator('.ncard').evaluateAll(n => n.map(x => x.dataset.next));
+  ok('titolo di un libro proposto modificato: l\'hero mostra il nuovo', /Joe Country \(nuovo\)/.test(await p.locator('#hero .ncard[data-next="n2"]').textContent().catch(() => '')));
   const before = await ids(hero);
   const moved = prev => p.waitForFunction(prev => [...document.querySelectorAll('#hero .ncard')].map(x => x.dataset.next).join() !== prev, prev, { timeout: 3000 }).catch(() => {});
   await p.locator('#n-more').click(); await moved(before.join());
@@ -292,6 +302,40 @@ async function prossimo(browser) {
 
   await load(p, [{ id: 'u1', title: 'Unico <b>', author: 'A', status: D, added: 1 }]);
   ok('un solo libro in pila: una proposta, testo con esc', await p.locator('#hero .ncard').count() === 1 && /Unico <b>/.test(await p.locator('#hero .ncard b').innerText()));
+  ok('un solo libro: niente linguette né contatore, regione «Proposta»', await p.locator('#hero [role=tablist]').count() === 0 && await p.locator('#hero .n').count() === 0
+    && await p.locator('#hero .ncard').getAttribute('role') === 'region' && await p.locator('#hero .ncard').getAttribute('aria-label') === 'Proposta');
+  await load(p, [{ id: 'g1', title: 'Uno', author: 'A', status: D, added: 1 }, { id: 'g2', title: 'Due', author: 'B', status: D, added: 2 }]);
+  ok('due libri in pila: 2 linguette e «1 di 2»', await p.locator('#hero [role=tab]').count() === 2 && await p.locator('#hero .ncard:visible .n').textContent() === '1 di 2');
+  await load(p, pila.map(b => ({ ...base, ...b })));
+  ok('senza letti: terza linguetta «Ancora a caso»', (await p.locator('#hero [role=tab]').allTextContents()).join('|') === 'Il più vecchio|A caso|Ancora a caso', (await p.locator('#hero [role=tab]').allTextContents()).join('|'));
+  const lungo = 'Supercalifragilistichespiralidosoeancorapiulungoancoraunpo'.padEnd(70, 'x');
+  await load(p, [{ id: 'lg', title: lungo, author: 'A', status: D, added: 1 }]);
+  ok('titolo di 70 caratteri senza spazi: niente scorrimento laterale, Inizia da 44 px', (await p.evaluate(() => document.documentElement.scrollWidth <= 390)) && (await p.locator('#hero [data-start]').boundingBox()).height >= 44);
+  const wide = await newPage(browser, { width: 1366, height: 860 });
+  await load(wide, [...pila, ...letti].map(b => ({ ...base, ...b })));
+  const wb = await wide.locator('#hero .next').boundingBox();
+  ok('computer: scheda larga al massimo 600 px, una sola proposta visibile', wb.width <= 600 && await wide.locator('#hero .ncard:visible').count() === 1, wb.width);
+  await wide.close2();
+  // contrasto in chiaro e scuro
+  const contrasto = () => {
+    const rgb = s => { const m = String(s).match(/[\d.]+/g).map(Number); return m.slice(0, 3); };
+    const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+    const hex = v => { const h = getComputedStyle(document.documentElement).getPropertyValue(v).trim(); return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    const out = [];
+    for (const [sel, bg] of [['.ncard:not([hidden]) .why', '--paper'], ['.ncard:not([hidden]) .meta', '--paper'], ['.ntab[aria-selected=false]', '--paper-off']]) {
+      const el = document.querySelector('#hero ' + sel); if (!el) { out.push(0); continue; }
+      out.push(ratio(rgb(getComputedStyle(el).color), hex(bg)));
+    }
+    return out;
+  };
+  for (const dark of [false, true]) {
+    const q = await newPage(browser, { dark });
+    await load(q, [...pila, ...letti].map(b => ({ ...base, pages: 300, ...b })));
+    const r = await q.evaluate(contrasto);
+    ok(`contrasto scheda del catalogo (${dark ? 'scuro' : 'chiaro'}) almeno 4,5:1`, r.every(x => x >= 4.5), r.join(' '));
+    await q.close2();
+  }
   await load(p, letti);
   ok('pila vuota: niente hero né Scegli per me', await p.locator('#hero .next').count() === 0 && await p.locator('[data-choose]').count() === 0);
   ok('prossimo libro: niente scorrimento laterale e nessun errore', (await p.evaluate(w => document.documentElement.scrollWidth <= w, 390)) && !p.errs.length, p.errs.join(' / '));
