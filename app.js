@@ -1544,11 +1544,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   /* ---------- schede ---------- */
   let lastFocus = null, sheetGuard = null, sheetCancel = null;
-  function openSheet(html) {
+  function openSheet(html, cls = "") {
     lastFocus = document.activeElement; sheetGuard = null;
     document.querySelectorAll(".toast").forEach(t => t.remove());
     const layer = $("#layer");
-    layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+    layer.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cls ? " " + cls : ""}" role="dialog" aria-modal="true">${html}</div></div>`;
     $("#scrim").onclick = e => { if (e.target.id === "scrim") dismissSheet(); };
     document.addEventListener("keydown", escClose);
     document.body.style.overflow = "hidden";
@@ -1591,25 +1591,46 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
 
-  function readingFields(b) {
-    return `
+  const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
+  const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
+  const rateHTML = b => `<div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
+  // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
+  function readingHead(b) {
+    return `<div class="rf rf-head">
       <div class="field"><span class="label" id="f-status-l">Stato</span>
         <input type="hidden" id="f-status" value="${esc(b.status || "da-leggere")}">
         <div class="seg" role="radiogroup" aria-labelledby="f-status-l">${["da-leggere", "in-lettura", "letto"].map(k => `<button type="button" role="radio" data-v="${k}" aria-checked="${b.status === k}">${STATUS_ONE[k]}</button>`).join("")}<span class="seg-ink"></span></div>
       </div>
-      <div>
-        <div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div></div>
+      ${b.status === "letto" ? rateHTML(b) : ""}
+      <div class="period" id="f-period">
+        <p class="sr" id="f-period-sr"></p>
+        <p class="pline"><span class="pw pl" id="f-pw-lead" aria-hidden="true" hidden></span><span class="pc" id="f-pc-start"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-started" type="date" aria-label="Iniziato il" value="${esc(b.started || "")}"></label></span><span class="pc" id="f-pc-end"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-finished" type="date" aria-label="Finito il" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></label></span></p>
+        <p class="psub" id="f-psub" hidden></p>
+        <p class="hint" id="f-pend-hint" hidden>La data di fine si sceglie quando lo segni come letto.</p>
+        <p class="hint err" id="f-date-err" role="alert" hidden></p>
+        <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
+        <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
+        ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
       </div>
-      <div class="grid2">
-        <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
-        <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></div>
+      <div class="pblk" id="f-pblk">
+        <div class="pbig"><label for="f-page">pag.</label> <input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"> <span id="f-pof"></span></div>
+        <input type="range" id="f-range" min="0" max="${esc(b.pages || 0)}" value="${esc(b.page || 0)}" aria-label="Avanzamento di ${esc(b.title || "")}">
+        <div class="pq"><button type="button" class="btn" id="f-p10" aria-label="Aggiungi 10 pagine a ${esc(b.title || "")}">+10</button><button type="button" class="btn" id="f-pstep" data-step="${esc(b.pageStep || "")}" aria-label="Aggiungi ${esc(b.pageStep || "")} pagine a ${esc(b.title || "")}"${b.pageStep ? "" : " hidden"}>+${esc(b.pageStep || "")}</button></div>
       </div>
-      <p class="hint err" id="f-date-err" role="alert" hidden></p>
-      <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
-      <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
-      <div class="field"><label for="f-page">Pagina attuale</label><input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"></div>
-      <div class="field"><label for="f-notes">Note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
-      <div class="field"><label for="f-quote">Citazione preferita</label><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>`;
+    </div>`;
+  }
+  function readingMemo(b) {
+    return `<div class="rf rf-memo">
+      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">“</span><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>
+      <div class="field notes"><label for="f-notes">Le tue note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
+      ${b.status !== "letto" ? rateHTML(b) : ""}
+    </div>`;
+  }
+  // Copertina del frontespizio e quella di «Sullo scaffale» insieme.
+  const lookCover = b => coverHTML(b).replace('class="cover', 'class="looks-cover cover');
+  function coverSync(sheet, b) {
+    const a = $(".sheet-top .cover", sheet); if (a) a.outerHTML = coverHTML(b);
+    const l = $(".looks-cover", sheet); if (l) l.outerHTML = lookCover(b);
   }
   function dataFields(b) {
     return `
@@ -1639,10 +1660,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         $("#f-status", sheet).value = btn.dataset.v; sync();
         const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
         if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
-        syncYearRow(sheet); syncPage(sheet);
+        syncYearRow(sheet); syncPage(sheet); syncPeriod(sheet);
+        const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating || 0, btn.dataset.v);
       });
       const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", () => syncYearRow(sheet));
-      wireDates(sheet);
+      wireDates(sheet); wireDateSlots(sheet);
       const dp = $("#d-pages", sheet); if (dp) dp.addEventListener("input", () => syncPage(sheet));
       syncPage(sheet);
       requestAnimationFrame(sync);
@@ -1650,6 +1672,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
+      const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating, ($("#f-status", sheet) || { value: "letto" }).value);
     });
   }
   // Coerenza delle date di lettura: né nel futuro, la fine non prima dell'inizio. `edited` dice quale campo si sta cambiando.
@@ -1683,7 +1706,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
           fin.value = fin.dataset.ok = v < today() ? v : today(); fin.dataset.auto = "1"; est.hidden = false;
           est.textContent = (moved ? "Fine spostata a 20 giorni dopo il nuovo inizio" : "Fine stimata: 20 giorni dopo l'inizio") + ", modificala se serve.";
         }
-        limits(); syncYearRow(sheet);
+        limits(); syncYearRow(sheet); syncPeriod(sheet);
       });
     });
     limits();
@@ -1697,15 +1720,79 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     err.hidden = false; err.textContent = pr.msg; el.setAttribute("aria-invalid", "true"); el.focus();
     return true;
   }
+  // Riscrive solo testi e `hidden` della frase delle date, del ritmo e dei suggerimenti: i campi data non si ricreano mai.
+  function syncPeriod(sheet) {
+    const st0 = $("#f-status", sheet), per = $("#f-period", sheet); if (!st0 || !per) { syncColophon(sheet); return; }
+    const st = st0.value, yv = $("#f-year", sheet), y = yv ? Number(yv.value.trim()) : 0;
+    const started = $("#f-started", sheet).value, finished = $("#f-finished", sheet).value, pages = parseInt($("#d-pages", sheet).value, 10) || 0;
+    const r = periodText({ status: st, started, finished, year: Number.isInteger(y) && y >= 1900 && y <= new Date().getFullYear() ? y : "", pages });
+    const lead = $("#f-pw-lead", sheet); lead.textContent = r.lead; lead.hidden = !r.lead;
+    [["#f-pc-start", r.showStart, r.startWord, r.startText], ["#f-pc-end", r.showEnd, r.endWord, r.endText]].forEach(([id, show, word, text]) => {
+      const c = $(id, sheet); c.hidden = !show; c.querySelector(".pw").textContent = word; c.querySelector(".dv").textContent = text;
+    });
+    let sub = r.sub;
+    if (st === "in-lettura") { const t = today(); sub = paceText(readingPace({ started, page: parseInt($("#f-page", sheet).value, 10) || 0, pages }, t), t); }
+    const ps = $("#f-psub", sheet); ps.textContent = sub; ps.hidden = !sub || st === "da-leggere";
+    $("#f-pend-hint", sheet).hidden = st !== "in-lettura";
+    $("#f-period-sr", sheet).textContent = r.sr + (st === "in-lettura" && sub ? " " + sub : "");
+    syncColophon(sheet);
+  }
+  // Colophon: dati del libro (dai campi della scheda) e chiusa «Finito di leggere…». Non c'è in Nuovo libro.
+  const MFMT = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
+  function syncColophon(sheet) {
+    const colo = $("#s-colo", sheet); if (!colo) return;
+    const val = id => ($(id, sheet).value || "").trim(), facts = $("#s-colo-facts", sheet), rows = [];
+    const row = (...parts) => { const p = document.createElement("p"); parts.forEach(x => { if (typeof x === "string") p.append(x); else { const b = document.createElement("b"); b.textContent = x.t; if (x.mono) b.className = "mono"; p.append(b); } }); rows.push(p); };
+    const year = val("#d-year"), pages = parseInt(val("#d-pages"), 10) || 0, genre = val("#d-genre"), call = val("#d-call"), isbn = colo.dataset.isbn || "";
+    if (year) row("Pubblicato nel ", { t: year });
+    if (pages && genre) row({ t: String(pages) }, (pages === 1 ? " pagina, " : " pagine, ") + genre.toLowerCase());
+    else if (pages) row({ t: String(pages) }, pages === 1 ? " pagina" : " pagine");
+    else if (genre) row(genre[0].toUpperCase() + genre.slice(1));
+    if (call) row("Segnatura ", { t: call, mono: true });
+    if (isbn) row("ISBN ", { t: isbn });
+    if (!rows.length) row("Nessun dato del libro: aggiungili con «Modifica i dati del libro».");
+    facts.replaceChildren(...rows);
+    const f = $("#f-status", sheet), st = f ? f.value : colo.dataset.st, S = f ? $("#f-started", sheet).value : "", F = f ? $("#f-finished", sheet).value : "", yv = $("#f-year", sheet) ? Number($("#f-year", sheet).value.trim()) : 0;
+    let l1 = "Nella lista dei desideri";
+    if (st === "letto") l1 = isoOk(F) ? "Finito di leggere nel mese di " + MFMT.format(new Date(F + "T12:00")) : Number.isInteger(yv) && yv >= 1900 && yv <= new Date().getFullYear() ? "Finito di leggere nel " + yv : "Finito di leggere (data da aggiungere)";
+    else if (st === "in-lettura") l1 = isoOk(S) ? "In lettura dal mese di " + MFMT.format(new Date(S + "T12:00")) : "In lettura";
+    else if (st === "da-leggere") l1 = "In attesa di essere letto";
+    $(".l1", colo).textContent = l1;
+  }
+  // Data toccabile: il campo vero è sovrapposto e trasparente; sul computer il clic apre il calendario con showPicker().
+  function wireDateSlots(sheet) {
+    ["#f-started", "#f-finished"].forEach(id => {
+      const el = $(id, sheet); if (!el) return;
+      const open = () => { try { el.showPicker(); } catch {} };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") open(); });
+    });
+    sheet.querySelectorAll("#f-year, #f-page, [id^=d-]").forEach(el => el.addEventListener("input", () => syncPeriod(sheet)));
+    syncPeriod(sheet);
+  }
   // «oppure solo l'anno» solo per un libro letto senza data di fine
   function syncYearRow(sheet) { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); }
   // Un libro letto ha letto tutte le pagine: la pagina attuale segue il totale (e non si cambia a mano).
   function syncPage(sheet) {
     const pg = $("#f-page", sheet); if (!pg) return;
     if (pg.dataset.orig === undefined) pg.dataset.orig = pg.value;
-    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || 0, done = $("#f-status", sheet).value === "letto" && tot > 0;
-    pg.readOnly = done; pg.value = done ? tot : pg.dataset.orig;
+    const tot = parseInt($("#d-pages", sheet) && $("#d-pages", sheet).value, 10) || 0, st = $("#f-status", sheet).value, done = st === "letto" && tot > 0;
+    if (done) { pg.readOnly = true; pg.value = tot; } else { if (pg.readOnly) pg.value = pg.dataset.orig; pg.readOnly = false; } // si riprende il valore di apertura solo tornando da Letto
     pg.placeholder = tot ? "su " + tot : "";
+    const blk = $("#f-pblk", sheet); if (blk) blk.hidden = st !== "in-lettura";
+    const rg = $("#f-range", sheet), cur = parseInt(pg.value, 10) || 0, pct = tot ? Math.min(100, Math.round(cur / tot * 100)) : 0;
+    if (rg) { rg.hidden = !tot; rg.max = tot; rg.value = cur; rg.style.setProperty("--pct", (tot ? Math.min(100, cur / tot * 100) : 0) + "%"); rg.setAttribute("aria-valuetext", `pagina ${cur} di ${tot}`); }
+    const pof = $("#f-pof", sheet); if (pof) pof.textContent = tot ? `di ${tot} · ${pct}%` : "di ?";
+  }
+  // Cursore, +10 e +N nella scheda: cambiano solo il campo della pagina (si salva con Salva) e non toccano `pageStep`.
+  function wirePageCtl(sheet) {
+    const pg = $("#f-page", sheet); if (!pg) return;
+    const fire = () => pg.dispatchEvent(new Event("input", { bubbles: true }));
+    const add = n => { const tot = parseInt($("#d-pages", sheet).value, 10) || 0, v = (parseInt(pg.value, 10) || 0) + n; pg.value = tot ? Math.min(v, tot) : v; fire(); };
+    $("#f-range", sheet).addEventListener("input", e => { pg.value = e.target.value; fire(); });
+    $("#f-p10", sheet).onclick = () => add(10);
+    const st = $("#f-pstep", sheet); st.onclick = () => add(Number(st.dataset.step) || 0);
+    pg.addEventListener("input", () => syncPage(sheet));
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
   function badYear(sheet) {
@@ -1771,7 +1858,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const head = (b.synopsis || "").split("\n")[0];
       b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", hit.synopsis].filter(Boolean).join("\n");
     }
-    const prev = $(".sheet-top .cover", sheet); if (prev) prev.outerHTML = coverHTML({ ...b, title: hit.title || b.title, author: hit.author || b.author });
+    coverSync(sheet, { ...b, title: hit.title || b.title, author: hit.author || b.author });
+    const colo = $("#s-colo", sheet); if (colo) colo.dataset.isbn = b.isbn || "";
+    syncPeriod(sheet);
   }
 
   function searchBlock(prefill, scan = false) {
@@ -1899,50 +1988,110 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const t = `<b>${no ? "#" + esc(no) + " " : ""}${esc(x ? x.title : r.title)}</b>`;
     return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} <span aria-hidden="true">›</span></span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next="${esc(r.title)}"${r.no ? ` data-no="${esc(r.no)}"` : ""} aria-label="Aggiungi «${esc(r.title)}» alla lista dei desideri">Lista dei desideri</button>`}</div>`;
   }
+  // ---- Scheda «Frontespizio»: frasi delle date e ritmo di lettura (funzioni pure) ----
+  const DFMT = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
+  const isoOk = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T12:00"));
+  const longDate = (iso, year = true) => { if (!isoOk(iso)) return ""; const t = DFMT.format(new Date(iso + "T12:00")); return year ? t : t.replace(/\s\d{4}$/, ""); };
+  const dayDiff = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
+  const addDays = (iso, n) => { const d = new Date(iso + "T12:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const prep = (base, iso) => { const g = isoOk(iso) ? Number(iso.slice(8)) : 0; return g === 8 || g === 11 ? ({ il: "l'", dal: "dall'", al: "all'" })[base] : base + " "; };
+  const nPages = n => n + (n === 1 ? " pagina" : " pagine");
+  function periodText({ status, started, finished, year, pages }) {
+    const S = isoOk(started) ? started : "", F = isoOk(finished) ? finished : "", ph = "scegli la data", pg = Number(pages) > 0 ? Number(pages) : 0;
+    const r = { lead: "", startWord: "", startText: ph, endWord: "", endText: ph, showStart: false, showEnd: false, sub: "", sr: "" };
+    if (status === "da-leggere") { r.lead = "Ancora da iniziare."; r.sr = r.lead; return r; }
+    if (status === "in-lettura") {
+      r.showStart = true; r.startWord = "In lettura " + prep("dal", S); if (S) r.startText = longDate(S);
+      r.sr = "In lettura dal" + (S ? " " + longDate(S) : ": data da scegliere") + "."; return r;
+    }
+    if (status !== "letto") return r;
+    r.showStart = r.showEnd = true; r.sub = pg ? nPages(pg) : "";
+    const y = year && !F ? Number(year) : 0, sx = S ? longDate(S) : "", fx = F ? longDate(F) : "";
+    if (S && F) {
+      const n = dayDiff(S, F) + 1;
+      r.startWord = "Letto " + prep("dal", S); r.endWord = " " + prep("al", F);
+      r.startText = longDate(S, S.slice(0, 4) !== F.slice(0, 4)); r.endText = fx;
+      r.sub = n < 1 ? r.sub : [n === 1 ? "In un giorno" : n + " giorni", pg ? nPages(pg) : ""].filter(Boolean).join(" · ");
+      r.sr = `Letto dal ${sx} al ${fx}${n < 1 ? "" : n === 1 ? ", in un giorno" : ", " + n + " giorni"}.`; return r;
+    }
+    if (y) r.lead = "Letto nel " + y + ".";
+    r.startWord = "Iniziato " + prep("il", S); r.endWord = " e finito " + prep("il", F);
+    if (S) r.startText = sx; if (F) r.endText = fx;
+    r.sr = (r.lead ? r.lead + " " : "") + `Iniziato il${S ? " " + sx : ": data da scegliere"}; finito il${F ? " " + fx : ": data da scegliere"}.`;
+    return r;
+  }
+  function readingPace({ started, page, pages }, oggi) {
+    if (!isoOk(started) || started > oggi) return { why: "no-start" };
+    const day = dayDiff(started, oggi) + 1, pt = Number(pages) || 0, pa = Number(page) || 0;
+    if (day === 1) return { why: "today", day };
+    if (pt <= 0) return { why: "no-pages", day };
+    if (pa <= 0) return { why: "no-page", day };
+    if (pa >= pt) return { why: "done", day };
+    const perDay = pa / day, left = pt - pa, n = Math.ceil(left / perDay);
+    if (day > 730 || perDay < 1 || perDay > 300 || n > 365) return { why: "odd", day, perDay, left };
+    return { why: "ok", day, perDay, left, eta: addDays(oggi, n) };
+  }
+  function paceText(r, oggi) {
+    const d = `${r.day}º giorno di lettura`;
+    switch (r.why) {
+      case "no-start": return "Scegli la data di inizio: qui comparirà quando potresti finirlo.";
+      case "today": return "Primo giorno di lettura: la stima compare da domani.";
+      case "no-pages": return d + ". Aggiungi le pagine totali in «Modifica i dati del libro» per sapere quando lo finisci.";
+      case "no-page": return d + ". Scrivi a che pagina sei per sapere quando lo finisci.";
+      case "done": return d + ": sei all'ultima pagina, segnalo come Letto.";
+      case "ok": {
+        const when = r.eta === addDays(oggi, 1) ? "domani" : "verso " + prep("il", r.eta) + longDate(r.eta, r.eta.slice(0, 4) !== oggi.slice(0, 4));
+        return `${d}, circa ${nPages(Math.round(r.perDay))} al giorno: a questo ritmo lo finisci ${when}.`;
+      }
+      default: return d + ".";
+    }
+  }
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
-    const sheet = openSheet(`
-      <div class="sheet-top">${coverHTML(b)}<div>
-        <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
-        ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
-        <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
-        ${b.finished ? `<p class="hint">Finito il ${esc(fmtDate(b.finished))}</p>` : ""}
-        ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
-      </div></div>
-      <p class="synopsis" id="s-syn"${b.synopsis ? "" : " hidden"}>${esc(b.synopsis || "")}</p>
-      ${snextHTML(b)}<div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
-      ${b.status === "desiderato" ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>` : readingFields(b)}
-      <div class="cover-edit">
-        <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="cv-more" type="button">Scegli un'altra copertina</button></div>
-        <div class="status-line" id="cv-status" aria-live="polite"></div>
-        <div class="cover-picks" id="cv-picks" hidden></div>
-      </div>
-      <div class="spine-edit">
-        <span class="label">Dorso sullo scaffale</span>
-        <div class="spine-row">
-          <div class="spine-prev" id="sp-prev">${spineHTML(b, "div")}</div>
-          <div class="spine-actions">
+    const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p></section>`;
+    const colo = `<section class="colo" id="s-colo" data-st="${esc(b.status || "")}" data-isbn="${esc(b.isbn || "")}">
+        <div id="s-colo-facts"></div>
+        <p id="s-colo-fin"><span class="l1"></span><span class="l2">nella libreria di Diego</span></p>
+        <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
+        <details class="edit"><summary>Modifica i dati del libro</summary><div class="inner">
+          ${searchBlock(b.title + " " + (b.author || ""))}
+          ${dataFields(b)}
+          <div class="actions"><button class="btn" id="cv-clear" type="button">${b.cover ? "Usa copertina disegnata" : "Nessuna copertina trovata"}</button></div>
+        </div></details>
+      </section>`;
+    const looks = `<section class="looks"><h3>Sullo scaffale</h3>
+        <div class="looks-grid">
+          <div class="looks-l">${lookCover(b)}<button class="btn" id="cv-more" type="button">Altra copertina</button></div>
+          <div class="looks-r">
+            <div class="spine-prev" id="sp-prev">${spineHTML(b, "div")}</div>
             <label class="btn" for="sp-file">${b.spine ? "Cambia foto del dorso" : "Fotografa il dorso"}</label>
             <input type="file" id="sp-file" accept="image/*" hidden>
             <span class="actions"><button class="btn" id="sp-rot" type="button">Ruota</button><button class="btn danger" id="sp-del" type="button">Rimuovi</button></span>
-            <p class="hint">Inquadra solo il dorso, da vicino e con buona luce. Va bene anche in orizzontale: lo raddrizzo io.</p>
           </div>
         </div>
-      </div>
-      <details class="edit"><summary>Modifica dati e copertina</summary><div class="inner">
-        ${searchBlock(b.title + " " + (b.author || ""))}
-        ${dataFields(b)}
-        <div class="actions"><button class="btn" id="cv-clear" type="button">${b.cover ? "Usa copertina disegnata" : "Nessuna copertina trovata"}</button></div>
-      </div></details>
-      <div class="actions">
-        <button class="btn primary" id="s-save">Salva</button>
-        <button class="btn ghost" id="s-close">Chiudi</button>
-        <button class="btn danger" id="s-del">Elimina</button>
-      </div>`);
-    wireRating(sheet, b);
+        <div class="status-line" id="cv-status" aria-live="polite"></div>
+        <div class="cover-picks" id="cv-picks" hidden></div>
+        <p class="hint">Per il dorso: inquadra solo il dorso, da vicino e con buona luce. Va bene anche in orizzontale: lo raddrizzo io.</p>
+      </section>`;
+    const nx = snextHTML(b);
+    const body = b.status === "desiderato"
+      ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>${synB}${colo}${looks}`
+      : b.status === "da-leggere" ? `${readingHead(b)}${synB}${readingMemo(b)}${colo}${looks}`
+      : `${readingHead(b)}${readingMemo(b)}${synB}${nx}${colo}${looks}`;
+    const sheet = openSheet(`
+      <button class="x" id="s-close" type="button" aria-label="Chiudi la scheda">✕</button>
+      <header class="sheet-top fp">${coverHTML(b)}
+        <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
+        ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
+        <i class="rib" aria-hidden="true"></i>
+      </header>
+      <div class="fp-main">${body}</div>
+      <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
+    wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet);
+    if (!$("#f-status", sheet)) sheet.querySelectorAll("[id^=d-]").forEach(el => el.addEventListener("input", () => syncColophon(sheet))); // Desiderato: niente blocchi della lettura
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
     const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
-    const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.disabled = spDel.disabled = !b.spine; };
+    const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.hidden = spDel.hidden = !b.spine; };
     spSync();
     $("#sp-file", sheet).onchange = async e => {
       const f = e.target.files[0]; if (!f) return;
@@ -1964,7 +2113,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (i < 0) { delete b.cover; b.noCover = true; } else { b.cover = cands[i].cover; delete b.noCover; }
         b.coverManual = true;
         cvPicks.querySelectorAll(".pick").forEach(x => x.classList.toggle("on", x === el));
-        const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b);
+        coverSync(sheet, b);
         spSync(); cvStatus.textContent = "Tocca Salva per tenere questa copertina.";
       });
     };
@@ -1973,7 +2122,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       cvMore.disabled = true; cvStatus.textContent = "Cerco le copertine…";
       cands = await coverCandidates(b);
       if (b.cover && !cands.some(c => c.cover === b.cover)) cands.unshift({ cover: b.cover, src: "attuale" });
-      cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica dati.";
+      cvStatus.textContent = cands.length > (b.cover ? 1 : 0) ? "Tocca quella che preferisci." : "Non ho trovato altre copertine: prova a correggere titolo o autore in Modifica i dati del libro.";
       drawPicks(); cvMore.disabled = false; cvMore.textContent = "Cerca di nuovo";
     };
     // Aggiorna informazioni: cerca il libro su tutte le fonti e riempie la scheda; si conferma con Salva.
@@ -1987,11 +2136,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       let wdDown = false; // serie scritta a mano con il seguito: niente da cercare
       const sr = cur.seriesManual && cur.seriesNext ? null : await findSeries({ ...cur, author: cur.author || info.author, isbn: cur.isbn || info.isbn }).catch(e => { wdDown = /^wikidata-/.test(e && e.code); return null; });
       const wdNote = wdDown ? " Wikidata non risponde: serie non cercata."
-        : !sr && !cur.series ? " Serie: Wikidata non collega questo libro a una serie (se ne fa parte, scrivila in Modifica dati)." : "";
+        : !sr && !cur.series ? " Serie: Wikidata non collega questo libro a una serie (se ne fa parte, scrivila in Modifica i dati del libro)." : "";
       refBtn.disabled = false;
       if (!info0 && !sr) {
         const err = Object.keys(errors).join(", ");
-        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica dati.` + wdNote;
+        refSt.textContent = `Nessuna informazione trovata${err ? " (" + err + ")" : ""}. Prova a correggere titolo o autore in Modifica i dati del libro.` + wdNote;
         return;
       }
       const got = [];
@@ -2005,11 +2154,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       put("#d-pages", info.pages, "pagine");
       put("#d-genre", info.genre, "genere", true);
       put("#d-call", info.author && surname3(info.author), "segnatura", true);
-      if (info.isbn && !b.isbn) { b.isbn = info.isbn; got.push("ISBN"); }
+      if (info.isbn && !b.isbn) { b.isbn = info.isbn; $("#s-colo", sheet).dataset.isbn = b.isbn; got.push("ISBN"); }
       if (info.synopsis && !(b.synopsis || "").includes(info.synopsis)) {
         const head = (b.synopsis || "").split("\n")[0];
         b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", info.synopsis].filter(Boolean).join("\n");
-        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; syn.hidden = false; got.push("trama");
+        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; $("#s-syn-b", sheet).hidden = false; got.push("trama");
       }
       if (sr) { // si tiene con Salva
         const nb = applySeries(cur, sr);
@@ -2017,15 +2166,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (nb.seriesNext && nb.seriesNext !== b.seriesNext) { b.seriesNext = nb.seriesNext; got.push("seguito"); }
       }
       if (info.cover && info.cover !== b.cover && !b.coverManual) { b.cover = info.cover; delete b.noCover; cvc.disabled = false; got.push("copertina"); }
-      const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML({ ...b, author: $("#d-author", sheet).value });
+      coverSync(sheet, { ...b, author: $("#d-author", sheet).value });
       $(".sheet-top .sub", sheet).textContent = $("#d-author", sheet).value || "Autore sconosciuto";
-      spSync();
+      spSync(); syncPeriod(sheet);
       if (got.some(g => ["autore", "anno", "pagine", "genere", "segnatura", "serie"].includes(g))) $("details.edit", sheet).open = true;
       refSt.textContent = (got.length ? `Aggiornati: ${got.join(", ")}. Tocca Salva per tenerli.` : "Le informazioni sono già aggiornate.") + wdNote;
     };
     const cvc = $("#cv-clear", sheet);
     cvc.disabled = !b.cover;
-    cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; const p = $(".sheet-top .cover", sheet); if (p) p.outerHTML = coverHTML(b); };
+    cvc.onclick = () => { delete b.cover; b.noCover = true; cvc.disabled = true; coverSync(sheet, b); };
     $("#s-close", sheet).onclick = dismissSheet;
     const ser = $("[data-series]", sheet); // serie → ricerca nella libreria
     if (ser) ser.onclick = () => dismissSheet(() => searchFor(book.series));
@@ -2053,6 +2202,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     };
     guardSheet(sheet, () => $("#s-save", sheet).click(), () => JSON.stringify(b));
   }
+  window.libreriaScheda = Object.freeze({ period: periodText, pace: readingPace, paceText });
 
   function openAdd({ scan = false } = {}) {
     const b = { status: "da-leggere", rating: 0 };
@@ -2066,9 +2216,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="cover-picks" id="a-cv-picks" hidden></div>
       </div>
       ${dataFields(b)}
-      ${readingFields(b)}
+      ${readingHead(b)}${readingMemo(b)}
       <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
-    wireRating(sheet, b);
+    wireRating(sheet, b); wirePageCtl(sheet);
     wireSearch(sheet, hit => {
       const prev = $("#a-prev", sheet); prev.hidden = false;
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;

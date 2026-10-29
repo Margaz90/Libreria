@@ -312,8 +312,6 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .sheet-top .cover { padding: 10px 8px; }
 .sheet-top .cover .ct { font-size: 12px; }
 .sheet-top .cover .ca { font-size: 8px; }
-.kv { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.kv .callno { font-family: var(--mono); color: var(--ink); }
 .synopsis { font-size: 14px; color: var(--muted); margin: 0; white-space: pre-line; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label, .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -642,9 +640,96 @@ html { scroll-behavior: smooth; }
 .sserie { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; min-height: 44px; padding: 0 12px; border-radius: 22px; border: 1px solid var(--rule); background: var(--surface); color: var(--accent); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
 /* Prossimo della serie (scheda di un libro letto) */
 .snext { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--rule); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; }
-.snext .lab { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; width: 100%; }
+.snext .lab { font-size: 12.5px; color: var(--accent); font-weight: 700; width: 100%; }
 .snext b { font-family: var(--display); font-weight: var(--dw); color: var(--title); }
 .snext .st { color: var(--muted); }
 .snext .btn { min-height: 44px; margin-left: auto; }
 .snext .snb { min-height: 44px; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .grid-serie { display: grid; grid-template-columns: 1fr 84px; gap: 10px; }
+
+/* Scheda del libro: frontespizio */
+.rf { display: flex; flex-direction: column; gap: 14px; }
+.sheet.book [hidden] { display: none !important; }
+.sheet.book { padding-bottom: 0; gap: 0; }
+.sheet.book .x { position: sticky; top: 0; z-index: 3; align-self: flex-end; width: 44px; height: 44px; margin: -12px -8px -20px 0; border: 0; border-radius: 50%; background: var(--surface); font-size: 20px; color: var(--muted); }
+.sheet.book .fp-main { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; }
+.sheet.book .sheet-top.fp { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.sheet.book .sheet-top .cover { width: 120px; flex: none; box-shadow: 0 6px 16px -6px var(--shadow); }
+.sheet.book h2 { font-size: 26px; margin-top: 8px; }
+.sheet.book .sub { margin: 0; font-size: 16px; font-style: italic; color: var(--muted); }
+.sheet.book .sserie { min-height: 44px; padding: 0 8px; border: 0; background: none; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; }
+.sheet.book .rib { width: 10px; height: 18px; background: var(--coral); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
+.sheet.book h3 { margin: 0 0 8px; font-family: var(--display); font-weight: var(--dw); font-size: 17px; color: var(--title); }
+.sheet.book .synopsis { font-size: 15px; line-height: 1.5; color: var(--ink); }
+.sheet.book .sheet-bar, .sheet.book .unsaved { position: sticky; bottom: 0; margin: 0 -16px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--rule); }
+.sheet.book .sheet-bar { display: flex; justify-content: space-between; gap: 8px; margin-top: 18px; z-index: 2; }
+.sheet.book .sheet-bar .btn { min-height: 44px; }
+.sheet.book .unsaved { margin-top: -1px; z-index: 4; }
+.sheet.book .colo { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; font-size: 14px; color: var(--muted); }
+.sheet.book .colo b { color: var(--ink); }
+.sheet.book .colo b.mono { font-family: var(--mono); font-weight: 600; }
+.sheet.book .colo #s-colo-facts { display: flex; flex-direction: column; gap: 2px; }
+.sheet.book .colo #s-colo-facts p { margin: 0; }
+.sheet.book .colo #s-colo-fin { margin: 0; font-family: var(--display); font-size: 16px; color: var(--title); display: flex; flex-direction: column; }
+.sheet.book .colo .refresh { align-items: center; }
+.sheet.book .colo details.edit { align-self: stretch; border-top: 0; padding-top: 0; text-align: left; }
+.sheet.book .colo details.edit summary { min-height: 44px; display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; cursor: pointer; }
+.sheet.book .looks { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.sheet.book .looks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.sheet.book .looks-l, .sheet.book .looks-r { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.sheet.book .looks-cover { width: 100px; padding: 10px 8px; }
+.sheet.book .looks-cover .ct { font-size: 12px; }
+.sheet.book .looks-cover .ca { font-size: 8px; }
+.sheet.book .looks .btn, .sheet.book .looks label.btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+.sheet.book .looks .status-line:empty { display: none; }
+.rf .quote { position: relative; }
+.rf .quote .qm { position: absolute; left: 0; top: -4px; font-family: var(--display); font-size: 44px; line-height: 1; color: var(--coral); }
+.rf .quote textarea { border: 0; background: none; padding: 6px 0 6px 30px; font-family: var(--display); font-size: 19px; color: var(--title); field-sizing: content; min-height: 56px; resize: none; }
+.rf .notes textarea { border: 0; border-radius: 0; padding: 0 2px; line-height: 28px; min-height: 112px; color: var(--ink);
+  background: repeating-linear-gradient(transparent 0 27px, var(--rule) 27px 28px); background-attachment: local; }
+.sheet.book > * { flex-shrink: 0; }
+.rf .period { display: flex; flex-direction: column; gap: 6px; }
+.rf .pline { margin: 0; font-family: var(--display); font-size: 19px; line-height: 1.35; color: var(--title); display: flex; flex-wrap: wrap; align-items: baseline; }
+.rf .pline .pl { flex-basis: 100%; }
+.rf .pc { display: inline-flex; flex-wrap: wrap; align-items: baseline; }
+.rf .pw { white-space: pre-wrap; }
+.rf .dt { display: inline-flex; align-items: center; min-height: 44px; position: relative; white-space: nowrap; color: var(--accent); text-decoration: underline dotted var(--coral) 2px; text-underline-offset: 6px; cursor: pointer; }
+.rf .dt input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+.rf .dt:has([aria-invalid=true]) { text-decoration: underline wavy var(--accent) 2px; }
+.rf .dt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.rf .psub { margin: 0; font-size: 14px; color: var(--muted); }
+.rf .seg { padding: 0 3px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; }
+.rf .seg button { min-height: 44px; padding: 8px 4px; font-size: 15px; border-radius: 0; }
+.rf .seg button[aria-checked=true] { color: var(--title); font-weight: 700; }
+.rf .seg-ink { top: auto; bottom: 0; height: 3px; border-radius: 0; background: var(--coral); }
+.rf .rate { justify-content: center; gap: 0; }
+.rf .rate button { width: 44px; height: 44px; padding: 0; font-size: 28px; color: var(--muted); }
+.rf .rate button.on { color: var(--accent); }
+.rf .verdict { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+.rf #f-rate + .verdict { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .rf .seg-ink { transition: none; } }
+.rf .pblk { display: flex; flex-direction: column; gap: 6px; }
+.rf .pbig { display: flex; align-items: baseline; justify-content: center; gap: 8px; color: var(--muted); }
+.rf .pbig label { font-size: 14px; }
+.rf .pbig input { width: 5.5ch; padding: 0; border: 0; border-bottom: 2px solid var(--rule); border-radius: 0; background: none; text-align: center; font-family: var(--display); font-size: 40px; line-height: 1.2; color: var(--title); }
+.rf .pbig input:read-only { border-bottom-color: transparent; }
+.rf .pblk input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; margin: 0; background: transparent; --pct: 0%; }
+.rf .pblk input[type=range]::-webkit-slider-runnable-track { height: 9px; border-radius: 99px; background: linear-gradient(90deg, var(--coral) var(--pct), var(--rule) var(--pct)); }
+.rf .pblk input[type=range]::-moz-range-track { height: 9px; border-radius: 99px; background: linear-gradient(90deg, var(--coral) var(--pct), var(--rule) var(--pct)); }
+.rf .pblk input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -8.5px; border-radius: 50%; background: #fff; border: 1px solid rgba(0,0,0,.12); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.rf .pblk input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 1px solid rgba(0,0,0,.12); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.rf .pq { display: flex; justify-content: center; gap: 10px; }
+.rf .pq .btn { min-height: 44px; min-width: 64px; font-variant-numeric: tabular-nums; }
+.rf [hidden] { display: none !important; }
+@media (min-width: 1024px) {
+  .sheet.book { width: min(760px, calc(100vw - 300px)); max-width: none; display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 32px; align-content: start; }
+  .sheet.book .x { grid-column: 1 / -1; justify-self: end; }
+  .sheet.book .sheet-top.fp { grid-column: 1; position: sticky; top: 56px; align-self: start; margin-top: 18px; }
+  .sheet.book .sheet-top .cover { width: 200px; }
+  .sheet.book .fp-main { grid-column: 2; }
+  .sheet.book .sheet-bar, .sheet.book .unsaved { grid-column: 1 / -1; }
+  .sheet.book .colo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; text-align: left; align-items: start; justify-items: stretch; }
+  .sheet.book .colo #s-colo-fin { text-align: right; align-items: flex-end; }
+  .sheet.book .colo .refresh, .sheet.book .colo details.edit { grid-column: 1 / -1; }
+  .sheet.book .colo .refresh { align-items: center; }
+}
