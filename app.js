@@ -1216,7 +1216,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const Y = computeStats(a.books, now).sempre, opener = document.activeElement;
     const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     const slide = (key, body) => `<section class="slide" data-s="${key}">${body}</section>`;
-    const list = [slide("copertina", `<p class="kick">Il tuo anno da lettore</p><p class="big">${year}</p><p class="mid">Ecco com'è andata.</p><p class="sm">Tocca a destra per continuare</p>`),
+    const list = [slide("copertina", `<p class="big">${year}</p><p class="mid">Hai messo sullo scaffale <b>${a.count === 1 ? "un libro" : a.count + " libri"}</b>.</p><p class="sm">Tocca a destra per continuare</p>`),
       slide("numeri", `<p class="kick">I numeri</p><p class="big">${num(a.count)}</p><p class="mid">${a.count === 1 ? "libro letto" : "libri letti"}</p>${a.pages ? `<p class="big small">${num(a.pages)}</p><p class="mid">pagine</p><p class="sm">In media ${num(Math.max(1, Math.round(a.pages / (leap ? 366 : 365))))} pagine al giorno, tutti i giorni.</p>` : ""}`)];
     if (a.count >= 3) {
       const D = Y.days, topM = a.months.indexOf(Math.max(...a.months));
@@ -1224,16 +1224,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (D) list.push(slide("tempo", `<p class="kick">Tempo di lettura</p><p class="big">${D.avg}</p><p class="mid">${D.avg === 1 ? "giorno" : "giorni"} in media per libro</p><p class="sm">Il più veloce: ${esc(D.fastest.book.title)}, in ${plural(D.fastest.days, "giorno", "giorni")}.</p>`));
       if (a.topAuthor) list.push(slide("autore", `<p class="kick">L'autore dell'anno</p><p class="mid name">${esc(a.topAuthor.name)}</p><p class="sm">${plural(a.topAuthor.count, "libro letto", "libri letti")}</p>`));
       if (a.topGenre) list.push(slide("genere", `<p class="kick">Il genere dell'anno</p><p class="mid name">${esc(a.topGenre.name)}</p><p class="sm">${plural(a.topGenre.count, "libro", "libri")} su ${num(a.count)}</p>`));
-      if (a.best) list.push(slide("preferito", `<p class="kick">Il tuo preferito</p><div class="fav">${coverHTML(a.best, 300)}<div><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars">${starStr(a.best.rating)}</p></div></div>`));
+      if (a.best) list.push(slide("preferito", `<p class="kick">Il preferito del ${year}</p><p class="mid name">${esc(a.best.title)}</p><p class="sm">${esc(a.best.author || "")}</p><p class="stars" role="img" aria-label="${Math.round(a.best.rating)} ${Math.round(a.best.rating) === 1 ? "stella" : "stelle"}">${starStr(Math.round(a.best.rating))}</p>`));
       if (a.avgRating != null) { const mx = Math.max(...Object.values(Y.ratings)); list.push(slide("voti", `<p class="kick">I tuoi voti</p><p class="big">★ ${dec(a.avgRating)}</p><p class="mid">voto medio</p><div class="story-votes">${[5, 4, 3, 2, 1].map(n => hbar(`<span role="img" aria-label="${n} stelle">${"★".repeat(n)}</span>`, Y.ratings[n], mx)).join("")}</div>`)); }
     }
-    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><div class="story-covers">${a.books.slice(0, 12).map(b => coverHTML(b, 160)).join("")}</div><button class="story-done" type="button">Chiudi</button>`));
+    list.push(slide("chiusura", `<p class="kick">Il tuo ${year}</p><p class="mid">${plural(a.count, "libro", "libri")}, un anno da ricordare.</p><button class="story-done" type="button">Chiudi</button>`));
+    // Palco: i libri dell'anno fino a 170 unità (al massimo 12); il preferito c'è sempre, al posto dell'ultimo.
+    const stage = []; let tot = 0;
+    for (const b of a.books) { const u = statDim(b).u; if (stage.length >= 12 || tot + u > 170) break; stage.push(b); tot += u; }
+    if (a.best && !stage.includes(a.best)) { if (stage.length) stage[stage.length - 1] = a.best; else stage.push(a.best); }
+    const stageHTML = stage.map((b, k) => spineHTML(b, "span", { w: (statDim(b).u * 0.53).toFixed(2) + "%", h: statDim(b).h }).replace("<span ", `<span${b === a.best && list.some(x => x.includes('data-s="preferito"')) ? " data-best" : ""} `).replace('style="', `style="--i:${k};`)).join("");
     const el = document.createElement("div");
     el.id = "story"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Il tuo ${year}`); el.tabIndex = -1;
     el.innerHTML = `<div class="story-bars" aria-hidden="true">${list.map(() => "<i></i>").join("")}</div>
-      <button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button>
-      <div class="story-body">${list.join("")}</div><p class="sr story-live" aria-live="polite"></p>
-      <button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><button class="story-next" type="button" aria-label="Schermata successiva">›</button>`;
+      <div class="story-top"><span>Il tuo anno da lettore</span><button class="story-close" type="button" aria-label="Chiudi il racconto">✕</button></div>
+      <div class="story-body">${list.join("")}</div><div class="story-stage" aria-hidden="true">${stageHTML}</div><p class="sr story-live" aria-live="polite"></p>
+      <div class="story-nav"><button class="story-prev" type="button" aria-label="Schermata precedente">‹</button><span class="story-count"></span><button class="story-next" type="button" aria-label="Schermata successiva">›</button></div>`;
     document.body.append(el); document.body.style.overflow = "hidden";
     const slides = [...el.querySelectorAll(".slide")], bars = [...el.querySelectorAll(".story-bars i")];
     let i = 0;
@@ -1243,6 +1248,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       bars.forEach((x, k) => x.classList.toggle("on", k <= i));
       const k = slides[i].querySelector(".kick"), body = slides[i].textContent.replace(/\s+/g, " ").trim();
       $(".story-live", el).textContent = `Schermata ${i + 1} di ${slides.length}: ${k ? k.textContent + ". " + body.slice(k.textContent.length).trim() : body}`.slice(0, 240);
+      $(".story-count", el).textContent = `${i + 1} di ${slides.length}`;
+      const bk = $("[data-best]", el); if (bk) bk.classList.toggle("out", slides[i].dataset.s === "preferito");
       $(".story-prev", el).disabled = i === 0; $(".story-next", el).disabled = i === slides.length - 1;
       const a = document.activeElement; // un pulsante disattivato o nascosto perderebbe il focus: lo riporto sul racconto
       if (a && a !== el && el.contains(a) && (a.disabled || !a.offsetParent)) el.focus();
@@ -1270,6 +1277,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (e.target.closest(".story-close, .story-done")) return close();
       if (e.target.closest(".story-prev")) return show(i - 1);
       if (e.target.closest(".story-next")) return show(i + 1);
+      if (e.target.closest(".story-nav")) return;
       const r = el.getBoundingClientRect();
       show(e.clientX < r.left + r.width / 3 ? i - 1 : i + 1); // tocco: terzo sinistro indietro, il resto avanti
     });

@@ -296,12 +296,21 @@ async function racconto(browser) {
   const ids = await p.$$eval('#story .slide', els => els.map(e => e.dataset.s).join());
   ok('2025: 9 schermate', ids === 'copertina,numeri,mese,tempo,autore,genere,preferito,voti,chiusura', ids);
   ok('una schermata visibile alla volta', (await p.locator('#story .slide:not([hidden])').count()) === 1);
+  ok('palco con 3 dorsi, nascosto a VoiceOver', await p.locator('#story .story-stage .spine').count() === 3 && (await p.getAttribute('#story .story-stage', 'aria-hidden')) === 'true');
+  ok('navigazione in basso visibile con «1 di 9»', await p.locator('#story .story-nav').isVisible() && (await p.locator('#story .story-count').innerText()) === '1 di 9');
+  ok('frecce del racconto da 48 px', (await p.locator('#story .story-next').boundingBox()).height >= 48);
+  ok('copertina: «Hai messo sullo scaffale 3 libri.»', /Hai messo sullo scaffale 3 libri\./.test(await p.locator('#story .slide[data-s="copertina"]').innerText()));
   const c0 = await cur();
   await p.keyboard.press('ArrowRight'); const c1 = await cur();
   const live = await p.locator('#story .story-live').innerText().catch(() => '');
   ok('cambio di schermata annunciato a VoiceOver', (await p.getAttribute('#story .story-live', 'aria-live').catch(() => null)) === 'polite' && /2 di 9/.test(live), live);
   await p.locator('#story .story-next').dispatchEvent('click'); const c2 = await cur(); // sul telefono le frecce sono nascoste
   await p.keyboard.press('ArrowLeft'); const c3 = await cur();
+  for (let k = 0; k < 5; k++) await p.keyboard.press('ArrowRight'); // da «numeri» a «preferito»
+  ok('nel «preferito» il dorso del preferito esce', (await cur()) === 'preferito' && await p.locator('#story .story-stage [data-best].out').count() === 1);
+  await p.keyboard.press('ArrowRight');
+  ok('lasciando il «preferito» rientra', !(await p.locator('#story .story-stage .out').count()));
+  for (let k = 0; k < 6; k++) await p.keyboard.press('ArrowLeft');
   ok('avanti con → e con la freccia, indietro con ←', c0 === 'copertina' && c1 === 'numeri' && c2 === 'mese' && c3 === 'numeri', [c0, c1, c2, c3].join());
   ok('trattini accesi fino alla schermata corrente', (await p.locator('#story .story-bars i.on').count()) === 2);
   await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowLeft'); const first = await cur();
@@ -313,6 +322,7 @@ async function racconto(browser) {
   await p.mouse.click(box.x + box.width - 20, box.y + box.height / 2); const tr = await cur();
   ok('tocco a sinistra indietro, a destra avanti', tl === 'voti' && tr === 'chiusura', tl + ' ' + tr);
   ok('racconto: niente scorrimento a 390 px', await noHScroll(p));
+  ok('chiusura senza griglia delle copertine', !(await p.locator('#story .story-covers').count()));
   await p.waitForTimeout(300); await p.screenshot({ path: '/tmp/racconto-chiusura.png' });
   const font = await p.$eval('#story .story-done', e => { const c = getComputedStyle(e); return c.fontWeight + ' ' + c.fontSize; });
   ok('pulsante Chiudi in grassetto da 15 px', font === '600 15px', font);
@@ -326,6 +336,18 @@ async function racconto(browser) {
   const esc2 = !(await p.locator('#story').count()) && (await p.evaluate(() => document.activeElement?.dataset?.story)) === '2024';
   ok('Esc e ✕ chiudono e il focus torna alla scheda', esc1 && esc2, `${esc1} ${esc2}`);
   ok('racconto: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+
+  p = await statsPage(browser, FIXTURE);
+  await p.emulateMedia({ reducedMotion: 'reduce' });
+  await p.locator('button.story-btn[data-story="2025"]').click(); await p.waitForSelector('#story');
+  ok('movimento ridotto: nessuna animazione né transizione sui dorsi', await p.$$eval('#story .story-stage .spine', els => els.length > 0 && els.every(e => { const c = getComputedStyle(e); return c.animationName === 'none' && parseFloat(c.transitionDuration) === 0; })));
+  await p.close2();
+
+  const S6 = (id, extra) => ({ id, title: id, author: 'A', status: 'letto', pages: 900, rating: 0, added: 1, ...extra });
+  p = await statsPage(browser, [1, 2, 3, 4, 5].map(i => S6('S' + i, { finished: `2025-0${7 - i}-10` })).concat([S6('Best', { rating: 5, finished: '2025-01-10' })]));
+  await p.locator('button.story-btn[data-story="2025"]').click(); await p.waitForSelector('#story');
+  ok('preferito oltre le 170 unità: è sul palco al posto dell\'ultimo', await p.locator('#story .story-stage .spine').count() === 3 && await p.locator('#story .story-stage [data-best]').count() === 1);
   await p.close2();
 
   // Il focus resta nel racconto anche quando il pulsante che lo aveva si disattiva o sparisce (computer, frecce visibili)
