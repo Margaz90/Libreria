@@ -282,6 +282,62 @@ async function pagina(browser) {
   await p.close2();
 }
 
+const COVER = 'https://is1-ssl.mzstatic.com/image/thumb/Pub/x/100x100bb.jpg';
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="90"><rect width="60" height="90" fill="#a33"/></svg>';
+
+async function colophon(browser) {
+  const p = await newPage(browser, { external: 'mock' });
+  await p.route(/googleapis\.com\/books/, r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"totalItems":0}' }));
+  await p.route(/openlibrary\.org/, r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"docs":[]}' }));
+  await p.route(/wikidata\.org/, r => r.abort());
+  await p.route(/itunes\.apple\.com/, r => { const u = new URL(r.request().url()); const t = (u.searchParams.get('term') || '').toLowerCase(); r.fulfill({ status: 200, contentType: 'text/javascript', body: `${u.searchParams.get('callback')}(${JSON.stringify({ results: t.includes('ubik') ? [{ trackName: 'Ubik', artistName: 'Philip K. Dick', releaseDate: '2021-01-01', genres: ['Fantascienza'], description: 'Joe Chip e la realtà che si disfa.', artworkUrl100: COVER }] : [] })})` }); });
+  await p.route(/mzstatic\.com|books\.google\.com/, r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: SVG }));
+  const base = { added: 1, rating: 0 };
+  await load(p, [
+    { ...base, id: 'c1', title: 'Covo', author: 'M. Herron', status: 'letto', year: 2016, pages: 369, genre: 'Spionaggio', callNo: '823.92 HER', isbn: '9788834746219', started: '2024-12-10', finished: '2025-01-02' },
+    { ...base, id: 'c2', title: 'Due', author: 'A', status: 'letto', finishedYear: 2019 },
+    { ...base, id: 'c3', title: 'Tre', author: 'A', status: 'letto' },
+    { ...base, id: 'c4', title: 'Quattro', author: 'A', status: 'desiderato' },
+    { ...base, id: 'f7', title: 'Sette', author: 'A', status: 'in-lettura', started: '2026-10-12', page: 142, pages: 337 },
+    { ...base, id: 'f8', title: 'Otto', author: 'A', status: 'in-lettura' },
+    { ...base, id: 'f9', title: 'Nove', author: 'A', status: 'da-leggere' },
+    { ...base, id: 'u1', title: 'Ubik', author: 'Philip K. Dick', status: 'da-leggere' },
+    { ...base, id: 'u2', title: 'Libro inesistente', author: 'Nessuno', status: 'da-leggere' },
+  ]);
+  const close = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
+  const facts = () => p.locator('#s-colo-facts p').evaluateAll(a => a.map(e => e.innerText.trim()));
+  const fin = async () => (await txt(p, '#s-colo .l1')) + ' | ' + (await txt(p, '#s-colo .l2'));
+  await openBook(p, 'c1');
+  ok('colophon completo', JSON.stringify(await facts()) === JSON.stringify(['Pubblicato nel 2016', '369 pagine, spionaggio', 'Segnatura 823.92 HER', 'ISBN 9788834746219']) && await fin() === 'Finito di leggere nel mese di gennaio 2025 | nella libreria di Diego', JSON.stringify(await facts()) + await fin());
+  await p.locator('details.edit summary').click();
+  await p.fill('#d-pages', '400');
+  ok('pagine cambiate: colophon aggiornato', (await facts())[1] === '400 pagine, spionaggio', JSON.stringify(await facts()));
+  await p.fill('#d-genre', '');
+  ok('senza genere: solo pagine', (await facts())[1] === '400 pagine');
+  await p.click('.seg [data-v="in-lettura"]');
+  ok('cambio di stato: In lettura dal mese di dicembre 2024', (await txt(p, '#s-colo .l1')) === 'In lettura dal mese di dicembre 2024', await fin());
+  await close();
+  await openBook(p, 'c2'); const f2 = await fin(); await close();
+  await openBook(p, 'c3'); const f3 = await fin(); const fc3 = await facts(); await close();
+  await openBook(p, 'f7'); const f7 = await fin(); await close();
+  await openBook(p, 'f8'); const f8 = await fin(); await close();
+  await openBook(p, 'f9'); const f9 = await fin(); await close();
+  await openBook(p, 'c4'); const f4 = await fin(); await close();
+  ok('chiuse per anno, nessuna data, In lettura, Da leggere, Desiderato', f2.startsWith('Finito di leggere nel 2019 |') && f3.startsWith('Finito di leggere (data da aggiungere) |') && f7.startsWith('In lettura dal mese di ottobre 2026 |') && f8.startsWith('In lettura |') && f9.startsWith('In attesa di essere letto |') && f4.startsWith('Nella lista dei desideri |'), [f2, f3, f7, f8, f9, f4].join(' / '));
+  ok('senza dati', JSON.stringify(fc3) === JSON.stringify(['Nessun dato del libro: aggiungili con «Modifica i dati del libro».']), JSON.stringify(fc3));
+  await openBook(p, 'u1');
+  await p.click('#s-refresh'); await p.waitForFunction(() => !/Cerco/.test(document.querySelector('#s-ref-status').textContent), null, { timeout: 30000 });
+  await p.waitForTimeout(300);
+  const fu = await facts();
+  ok('Aggiorna informazioni: dati, trama, copertine e colophon', await p.evaluate(() => document.querySelector('details.edit').open) && await vis(p, '#s-syn-b') && /Joe Chip/.test(await txt(p, '#s-syn')) && fu.includes('Pubblicato nel 2021') && fu.some(x => /Fantascienza/i.test(x)) && await p.locator('.sheet-top .cover img').count() === 1 && await p.locator('.looks-cover img').count() === 1, JSON.stringify(fu));
+  await close();
+  await openBook(p, 'u2');
+  await p.click('#s-refresh'); await p.waitForFunction(() => !/Cerco/.test(document.querySelector('#s-ref-status').textContent), null, { timeout: 30000 });
+  ok('libro sconosciuto: messaggio con Modifica i dati del libro', /in Modifica i dati del libro/.test(await txt(p, '#s-ref-status')), await txt(p, '#s-ref-status'));
+  ok('colophon: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
@@ -289,4 +345,5 @@ export default async function ({ browser }) {
   await frase(browser);
   await voto(browser);
   await pagina(browser);
+  await colophon(browser);
 }

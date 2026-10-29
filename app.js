@@ -1640,7 +1640,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   // Riscrive solo testi e `hidden` della frase delle date, del ritmo e dei suggerimenti: i campi data non si ricreano mai.
   function syncPeriod(sheet) {
-    const st0 = $("#f-status", sheet), per = $("#f-period", sheet); if (!st0 || !per) return;
+    const st0 = $("#f-status", sheet), per = $("#f-period", sheet); if (!st0 || !per) { syncColophon(sheet); return; }
     const st = st0.value, yv = $("#f-year", sheet), y = yv ? Number(yv.value.trim()) : 0;
     const started = $("#f-started", sheet).value, finished = $("#f-finished", sheet).value, pages = parseInt($("#d-pages", sheet).value, 10) || 0;
     const r = periodText({ status: st, started, finished, year: Number.isInteger(y) && y >= 1900 && y <= new Date().getFullYear() ? y : "", pages });
@@ -1653,6 +1653,29 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const ps = $("#f-psub", sheet); ps.textContent = sub; ps.hidden = !sub || st === "da-leggere";
     $("#f-pend-hint", sheet).hidden = st !== "in-lettura";
     $("#f-period-sr", sheet).textContent = r.sr + (st === "in-lettura" && sub ? " " + sub : "");
+    syncColophon(sheet);
+  }
+  // Colophon: dati del libro (dai campi della scheda) e chiusa «Finito di leggere…». Non c'è in Nuovo libro.
+  const MFMT = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
+  function syncColophon(sheet) {
+    const colo = $("#s-colo", sheet); if (!colo) return;
+    const val = id => ($(id, sheet).value || "").trim(), facts = $("#s-colo-facts", sheet), rows = [];
+    const row = (...parts) => { const p = document.createElement("p"); parts.forEach(x => { if (typeof x === "string") p.append(x); else { const b = document.createElement("b"); b.textContent = x.t; if (x.mono) b.className = "mono"; p.append(b); } }); rows.push(p); };
+    const year = val("#d-year"), pages = parseInt(val("#d-pages"), 10) || 0, genre = val("#d-genre"), call = val("#d-call"), isbn = colo.dataset.isbn || "";
+    if (year) row("Pubblicato nel ", { t: year });
+    if (pages && genre) row({ t: String(pages) }, (pages === 1 ? " pagina, " : " pagine, ") + genre.toLowerCase());
+    else if (pages) row({ t: String(pages) }, pages === 1 ? " pagina" : " pagine");
+    else if (genre) row(genre[0].toUpperCase() + genre.slice(1));
+    if (call) row("Segnatura ", { t: call, mono: true });
+    if (isbn) row("ISBN ", { t: isbn });
+    if (!rows.length) row("Nessun dato del libro: aggiungili con «Modifica i dati del libro».");
+    facts.replaceChildren(...rows);
+    const f = $("#f-status", sheet), st = f ? f.value : colo.dataset.st, S = f ? $("#f-started", sheet).value : "", F = f ? $("#f-finished", sheet).value : "", yv = $("#f-year", sheet) ? Number($("#f-year", sheet).value.trim()) : 0;
+    let l1 = "Nella lista dei desideri";
+    if (st === "letto") l1 = isoOk(F) ? "Finito di leggere nel mese di " + MFMT.format(new Date(F + "T12:00")) : Number.isInteger(yv) && yv >= 1900 && yv <= new Date().getFullYear() ? "Finito di leggere nel " + yv : "Finito di leggere (data da aggiungere)";
+    else if (st === "in-lettura") l1 = isoOk(S) ? "In lettura dal mese di " + MFMT.format(new Date(S + "T12:00")) : "In lettura";
+    else if (st === "da-leggere") l1 = "In attesa di essere letto";
+    $(".l1", colo).textContent = l1;
   }
   // Data toccabile: il campo vero è sovrapposto e trasparente; sul computer il clic apre il calendario con showPicker().
   function wireDateSlots(sheet) {
@@ -1944,7 +1967,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
     const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p></section>`;
-    const colo = `<section class="colo" id="s-colo" data-isbn="${esc(b.isbn || "")}">
+    const colo = `<section class="colo" id="s-colo" data-st="${esc(b.status || "")}" data-isbn="${esc(b.isbn || "")}">
         <div id="s-colo-facts"></div>
         <p id="s-colo-fin"><span class="l1"></span><span class="l2">nella libreria di Diego</span></p>
         <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
@@ -1982,7 +2005,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </header>
       <div class="fp-main">${body}</div>
       <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
-    wireRating(sheet, b); wirePageCtl(sheet);
+    wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet);
+    if (!$("#f-status", sheet)) sheet.querySelectorAll("[id^=d-]").forEach(el => el.addEventListener("input", () => syncColophon(sheet))); // Desiderato: niente blocchi della lettura
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
     const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
     const spSync = () => { spPrev.innerHTML = spineHTML(b, "div"); spRot.hidden = spDel.hidden = !b.spine; };
