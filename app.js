@@ -1007,7 +1007,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       flipCard($(".ncard", root)); announce("Nuove proposte: " + nx.list.map(x => x.book.title).join(", "));
       const n = $("[data-n=more]", root); if (n) n.focus();
     };
-    $("[data-n=later]", root).onclick = () => { if (sheet) closeSheet(); else { nx.off = true; renderHero(); } };
+    $("[data-n=later]", root).onclick = () => {
+      if (sheet) { closeSheet(); return; }
+      nx.off = true; renderHero();
+      toast("Proposte nascoste", { label: "Annulla", run: () => { nx.off = false; renderHero(); const f = $("#hero [role=tab][aria-selected=true]") || $("#hero [data-start]"); if (f) f.focus(); } }, { focus: true });
+    };
   }
   function fillNext(sheet) { sheet.innerHTML = nextHTML(nextList(), "h2"); wireNext(sheet, true); }
   // «Inizia» con Annulla: rimette i campi di lettura com'erano prima (assenti restano assenti).

@@ -322,8 +322,12 @@ async function prossimo(browser) {
   await p.locator('[data-filter="da-leggere"]').first().click(); await p.locator('#hero .next').waitFor({ timeout: 3000 }).catch(() => {});
   ok('filtro Da leggere: proposte visibili', await p.locator('#hero .next').isVisible());
   await p.locator('[data-filter="tutti"]').first().click(); await p.locator('#n-later').waitFor({ timeout: 3000 }).catch(() => {});
-  await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
+  await tabEl(1).click(); await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
   ok('Non ora nasconde la proposta', await p.locator('#hero .next').count() === 0);
+  ok('Non ora: avviso «Proposte nascoste» con Annulla a fuoco', /^Proposte nascoste/.test(await toastText(p)) && await p.evaluate(() => document.activeElement.matches('.toast button')));
+  await p.keyboard.press('Enter'); await p.locator('#hero .next').waitFor({ timeout: 3000 }).catch(() => {});
+  ok('Annulla di Non ora: stesse proposte, stessa linguetta, focus sulla linguetta', await p.locator('#hero .next').isVisible() && await sel(1) === 'true' && await act() === 'nh-t1');
+  await tabEl(0).click(); await p.locator('#n-later').click(); await p.locator('#hero .next').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
 
   const choose = p.locator('[data-shelf="da-leggere"] .shelf-head button[data-choose]');
   const cs = await choose.boundingBox();
@@ -340,6 +344,14 @@ async function prossimo(browser) {
   ok('con letture in corso l\'hero non propone', await p.locator('#hero .next').count() === 0);
   await choose.click(); await p.locator('.sheet .next .ncard').first().waitFor({ timeout: 3000 }).catch(() => {});
   ok('Scegli per me funziona anche con letture in corso', await p.locator('.sheet .next .ncard').count() >= 1);
+  {
+    const w = await newPage(browser); await w.clock.install();
+    await load(w, [...pila, ...letti].map(b => ({ ...base, ...b })));
+    await w.locator('#n-later').click();
+    await w.clock.fastForward(10500);
+    ok('avviso scaduto: focus sul filtro attivo, proposte ancora nascoste', await w.locator('.toast').count() === 0 && await w.evaluate(() => document.activeElement.matches('[data-filter][aria-checked="true"], [data-filter][aria-pressed="true"]')) && await w.locator('#hero .next').count() === 0);
+    await w.close2();
+  }
   await p.keyboard.press('Escape'); await closed(p);
 
   // Inizia con Annulla
