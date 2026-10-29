@@ -1519,10 +1519,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </div>
       ${b.status === "letto" ? rateHTML(b) : ""}
       <div class="period" id="f-period">
-        <div class="grid2">
-          <div class="field"><label for="f-started">Iniziato il</label><input id="f-started" type="date" value="${esc(b.started || "")}"></div>
-          <div class="field"><label for="f-finished">Finito il</label><input id="f-finished" type="date" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></div>
-        </div>
+        <p class="sr" id="f-period-sr"></p>
+        <p class="pline"><span class="pw pl" id="f-pw-lead" aria-hidden="true" hidden></span><span class="pc" id="f-pc-start"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-started" type="date" aria-label="Iniziato il" value="${esc(b.started || "")}"></label></span><span class="pc" id="f-pc-end"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-finished" type="date" aria-label="Finito il" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></label></span></p>
+        <p class="psub" id="f-psub" hidden></p>
+        <p class="hint" id="f-pend-hint" hidden>La data di fine si sceglie quando lo segni come letto.</p>
         <p class="hint err" id="f-date-err" role="alert" hidden></p>
         <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
         <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
@@ -1572,10 +1572,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         $("#f-status", sheet).value = btn.dataset.v; sync();
         const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
         if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
-        syncYearRow(sheet); syncPage(sheet);
+        syncYearRow(sheet); syncPage(sheet); syncPeriod(sheet);
       });
       const fin = $("#f-finished", sheet); if (fin) fin.addEventListener("input", () => syncYearRow(sheet));
-      wireDates(sheet);
+      wireDates(sheet); wireDateSlots(sheet);
       const dp = $("#d-pages", sheet); if (dp) dp.addEventListener("input", () => syncPage(sheet));
       syncPage(sheet);
       requestAnimationFrame(sync);
@@ -1616,7 +1616,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
           fin.value = fin.dataset.ok = v < today() ? v : today(); fin.dataset.auto = "1"; est.hidden = false;
           est.textContent = (moved ? "Fine spostata a 20 giorni dopo il nuovo inizio" : "Fine stimata: 20 giorni dopo l'inizio") + ", modificala se serve.";
         }
-        limits(); syncYearRow(sheet);
+        limits(); syncYearRow(sheet); syncPeriod(sheet);
       });
     });
     limits();
@@ -1629,6 +1629,33 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const err = $("#f-date-err", sheet), el = pr.field === "started" ? sta : fin;
     err.hidden = false; err.textContent = pr.msg; el.setAttribute("aria-invalid", "true"); el.focus();
     return true;
+  }
+  // Riscrive solo testi e `hidden` della frase delle date, del ritmo e dei suggerimenti: i campi data non si ricreano mai.
+  function syncPeriod(sheet) {
+    const st0 = $("#f-status", sheet), per = $("#f-period", sheet); if (!st0 || !per) return;
+    const st = st0.value, yv = $("#f-year", sheet), y = yv ? Number(yv.value.trim()) : 0;
+    const started = $("#f-started", sheet).value, finished = $("#f-finished", sheet).value, pages = parseInt($("#d-pages", sheet).value, 10) || 0;
+    const r = periodText({ status: st, started, finished, year: Number.isInteger(y) && y >= 1900 && y <= new Date().getFullYear() ? y : "", pages });
+    const lead = $("#f-pw-lead", sheet); lead.textContent = r.lead; lead.hidden = !r.lead;
+    [["#f-pc-start", r.showStart, r.startWord, r.startText], ["#f-pc-end", r.showEnd, r.endWord, r.endText]].forEach(([id, show, word, text]) => {
+      const c = $(id, sheet); c.hidden = !show; c.querySelector(".pw").textContent = word; c.querySelector(".dv").textContent = text;
+    });
+    let sub = r.sub;
+    if (st === "in-lettura") { const t = today(); sub = paceText(readingPace({ started, page: parseInt($("#f-page", sheet).value, 10) || 0, pages }, t), t); }
+    const ps = $("#f-psub", sheet); ps.textContent = sub; ps.hidden = !sub || st === "da-leggere";
+    $("#f-pend-hint", sheet).hidden = st !== "in-lettura";
+    $("#f-period-sr", sheet).textContent = r.sr + (st === "in-lettura" && sub ? " " + sub : "");
+  }
+  // Data toccabile: il campo vero è sovrapposto e trasparente; sul computer il clic apre il calendario con showPicker().
+  function wireDateSlots(sheet) {
+    ["#f-started", "#f-finished"].forEach(id => {
+      const el = $(id, sheet); if (!el) return;
+      const open = () => { try { el.showPicker(); } catch {} };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") open(); });
+    });
+    sheet.querySelectorAll("#f-year, #f-page, [id^=d-]").forEach(el => el.addEventListener("input", () => syncPeriod(sheet)));
+    syncPeriod(sheet);
   }
   // «oppure solo l'anno» solo per un libro letto senza data di fine
   function syncYearRow(sheet) { const r = $("#f-year-row", sheet); if (r) r.hidden = !($("#f-status", sheet).value === "letto" && !$("#f-finished", sheet).value); }
@@ -1706,6 +1733,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     coverSync(sheet, { ...b, title: hit.title || b.title, author: hit.author || b.author });
     const colo = $("#s-colo", sheet); if (colo) colo.dataset.isbn = b.isbn || "";
+    syncPeriod(sheet);
   }
 
   function searchBlock(prefill, scan = false) {
@@ -2012,7 +2040,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (info.cover && info.cover !== b.cover && !b.coverManual) { b.cover = info.cover; delete b.noCover; cvc.disabled = false; got.push("copertina"); }
       coverSync(sheet, { ...b, author: $("#d-author", sheet).value });
       $(".sheet-top .sub", sheet).textContent = $("#d-author", sheet).value || "Autore sconosciuto";
-      spSync();
+      spSync(); syncPeriod(sheet);
       if (got.some(g => ["autore", "anno", "pagine", "genere", "segnatura", "serie"].includes(g))) $("details.edit", sheet).open = true;
       refSt.textContent = (got.length ? `Aggiornati: ${got.join(", ")}. Tocca Salva per tenerli.` : "Le informazioni sono già aggiornate.") + wdNote;
     };

@@ -126,7 +126,7 @@ async function aspetto(browser) {
     { id: 'a1', title: 'Il primo volume', author: 'Autore Uno', status: 'letto', finished: '2025-01-02', started: '2024-12-10', added: 1, rating: 3, series: 'Saga', seriesNo: '1', synopsis: 'Trama ' + 'lunga '.repeat(40), pages: 300 },
     { id: 'a2', title: 'Il secondo volume', author: 'Autore Uno', status: 'da-leggere', added: 2, rating: 0, series: 'Saga', seriesNo: '2' },
   ]);
-  await openBook(p, 'a1');
+  await openBook(p, 'a1'); await p.waitForTimeout(500);
   const css = (sel, prop) => p.evaluate(([s, pr]) => getComputedStyle(document.querySelector(s))[pr], [sel, prop]);
   const cb = await p.locator('.sheet-top .cover').boundingBox();
   ok('titolo 26 px in Fraunces, autore in corsivo, copertina 120 px', await css('.sheet h2', 'fontSize') === '26px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await css('.sheet-top .sub', 'fontStyle') === 'italic' && Math.round(cb.width) === 120, JSON.stringify(cb));
@@ -150,8 +150,73 @@ async function aspetto(browser) {
   await p.close2();
 }
 
+const txt = (p, sel) => p.locator(sel).innerText().then(t => t.replace(/\s+/g, ' ').trim());
+const vis = (p, sel) => p.locator(sel).isVisible().catch(() => false);
+
+async function frase(browser) {
+  const p = await newPage(browser, { init: { fn: () => { window.__pick = 0; HTMLInputElement.prototype.showPicker = function () { window.__pick++; }; } } });
+  const base = { added: 1, rating: 0 };
+  await load(p, [
+    { ...base, id: 'f1', title: 'Uno', author: 'A', status: 'letto', started: '2025-03-10', finished: '2025-04-02', pages: 300 },
+    { ...base, id: 'f4', title: 'Quattro', author: 'A', status: 'letto', started: '2025-03-10', pages: 300 },
+    { ...base, id: 'f5', title: 'Cinque', author: 'A', status: 'letto' },
+    { ...base, id: 'f6', title: 'Sei', author: 'A', status: 'letto', finishedYear: 2019 },
+    { ...base, id: 'f7', title: 'Sette', author: 'A', status: 'in-lettura', started: '2026-10-12', page: 142, pages: 337 },
+    { ...base, id: 'f8', title: 'Otto', author: 'A', status: 'in-lettura' },
+    { ...base, id: 'f9', title: 'Nove', author: 'A', status: 'da-leggere' },
+    { ...base, id: 'f10', title: 'Dieci', author: 'A', status: 'letto', started: '2025-05-10', finished: '2025-05-01', pages: 200 },
+  ]);
+  const close = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
+  await openBook(p, 'f1');
+  ok('L1', await txt(p, '.pline') === 'Letto dal 10 marzo al 2 aprile 2025' && await txt(p, '#f-psub') === '24 giorni · 300 pagine' && await p.locator('#f-period-sr').textContent() === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', await txt(p, '.pline'));
+  const dt = await p.locator('#f-started').evaluate(e => ({ o: getComputedStyle(e).opacity, f: getComputedStyle(e).fontSize, h: e.closest('.dt').getBoundingClientRect().height }));
+  ok('selettore trasparente a 16 px, bersaglio >= 44', dt.o === '0' && dt.f === '16px' && dt.h >= 44, JSON.stringify(dt));
+  await p.click('#f-started'); const n1 = await p.evaluate(() => window.__pick);
+  await p.focus('#f-started'); await p.keyboard.press('Enter'); const n2 = await p.evaluate(() => window.__pick);
+  ok('clic e Invio chiamano showPicker', n1 === 1 && n2 === 2, n1 + ',' + n2);
+  await p.click('.seg [data-v="in-lettura"]');
+  ok('cambio di stato: R1 e suggerimento', await txt(p, '.pline') === 'In lettura dal 10 marzo 2025' && await vis(p, '#f-pend-hint') && !(await vis(p, '#f-pc-end')), await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f4');
+  ok('L3 con segnale e anno', await txt(p, '.pline') === 'Iniziato il 10 marzo 2025 e finito il scegli la data' && await vis(p, '#s-stale') && await vis(p, '#f-year-row'), await txt(p, '.pline'));
+  await p.fill('#f-finished', '2025-04-02');
+  ok('fine scelta: frase L1 e anno nascosto', await txt(p, '.pline') === 'Letto dal 10 marzo al 2 aprile 2025' && !(await vis(p, '#f-year-row')), await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f5');
+  await p.fill('#f-started', '2025-03-01');
+  ok('inizio: fine stimata nella frase e nota', await txt(p, '.pline') === 'Letto dal 1 marzo al 21 marzo 2025' && await vis(p, '#f-date-est'), await txt(p, '.pline'));
+  await p.fill('#f-started', ''); await p.fill('#f-finished', '');
+  await p.fill('#f-year', '2019');
+  ok('solo anno: Letto nel 2019.', await txt(p, '#f-pw-lead') === 'Letto nel 2019.', await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f6');
+  ok('L5 senza segnale', await txt(p, '.pline') === 'Letto nel 2019. Iniziato il scegli la data e finito il scegli la data' && !(await p.locator('#s-stale').count()), await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f7');
+  ok('R1', await txt(p, '.pline') === 'In lettura dal 12 ottobre 2026' && !(await vis(p, '#f-pc-end')) && await vis(p, '#f-pend-hint'), await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f8');
+  ok('R2', await txt(p, '.pline') === 'In lettura dal scegli la data', await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f9');
+  ok('Da leggere', await txt(p, '.pline') === 'Ancora da iniziare.' && !(await vis(p, '#f-psub')) && !(await vis(p, '#f-pend-hint')), await txt(p, '.pline'));
+  await close();
+  await openBook(p, 'f10');
+  ok('date storte: frase e segnale', await txt(p, '.pline') === 'Letto dal 10 maggio al 1 maggio 2025' && await vis(p, '#s-stale'), await txt(p, '.pline'));
+  await p.locator('#s-save').click(); await p.waitForTimeout(300);
+  ok('date storte: Salva bloccato con avviso', await vis(p, '.sheet') && await vis(p, '#f-date-err') && await p.getAttribute('#f-finished', 'aria-invalid') === 'true');
+  await close();
+  await p.keyboard.press('n'); await p.waitForSelector('.sheet');
+  await p.click('.seg [data-v="letto"]');
+  ok('Nuovo libro: Letto mostra le date da scegliere', await txt(p, '.pline') === 'Iniziato il scegli la data e finito il scegli la data', await txt(p, '.pline'));
+  await p.fill('#f-started', '2025-03-01');
+  ok('frase: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
   await aspetto(browser);
+  await frase(browser);
 }
