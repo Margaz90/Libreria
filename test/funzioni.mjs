@@ -283,6 +283,26 @@ async function prossimo(browser) {
   await p.evaluate(id => { const H = window.libreriaHost, b = H.books().find(x => x.id === id); H.setLocal(id, { ...b, title: b.title + ' bis' }); H.refreshChanged([{ id, from: 'da-leggere', to: 'da-leggere' }]); }, l1[2]);
   ok('selezione ricordata dopo un cambio di titolo', await sel(1) === 'true' && /bis$/.test(await titleOf(l1[2])));
   await tabEl(0).click();
+  // Scorrimento laterale
+  const swipe = (x0, y0, x1, y1, o = {}) => p.evaluate(([x0, y0, x1, y1, o]) => {
+    const el = document.querySelector('#hero .nstack'), ev = (t, id, x, y) => el.dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: o.type || 'touch', clientX: x, clientY: y, bubbles: true }));
+    ev('pointerdown', 1, x0, y0); if (o.second) ev('pointerdown', 2, x0 + 30, y0);
+    if (o.cancel) ev('pointercancel', 1, x1, y1); else ev('pointerup', 1, x1, y1);
+  }, [x0, y0, x1, y1, o]);
+  const cur = async () => (await p.locator('#hero [role=tab]').evaluateAll(t => t.findIndex(x => x.getAttribute('aria-selected') === 'true')));
+  await swipe(250, 400, 150, 405);
+  ok('scorrimento a sinistra: linguetta successiva', await cur() === 1);
+  await tabEl(0).click(); await swipe(150, 400, 250, 400);
+  ok('scorrimento a destra dalla prima: l\'ultima', await cur() === 2);
+  await tabEl(0).click();
+  await swipe(200, 400, 140, 480); ok('gesto obliquo ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { cancel: true }); ok('pointercancel ignorato', await cur() === 0);
+  await swipe(30, 400, 5, 400); await swipe(380, 400, 280, 400); ok('gesto dal bordo ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { type: 'mouse' }); ok('mouse ignorato', await cur() === 0);
+  await swipe(250, 400, 150, 400, { second: true }); ok('due dita: nessun cambio', await cur() === 0);
+  await tabEl(0).focus(); await swipe(250, 400, 150, 400);
+  ok('scorrimento: il focus non si sposta', await cur() === 1 && await act() === 'nh-t0');
+  await tabEl(0).click();
   const bs = await hero.locator('[data-start]').first().boundingBox(), ms = await p.locator('#n-more').boundingBox(), ls = await p.locator('#n-later').boundingBox();
   ok('proposte: bersagli di almeno 44 px', bs.height >= 44 && ms.height >= 44 && ls.height >= 44, `${bs.height} ${ms.height} ${ls.height}`);
   await p.locator('#main [data-id="n2"]').first().click(); await p.waitForSelector('.sheet details.edit');

@@ -986,6 +986,20 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (i < 0 || to === undefined) return;
       e.preventDefault(); go(to, true);
     };
+    const stack = $(".nstack", root);
+    if (stack && tabs.length > 1) {
+      let g = null;
+      stack.addEventListener("pointerdown", e => {
+        if (g || e.pointerType === "mouse" || e.clientX < 24 || e.clientX > innerWidth - 24) { if (g) g = null; return; } // un secondo dito annulla il gesto
+        g = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      }, { passive: true });
+      stack.addEventListener("pointercancel", () => { g = null; }, { passive: true });
+      stack.addEventListener("pointerup", e => {
+        if (!g || g.id !== e.pointerId) return;
+        const dx = e.clientX - g.x, dy = e.clientY - g.y; g = null;
+        if (Math.abs(dx) >= 48 && Math.abs(dx) >= 2 * Math.abs(dy)) go(cur + (dx < 0 ? 1 : -1));
+      }, { passive: true });
+    }
     start.onclick = () => { const b = state.books.find(x => x.id === start.dataset.start); if (sheet) closeSheet(); if (b && b.status === "da-leggere") setStatus(b, "in-lettura"); else renderHero(); };
     const m = $("[data-n=more]", root);
     if (m) m.onclick = () => {
