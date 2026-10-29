@@ -1054,7 +1054,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         fastest: timed.reduce((a, x) => x.days < a.days ? x : a), slowest: timed.reduce((a, x) => x.days > a.days ? x : a),
       } : null,
       months: mo, monthsCount: mo.reduce((t, n) => t + n, 0),
-      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs) }))
+      authors: groups(read, "author").map(g => ({ name: g.name, count: g.xs.length, pages: sum(g.xs), avgRating: avg(g.xs), books: g.xs.slice().sort(recent).map(x => x.b) }))
         .sort((a, b) => b.count - a.count || b.pages - a.pages || a.name.localeCompare(b.name, "it")).slice(0, 6),
       genres: groups(read, "genre").map(g => ({ name: g.name, count: g.xs.length }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "it")).slice(0, 6),
@@ -1068,7 +1068,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
     return { sempre, anni, noYear: read.filter(x => !x.year && !(x.b.finished > iso)).length, future: read.filter(x => !x.year && x.b.finished > iso).length, racconti: [thisYear - 1, thisYear - 2].filter(y => byYear.has(y)) };
   }
-  window.libreriaStats = Object.freeze({ compute: computeStats });
+  // Misure di un dorso sulla mensola: unità (larghezza relativa), larghezza in % della fila, altezza in px.
+  function statDim(b) {
+    const p = Number(b.pages) || 0, u = p > 0 ? Math.min(44, Math.max(20, Math.round(p / 14))) : 20;
+    return { u, w: (u / 3.4).toFixed(2) + "%", h: p > 0 ? Math.round(84 + Math.min(p, 900) / 900 * 32) : 92 };
+  }
+  // Divide i libri in file da al più 300 unità (mai file vuote).
+  function ysRows(list) {
+    const rows = []; let cur = [], tot = 0;
+    list.forEach(b => { const u = statDim(b).u; if (cur.length && tot + u > 300) { rows.push(cur); cur = []; tot = 0; } cur.push(b); tot += u; });
+    if (cur.length) rows.push(cur);
+    return rows;
+  }
+  window.libreriaStats = Object.freeze({ compute: computeStats, dim: statDim, rows: ysRows });
 
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");

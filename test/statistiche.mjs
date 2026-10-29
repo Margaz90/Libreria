@@ -115,6 +115,15 @@ async function calcoli(browser) {
   ok('mesi: marzo 1, maggio 1, agosto 3', J(S.months) === J([0, 0, 1, 0, 1, 0, 0, 3, 0, 0, 0, 0]) && S.monthsCount === 5, J(S.months));
   ok('autori in ordine: King, Winslow, Herron, Bad Dates, Futuro', S.authors.map(a => a.name).join() === 'Stephen King,Don Winslow,Mick Herron,Bad Dates,Futuro', S.authors.map(a => a.name).join());
   ok('autori: libri, pagine e voto medio', J(S.authors.slice(0, 3).map(a => [a.count, a.pages, a.avgRating])) === J([[2, 1400, 4], [2, 700, 4.5], [2, 550, 4]]), J(S.authors.slice(0, 3)));
+  ok('autori: libri di Stephen King dal più recente', S.authors[0].books.map(b => b.id).join() === 'Cinque,Sei');
+  const dim = (b) => p.evaluate(x => window.libreriaStats.dim(x), b);
+  ok('dorso senza pagine: 20 unità, 5.88%, 92 px', J(await dim({})) === J({ u: 20, w: '5.88%', h: 92 }));
+  ok('dorso 100 pagine: larghezza minima, 88 px', J(await dim({ pages: 100 })) === J({ u: 20, w: '5.88%', h: 88 }));
+  ok('dorso 900 pagine: 44 unità, 12.94%, 116 px', J(await dim({ pages: 900 })) === J({ u: 44, w: '12.94%', h: 116 }));
+  const rows = (books) => p.evaluate(x => window.libreriaStats.rows(x).map(r => r.length), books);
+  ok('file: 15 libri da 900 pagine → 6, 6, 3', J(await rows(Array(15).fill({ pages: 900 }))) === J([6, 6, 3]));
+  ok('file: 15 libri senza pagine → una fila', J(await rows(Array(15).fill({}))) === J([15]));
+  ok('file: nessun libro → nessuna fila', J(await rows([])) === J([]));
   ok('generi: Thriller 3, Narrativa 2, Saggi 2, Horror 1', S.genres.map(g => g.name + g.count).join() === 'Thriller3,Narrativa2,Saggi2,Horror1', S.genres.map(g => g.name + g.count).join());
   const [a25, a24, a19] = s.anni;
   ok('anni: 2025, 2024, 2019', s.anni.map(a => a.year).join() === '2025,2024,2019', s.anni.map(a => a.year).join());
