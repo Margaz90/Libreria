@@ -701,3 +701,15 @@ html { scroll-behavior: smooth; }
 .rf .pq { display: flex; justify-content: center; gap: 10px; }
 .rf .pq .btn { min-height: 44px; min-width: 64px; font-variant-numeric: tabular-nums; }
 .rf [hidden] { display: none !important; }
+@media (min-width: 1024px) {
+  .sheet.book { width: min(760px, calc(100vw - 300px)); max-width: none; display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 32px; align-content: start; }
+  .sheet.book .x { grid-column: 1 / -1; justify-self: end; }
+  .sheet.book .sheet-top.fp { grid-column: 1; position: sticky; top: 56px; align-self: start; margin-top: 18px; }
+  .sheet.book .sheet-top .cover { width: 200px; }
+  .sheet.book .fp-main { grid-column: 2; }
+  .sheet.book .sheet-bar, .sheet.book .unsaved { grid-column: 1 / -1; }
+  .sheet.book .colo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; text-align: left; align-items: start; justify-items: stretch; }
+  .sheet.book .colo #s-colo-fin { text-align: right; align-items: flex-end; }
+  .sheet.book .colo .refresh, .sheet.book .colo details.edit { grid-column: 1 / -1; }
+  .sheet.book .colo .refresh { align-items: center; }
+}

@@ -338,6 +338,48 @@ async function colophon(browser) {
   await p.close2();
 }
 
+async function computer(browser) {
+  const base = { added: 1, rating: 0, synopsis: 'Una trama abbastanza lunga. '.repeat(30) };
+  const books = [
+    { ...base, id: 'c1', title: 'Il covo dei bastardi con un titolo piuttosto lungo', author: 'Mick Herron', status: 'letto', year: 2016, pages: 369, genre: 'Spionaggio', callNo: '823.92 HER', isbn: '9788834746219', started: '2024-12-10', finished: '2025-01-02', series: 'Slough House', seriesNo: '1' },
+    { ...base, id: 'f7', title: 'Sette', author: 'A', status: 'in-lettura', started: '2026-10-12', page: 142, pages: 337 },
+  ];
+  const p = await newPage(browser, { width: 1366, height: 860 });
+  await load(p, books);
+  await openBook(p, 'c1'); await p.waitForTimeout(500);
+  const box = sel => p.locator(sel).boundingBox();
+  const sb = await box('.sheet.book');
+  ok('pannello largo', sb.width >= 700 && sb.width <= 761, String(sb.width));
+  const h2 = await box('.sheet h2'), seg = await box('.rf .seg');
+  ok('due colonne', h2.x + h2.width < seg.x, JSON.stringify([h2, seg]));
+  const cf = await box('#s-colo-facts'), cn = await box('#s-colo-fin');
+  ok('colophon a due colonne', cf.x + cf.width <= cn.x + 1, JSON.stringify([cf, cn]));
+  await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 99999; }); await p.waitForTimeout(150);
+  const h2b = await box('.sheet h2');
+  ok('frontespizio fermo mentre si scorre', h2b.y >= 0 && h2b.y < 860, JSON.stringify(h2b));
+  ok('computer: niente scorrimento orizzontale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth && document.documentElement.scrollWidth <= innerWidth; }));
+  await p.keyboard.press('Escape'); await p.waitForSelector('.sheet', { state: 'detached' });
+  await p.keyboard.press('n'); await p.waitForSelector('.sheet'); await p.waitForTimeout(400);
+  ok('le altre schede restano a 460 px', (await box('.sheet')).width <= 460);
+  ok('computer: nessun errore in console', !p.errs.length, p.errs.join());
+  await p.close2();
+  for (const [w, h, maxW] of [[1024, 768, 724], [800, 900, 560]]) {
+    const q = await newPage(browser, { width: w, height: h });
+    await load(q, books); await openBook(q, 'c1'); await q.waitForTimeout(500);
+    const b2 = await q.locator('.sheet.book').boundingBox();
+    ok(`pannello a ${w} px: al massimo ${maxW}`, b2.width <= maxW + 1, String(b2.width));
+    await q.close2();
+  }
+  // schermi e temi: niente scorrimento orizzontale né errori
+  for (const [w, h] of [[390, 844], [1366, 860]]) for (const dark of [false, true]) for (const id of ['f7', 'c1']) {
+    const q = await newPage(browser, { width: w, height: h, dark });
+    await load(q, books); await openBook(q, id); await q.waitForTimeout(500);
+    const okH = await q.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth && document.documentElement.scrollWidth <= innerWidth; });
+    ok(`${id} ${w}x${h} ${dark ? 'scuro' : 'chiaro'}: niente scorrimento orizzontale, nessun errore`, okH && !q.errs.length, q.errs.join());
+    await q.close2();
+  }
+}
+
 export default async function ({ browser }) {
   await puri(browser);
   await struttura(browser);
@@ -346,4 +388,5 @@ export default async function ({ browser }) {
   await voto(browser);
   await pagina(browser);
   await colophon(browser);
+  await computer(browser);
 }
