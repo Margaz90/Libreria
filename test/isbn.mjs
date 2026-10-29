@@ -110,6 +110,13 @@ export default async function ({ browser }) {
   ok('Google: dopo un 503 si riprova con la chiave e si trova il libro', /Underworld/.test(r.titoli.join('|')) && p.googleUrls.length >= 2 && p.googleUrls.slice(0, 2).every(u => /key=/.test(u)), p.googleUrls.map(u => /key=/.test(u) ? 'chiave' : 'senza').join(','));
   await p.close2();
 
+  // 5b. Google risponde 0 risultati per un ISBN che conosce (succede: la volta dopo lo trova): si riprova una volta
+  p = await apri(browser, (() => { let n = 0; return u => (/isbn/.test(decodeURIComponent(u)) && n++ === 0 ? { body: VUOTO } : { body: EINAUDI }); })());
+  await p.goto(APP + '/'); await p.waitForTimeout(300);
+  r = await cerca(p, ISBN);
+  ok('Google: ISBN con 0 risultati alla prima richiesta → si riprova e si trova', /Underworld/.test(r.titoli.join('|')) && isbnChiamate(p).length === 2, isbnChiamate(p).length + ' chiamate · ' + r.titoli.join('|'));
+  await p.close2();
+
   // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono
   p = await apri(browser, () => ({ body: VUOTO }));
   p.appleUrls = [];

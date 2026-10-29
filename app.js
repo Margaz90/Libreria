@@ -417,7 +417,9 @@
       throw { code: "google-" + r.status, msg: await googleMsg(r) };
     }
     if (!r.ok) throw { code: "google-" + r.status, msg: await googleMsg(r) };
-    const j = await r.json();
+    let j = await r.json();
+    // Per un ISBN Google a volte risponde «niente» e alla richiesta dopo trova il libro: riprovo una volta.
+    if (!(j.items || []).length && /^isbn:/.test(q)) { await sleep(700); try { const r2 = await fetchT(url); if (r2.ok) j = await r2.json(); } catch {} }
     return (j.items || []).map(normVolume).filter(x => x.title);
   }
 
