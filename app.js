@@ -1724,6 +1724,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function syncPeriod(sheet) {
     const st0 = $("#f-status", sheet), per = $("#f-period", sheet); if (!st0 || !per) { syncColophon(sheet); return; }
     const st = st0.value, yv = $("#f-year", sheet), y = yv ? Number(yv.value.trim()) : 0;
+    sheet.dataset.st = st; // lo stile nasconde citazione, note e voto per i Da leggere
     const started = $("#f-started", sheet).value, finished = $("#f-finished", sheet).value, pages = parseInt($("#d-pages", sheet).value, 10) || 0;
     const r = periodText({ status: st, started, finished, year: Number.isInteger(y) && y >= 1900 && y <= new Date().getFullYear() ? y : "", pages });
     const lead = $("#f-pw-lead", sheet); lead.textContent = r.lead; lead.hidden = !r.lead;

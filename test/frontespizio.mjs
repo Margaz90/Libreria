@@ -169,7 +169,7 @@ async function frase(browser) {
   const close = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
   await openBook(p, 'f1');
   ok('L1', await txt(p, '.pline') === 'Letto dal 10 marzo al 2 aprile 2025' && await txt(p, '#f-psub') === '24 giorni · 300 pagine' && await p.locator('#f-period-sr').textContent() === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', await txt(p, '.pline'));
-  const dt = await p.locator('#f-started').evaluate(e => ({ o: getComputedStyle(e).opacity, f: getComputedStyle(e).fontSize, h: e.closest('.dt').getBoundingClientRect().height }));
+  const dt = await p.locator('#f-started').evaluate(e => ({ o: getComputedStyle(e).opacity, f: getComputedStyle(e).fontSize, h: e.getBoundingClientRect().height })); // il bersaglio è il selettore, più alto della riga
   ok('selettore trasparente a 16 px, bersaglio >= 44', dt.o === '0' && dt.f === '16px' && dt.h >= 44, JSON.stringify(dt));
   await p.click('#f-started'); const n1 = await p.evaluate(() => window.__pick);
   await p.focus('#f-started'); await p.keyboard.press('Enter'); const n2 = await p.evaluate(() => window.__pick);

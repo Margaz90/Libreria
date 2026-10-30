@@ -88,7 +88,7 @@ async function scheda(browser) {
     && await p.locator('#main [data-id="s3"]').count() === 0 && await p.locator('#main [data-id="s4"]').count() === 0);
   await p.locator('#q').fill(''); await p.waitForSelector('#main [data-id="s4"]');
   // Con modifiche non salvate: prima Salva/Scarta/Continua, poi (Scarta) la ricerca
-  await open('s1'); await p.locator('#f-notes').fill('nota');
+  await open('s1'); await p.locator('#f-notes').evaluate(e => { e.value = 'nota'; e.dispatchEvent(new Event('input', { bubbles: true })); }); // s1 è Da leggere: note nascoste
   await p.locator('.sheet-top button[data-series]').click();
   const bar = await p.locator('.unsaved').isVisible().catch(() => false);
   await p.locator('[data-u="drop"]').click(); await p.waitForSelector('.sheet', { state: 'detached' });
@@ -424,7 +424,8 @@ async function usoRicerca(browser) {
   await p.locator(`#main [data-id="${dl.id}"]`).first().click(); await p.waitForSelector('.sheet');
   await until(p, dl.id, { series: 'Slough House' });
   const udl = (await book(p, dl.id) || {}).updated;
-  await p.locator('#f-notes').fill('nota'); await save(); await saved(p, dl.id, udl);
+  await p.locator('#f-notes').evaluate(e => { e.value = 'nota'; e.dispatchEvent(new Event('input', { bubbles: true })); }); // Da leggere: le note sono nascoste ma si salvano
+  await save(); await saved(p, dl.id, udl);
   b = await book(p, dl.id) || {};
   ok('scheda aperta durante la ricerca in sottofondo: Salva tiene la serie', b.series === 'Slough House' && b.seriesNo === '2' && b.notes === 'nota', JSON.stringify(b));
   p.cfg.delay = 0;
