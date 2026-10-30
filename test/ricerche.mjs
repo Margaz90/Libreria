@@ -18,6 +18,7 @@ async function mock(p, google) {
   await p.route(/googleapis\.com\/books/, google);
   await p.route(/openlibrary\.org/, r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"docs":[]}' }));
   await p.route(/itunes\.apple\.com/, r => { const u = new URL(r.request().url()); r.fulfill({ status: 200, contentType: 'text/javascript', body: `${u.searchParams.get('callback')}(${JSON.stringify({ results: apple(u.searchParams.get('term') || '') })})` }); });
+  await p.route(/wikidata\.org/, r => r.fulfill({ status: 200, contentType: 'application/json', body: /api\.php/.test(r.request().url()) ? '{"search":[]}' : '{"results":{"bindings":[]}}' })); // la ricerca della serie non va in rete
   await p.route(/mzstatic\.com|books\.google\.com/, r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: SVG }));
 }
 const load = (p, books) => p.evaluate(b => localStorage.setItem('libreria-diego-v1', JSON.stringify(b)), books);

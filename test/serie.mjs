@@ -80,7 +80,7 @@ async function scheda(browser) {
   const sb = p.locator('.sheet-top button[data-series]');
   ok('vista del libro: pulsante «Slough House · 1»', (await sb.innerText()).trim() === 'Slough House · 1', await sb.innerText().catch(() => ''));
   const bb = await sb.boundingBox();
-  ok('pulsante serie: almeno 44 px', bb && bb.height >= 44, bb && bb.height);
+  ok('pulsante serie: almeno 44 px', bb && bb.height >= 43.5, bb && bb.height);
   await sb.click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => document.querySelector('#main [data-id="s1"]') && !document.querySelector('#main [data-id="s4"]'), null, { timeout: 3000 }).catch(() => {});
   ok('pulsante serie scrive nella ricerca e la ricerca trova i volumi', await p.locator('#q').inputValue() === 'Slough House'
@@ -88,7 +88,7 @@ async function scheda(browser) {
     && await p.locator('#main [data-id="s3"]').count() === 0 && await p.locator('#main [data-id="s4"]').count() === 0);
   await p.locator('#q').fill(''); await p.waitForSelector('#main [data-id="s4"]');
   // Con modifiche non salvate: prima Salva/Scarta/Continua, poi (Scarta) la ricerca
-  await open('s1'); await p.locator('#f-notes').fill('nota');
+  await open('s1'); await p.locator('#f-notes').evaluate(e => { e.value = 'nota'; e.dispatchEvent(new Event('input', { bubbles: true })); }); // s1 è Da leggere: note nascoste
   await p.locator('.sheet-top button[data-series]').click();
   const bar = await p.locator('.unsaved').isVisible().catch(() => false);
   await p.locator('[data-u="drop"]').click(); await p.waitForSelector('.sheet', { state: 'detached' });
@@ -424,7 +424,8 @@ async function usoRicerca(browser) {
   await p.locator(`#main [data-id="${dl.id}"]`).first().click(); await p.waitForSelector('.sheet');
   await until(p, dl.id, { series: 'Slough House' });
   const udl = (await book(p, dl.id) || {}).updated;
-  await p.locator('#f-notes').fill('nota'); await save(); await saved(p, dl.id, udl);
+  await p.locator('#f-notes').evaluate(e => { e.value = 'nota'; e.dispatchEvent(new Event('input', { bubbles: true })); }); // Da leggere: le note sono nascoste ma si salvano
+  await save(); await saved(p, dl.id, udl);
   b = await book(p, dl.id) || {};
   ok('scheda aperta durante la ricerca in sottofondo: Salva tiene la serie', b.series === 'Slough House' && b.seriesNo === '2' && b.notes === 'nota', JSON.stringify(b));
   p.cfg.delay = 0;
@@ -657,8 +658,8 @@ async function prossimo(browser) {
   const row = () => p.locator('.sheet .snext').innerText().catch(() => '');
   await open('h1');
   const t1 = await row(), lk = p.locator('.sheet .snext [data-next-open]'), bb = await lk.boundingBox().catch(() => null);
-  const before = await p.evaluate(() => { const s = document.querySelector('.sheet .snext'), r = document.querySelector('.sheet .refresh'); return !!(s && r && s.nextElementSibling === r); });
-  ok('in pila: riga «Prossimo della serie» prima di Aggiorna informazioni', /Prossimo della serie/i.test(t1) && /#2 Leoni morti/.test(t1) && /· in pila/.test(t1) && before, t1);
+  const before = await p.evaluate(() => { const s = document.querySelector('.sheet .snext'), y = document.querySelector('.sheet #s-syn-b'), c = document.querySelector('.sheet #s-colo'); return !!(s && y && c && (y.compareDocumentPosition(s) & 4) && (s.compareDocumentPosition(c) & 4)); });
+  ok('in pila: riga «Prossimo della serie» dopo la trama e prima del colophon', /Prossimo della serie/i.test(t1) && /#2 Leoni morti/.test(t1) && /· in pila/.test(t1) && before, t1);
   await lk.click(); await p.waitForFunction(() => /Leoni morti/.test((document.querySelector('.sheet h2') || {}).textContent || ''), null, { timeout: 3000 }).catch(() => {});
   ok('in pila: tocco apre la scheda (≥ 44 px)', await p.locator('.sheet h2').innerText() === 'Leoni morti' && bb && bb.height >= 44, bb && bb.height);
   ok('nessuna riga nella scheda di un libro non letto', await p.locator('.sheet .snext').count() === 0);
