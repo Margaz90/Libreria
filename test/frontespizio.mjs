@@ -129,7 +129,8 @@ async function aspetto(browser) {
   await openBook(p, 'a1'); await p.waitForTimeout(500);
   const css = (sel, prop) => p.evaluate(([s, pr]) => getComputedStyle(document.querySelector(s))[pr], [sel, prop]);
   const cb = await p.locator('.sheet-top .cover').boundingBox();
-  ok('titolo 26 px in Fraunces, autore in corsivo, copertina 120 px', await css('.sheet h2', 'fontSize') === '26px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await css('.sheet-top .sub', 'fontStyle') === 'italic' && Math.round(cb.width) === 120, JSON.stringify(cb));
+  const tb = await p.locator('.sheet h2').boundingBox();
+  ok('intestazione come la v73: copertina 96 px a sinistra, titolo 24 px in Fraunces accanto, riga dei dati', Math.round(cb.width) === 96 && tb.x > cb.x + cb.width && await css('.sheet h2', 'fontSize') === '24px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await p.locator('.sheet-top .kv').count() === 1, JSON.stringify([cb, tb]));
   ok('barra Elimina/Salva fissa in basso', await css('.sheet-bar', 'position') === 'sticky');
   await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 0; });
   const sb = await p.locator('#s-save').boundingBox();
@@ -349,14 +350,11 @@ async function computer(browser) {
   await openBook(p, 'c1'); await p.waitForTimeout(500);
   const box = sel => p.locator(sel).boundingBox();
   const sb = await box('.sheet.book');
-  ok('pannello largo', sb.width >= 700 && sb.width <= 761, String(sb.width));
+  ok('pannello della larghezza di sempre', sb.width >= 400 && sb.width <= 520, String(sb.width));
   const h2 = await box('.sheet h2'), seg = await box('.rf .seg');
-  ok('due colonne', h2.x + h2.width < seg.x, JSON.stringify([h2, seg]));
+  ok('intestazione sopra lo stato', h2.y + h2.height <= seg.y, JSON.stringify([h2, seg]));
   const cf = await box('#s-colo-facts'), cn = await box('#s-colo-fin');
   ok('colophon a due colonne', cf.x + cf.width <= cn.x + 1, JSON.stringify([cf, cn]));
-  await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 99999; }); await p.waitForTimeout(150);
-  const h2b = await box('.sheet h2');
-  ok('frontespizio fermo mentre si scorre', h2b.y >= 0 && h2b.y < 860, JSON.stringify(h2b));
   ok('computer: niente scorrimento orizzontale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollWidth <= s.clientWidth && document.documentElement.scrollWidth <= innerWidth; }));
   await p.keyboard.press('Escape'); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.keyboard.press('n'); await p.waitForSelector('.sheet'); await p.waitForTimeout(400);

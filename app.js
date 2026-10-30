@@ -2081,11 +2081,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       : `${readingHead(b)}${readingMemo(b)}${synB}${nx}${colo}${looks}`;
     const sheet = openSheet(`
       <button class="x" id="s-close" type="button" aria-label="Chiudi la scheda">✕</button>
-      <header class="sheet-top fp">${coverHTML(b)}
+      <header class="sheet-top">${coverHTML(b)}<div>
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
         ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
-        <i class="rib" aria-hidden="true"></i>
-      </header>
+        <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
+      </div></header>
       <div class="fp-main">${body}</div>
       <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
     wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet);

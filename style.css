@@ -312,6 +312,9 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .sheet-top .cover { padding: 10px 8px; }
 .sheet-top .cover .ct { font-size: 12px; }
 .sheet-top .cover .ca { font-size: 8px; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kv .callno { font-family: var(--mono); color: var(--ink); }
+.sheet.book .sheet-top > div { padding-right: 36px; } /* il titolo non passa sotto la ✕ */
 .synopsis { font-size: 14px; color: var(--muted); margin: 0; white-space: pre-line; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label, .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -654,12 +657,6 @@ html { scroll-behavior: smooth; }
 .sheet.book { padding-bottom: 0; gap: 0; }
 .sheet.book .x { position: sticky; top: 0; z-index: 3; align-self: flex-end; width: 44px; height: 44px; margin: -12px -8px -20px 0; border: 0; border-radius: 50%; background: var(--surface); font-size: 20px; color: var(--muted); }
 .sheet.book .fp-main { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; }
-.sheet.book .sheet-top.fp { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
-.sheet.book .sheet-top .cover { width: 120px; flex: none; box-shadow: 0 6px 16px -6px var(--shadow); }
-.sheet.book h2 { font-size: 26px; line-height: 1.15; margin-top: 10px; }
-.sheet.book .sub { margin: 0; font-size: 16px; font-style: italic; color: var(--muted); }
-.sheet.book .sserie { min-height: 44px; margin: -8px 0 -10px; padding: 0 8px; border: 0; background: none; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; }
-.sheet.book .rib { width: 10px; height: 18px; background: var(--coral); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
 .sheet.book h3 { margin: 0 0 8px; font-family: var(--display); font-weight: var(--dw); font-size: 17px; color: var(--title); }
 .sheet.book .synopsis { font-size: 15px; line-height: 1.5; color: var(--ink); }
 .sheet.book .sheet-bar, .sheet.book .unsaved { position: sticky; bottom: 0; margin: 0 -16px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--rule); }
@@ -725,12 +722,6 @@ html { scroll-behavior: smooth; }
 .rf .pq .btn { min-height: 44px; min-width: 64px; font-variant-numeric: tabular-nums; }
 .rf [hidden] { display: none !important; }
 @media (min-width: 1024px) {
-  .sheet.book { width: min(760px, calc(100vw - 300px)); max-width: none; display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 32px; align-content: start; }
-  .sheet.book .x { grid-column: 1 / -1; justify-self: end; }
-  .sheet.book .sheet-top.fp { grid-column: 1; position: sticky; top: 56px; align-self: start; margin-top: 18px; }
-  .sheet.book .sheet-top .cover { width: 200px; }
-  .sheet.book .fp-main { grid-column: 2; }
-  .sheet.book .sheet-bar, .sheet.book .unsaved { grid-column: 1 / -1; }
   .sheet.book .colo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; text-align: left; align-items: start; justify-items: stretch; }
   .sheet.book .colo #s-colo-fin { text-align: right; align-items: flex-end; }
   .sheet.book .colo .refresh, .sheet.book .colo details.edit { grid-column: 1 / -1; }
