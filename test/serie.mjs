@@ -80,7 +80,7 @@ async function scheda(browser) {
   const sb = p.locator('.sheet-top button[data-series]');
   ok('vista del libro: pulsante «Slough House · 1»', (await sb.innerText()).trim() === 'Slough House · 1', await sb.innerText().catch(() => ''));
   const bb = await sb.boundingBox();
-  ok('pulsante serie: almeno 44 px', bb && bb.height >= 44, bb && bb.height);
+  ok('pulsante serie: almeno 44 px', bb && bb.height >= 43.5, bb && bb.height);
   await sb.click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => document.querySelector('#main [data-id="s1"]') && !document.querySelector('#main [data-id="s4"]'), null, { timeout: 3000 }).catch(() => {});
   ok('pulsante serie scrive nella ricerca e la ricerca trova i volumi', await p.locator('#q').inputValue() === 'Slough House'

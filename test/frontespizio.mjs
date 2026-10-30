@@ -101,6 +101,8 @@ async function struttura(browser) {
   await closeAll();
   await openBook(p, 't2');
   ok('ordine In lettura', await order(['.sheet-top', '#s-syn-b', '.seg', '#f-period', '#f-pblk', '#f-quote', '#f-notes', '#s-colo', '.looks', '.sheet-bar']));
+  { const pb = await p.locator('#f-pblk').boundingBox(), pe = await p.locator('#f-period').boundingBox(), sg = await p.locator('.rf .seg').boundingBox();
+    ok('In lettura: a vista stato, poi pagina, poi date', sg.y < pb.y && pb.y + pb.height <= pe.y, JSON.stringify([sg, pb, pe])); }
   await closeAll();
   await openBook(p, 't3');
   ok('ordine Da leggere', await order(['.sheet-top', '#s-syn-b', '.seg', '#f-period', '#f-quote', '#f-notes', '#s-colo', '.looks', '.sheet-bar']));
@@ -130,7 +132,9 @@ async function aspetto(browser) {
   const css = (sel, prop) => p.evaluate(([s, pr]) => getComputedStyle(document.querySelector(s))[pr], [sel, prop]);
   const cb = await p.locator('.sheet-top .cover').boundingBox();
   const tb = await p.locator('.sheet h2').boundingBox();
-  ok('intestazione come la v73: copertina 96 px a sinistra, titolo 24 px in Fraunces accanto, riga dei dati', Math.round(cb.width) === 96 && tb.x > cb.x + cb.width && await css('.sheet h2', 'fontSize') === '24px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await p.locator('.sheet-top .kv').count() === 1, JSON.stringify([cb, tb]));
+  ok('intestazione (proposta A): copertina 120 px a sinistra, titolo 24 px in Fraunces a destra, riga dei dati', Math.round(cb.width) === 120 && tb.x > cb.x + cb.width && await css('.sheet-top > div:last-child', 'textAlign') === 'right' && await css('.sheet h2', 'fontSize') === '24px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await p.locator('.sheet-top .kv').count() === 1, JSON.stringify([cb, tb]));
+  const rb = await p.locator('.sheet-top .rate').boundingBox();
+  ok('stelle sotto la copertina, non più larghe di lei', rb.y >= cb.y + cb.height && rb.width <= cb.width + 1, JSON.stringify([rb, cb]));
   ok('barra Elimina/Salva fissa in basso', await css('.sheet-bar', 'position') === 'sticky');
   const sy = await p.locator('#s-syn').evaluate(e => e.scrollHeight > e.clientHeight + 1);
   ok('trama lunga: ridotta e con «…»', sy && await p.locator('#s-syn-more').isVisible());
