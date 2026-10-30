@@ -1593,15 +1593,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
   const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
-  const rateHTML = b => `<div class="field"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
+  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
-  function readingHead(b) {
+  function readingHead(b, rate = true) {
     return `<div class="rf rf-head">
       <div class="field"><span class="label" id="f-status-l">Stato</span>
         <input type="hidden" id="f-status" value="${esc(b.status || "da-leggere")}">
         <div class="seg" role="radiogroup" aria-labelledby="f-status-l">${["da-leggere", "in-lettura", "letto"].map(k => `<button type="button" role="radio" data-v="${k}" aria-checked="${b.status === k}">${STATUS_ONE[k]}</button>`).join("")}<span class="seg-ink"></span></div>
       </div>
-      ${b.status === "letto" ? rateHTML(b) : ""}
+      ${rate ? rateHTML(b) : ""}
       <div class="period" id="f-period">
         <p class="sr" id="f-period-sr"></p>
         <p class="pline"><span class="pw pl" id="f-pw-lead" aria-hidden="true" hidden></span><span class="pc" id="f-pc-start"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-started" type="date" aria-label="Iniziato il" value="${esc(b.started || "")}"></label></span><span class="pc" id="f-pc-end"><span class="pw" aria-hidden="true"></span><label class="dt"><span class="dv" aria-hidden="true"></span><input id="f-finished" type="date" aria-label="Finito il" value="${esc(b.finished || "")}"${b.finishedAuto ? ' data-auto="1"' : ""}${b.status === "letto" ? "" : " disabled"}></label></span></p>
@@ -1621,10 +1621,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function readingMemo(b) {
     return `<div class="rf rf-memo">
-      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">“</span><textarea id="f-quote" placeholder="Una frase da ricordare">${esc(b.quote || "")}</textarea></div>
+      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">“</span><textarea id="f-quote" placeholder="“Una frase da ricordare”">${esc(b.quote || "")}</textarea><span class="qm qe" aria-hidden="true">”</span></div>
       <div class="field notes"><label for="f-notes">Le tue note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
-      ${b.status !== "letto" ? rateHTML(b) : ""}
     </div>`;
+  }
+  // Trama ridotta a 4 righe: «…» compare solo se il testo non ci sta.
+  function synClamp(sheet) {
+    const sy = $("#s-syn", sheet), m = $("#s-syn-more", sheet); if (!sy || !m) return;
+    requestAnimationFrame(() => { m.hidden = !sy.classList.contains("open") && sy.scrollHeight <= sy.clientHeight + 1; });
   }
   // Copertina del frontespizio e quella di «Sullo scaffale» insieme.
   const lookCover = b => coverHTML(b).replace('class="cover', 'class="looks-cover cover');
@@ -2006,13 +2010,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       r.sr = "In lettura dal" + (S ? " " + longDate(S) : ": data da scegliere") + "."; return r;
     }
     if (status !== "letto") return r;
-    r.showStart = r.showEnd = true; r.sub = pg ? nPages(pg) : "";
+    r.showStart = r.showEnd = true; r.sub = ""; // le pagine stanno già nell'intestazione
     const y = year && !F ? Number(year) : 0, sx = S ? longDate(S) : "", fx = F ? longDate(F) : "";
     if (S && F) {
       const n = dayDiff(S, F) + 1;
       r.startWord = "Letto " + prep("dal", S); r.endWord = " " + prep("al", F);
       r.startText = longDate(S, S.slice(0, 4) !== F.slice(0, 4)); r.endText = fx;
-      r.sub = n < 1 ? r.sub : [n === 1 ? "In un giorno" : n + " giorni", pg ? nPages(pg) : ""].filter(Boolean).join(" · ");
+      r.sub = n < 1 ? "" : n === 1 ? "In un giorno" : n + " giorni";
       r.sr = `Letto dal ${sx} al ${fx}${n < 1 ? "" : n === 1 ? ", in un giorno" : ", " + n + " giorni"}.`; return r;
     }
     if (y) r.lead = "Letto nel " + y + ".";
@@ -2049,7 +2053,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
-    const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p></section>`;
+    const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p><button class="syn-more" id="s-syn-more" type="button" aria-expanded="false" aria-label="Mostra tutta la trama" hidden>…</button></section>`;
     const colo = `<section class="colo" id="s-colo" data-st="${esc(b.status || "")}" data-isbn="${esc(b.isbn || "")}">
         <div id="s-colo-facts"></div>
         <p id="s-colo-fin"><span class="l1"></span><span class="l2">nella libreria di Diego</span></p>
@@ -2076,19 +2080,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </section>`;
     const nx = snextHTML(b);
     const body = b.status === "desiderato"
-      ? `<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>${synB}${colo}${looks}`
-      : b.status === "da-leggere" ? `${readingHead(b)}${synB}${readingMemo(b)}${colo}${looks}`
-      : `${readingHead(b)}${readingMemo(b)}${synB}${nx}${colo}${looks}`;
+      ? `${synB}<div class="wish-box"><p class="hint">Nella lista dei desideri. Quando lo compri:</p><button class="btn primary" id="s-bought" type="button">Ho acquistato: passa a Da leggere</button></div>${colo}${looks}`
+      : b.status === "da-leggere" ? `${synB}${readingHead(b, false)}${readingMemo(b)}${colo}${looks}`
+      : `${synB}${readingHead(b, false)}${readingMemo(b)}${nx}${colo}${looks}`;
     const sheet = openSheet(`
       <button class="x" id="s-close" type="button" aria-label="Chiudi la scheda">✕</button>
-      <header class="sheet-top">${coverHTML(b)}<div>
+      <header class="sheet-top"><div class="stc">${coverHTML(b)}${rateHTML(b)}</div><div>
         <h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "Autore sconosciuto")}</div>
         ${b.series ? `<button class="sserie" type="button" data-series>${esc(serLabel(b))}</button>` : ""}
         <div class="kv">${b.callNo ? `<span class="callno">${esc(b.callNo)}</span>` : ""}${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.pages ? `<span>${esc(b.pages)} pp.</span>` : ""}${b.genre ? `<span>${esc(b.genre)}</span>` : ""}</div>
       </div></header>
       <div class="fp-main">${body}</div>
       <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
-    wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet);
+    sheet.dataset.st = b.status || "da-leggere"; // il voto si vede solo per i Letto
+    wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet); synClamp(sheet);
+    $("#s-syn-more", sheet).onclick = e => { const o = $("#s-syn", sheet).classList.toggle("open"); e.currentTarget.setAttribute("aria-expanded", o); e.currentTarget.setAttribute("aria-label", o ? "Mostra meno trama" : "Mostra tutta la trama"); e.currentTarget.textContent = o ? "Mostra meno" : "…"; };
     if (!$("#f-status", sheet)) sheet.querySelectorAll("[id^=d-]").forEach(el => el.addEventListener("input", () => syncColophon(sheet))); // Desiderato: niente blocchi della lettura
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
     const spPrev = $("#sp-prev", sheet), spRot = $("#sp-rot", sheet), spDel = $("#sp-del", sheet);
@@ -2159,7 +2165,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (info.synopsis && !(b.synopsis || "").includes(info.synopsis)) {
         const head = (b.synopsis || "").split("\n")[0];
         b.synopsis = [/^Titolo originale|^Serie/.test(head) ? head : "", info.synopsis].filter(Boolean).join("\n");
-        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; $("#s-syn-b", sheet).hidden = false; got.push("trama");
+        const syn = $("#s-syn", sheet); syn.textContent = b.synopsis; $("#s-syn-b", sheet).hidden = false; synClamp(sheet); got.push("trama");
       }
       if (sr) { // si tiene con Salva
         const nb = applySeries(cur, sr);

@@ -21,17 +21,17 @@ async function puri(browser) {
   const P = a => p.evaluate(a => window.libreriaScheda.period(a), a);
   const line = r => (r.lead + ' ' + (r.showStart ? r.startWord + r.startText : '') + (r.showEnd ? r.endWord + r.endText : '')).replace(/\s+/g, ' ').trim();
   let r = await P({ status: 'letto', started: '2025-03-10', finished: '2025-04-02', pages: 300 });
-  ok('L1 stesso anno', line(r) === 'Letto dal 10 marzo al 2 aprile 2025' && r.sub === '24 giorni · 300 pagine' && r.sr === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', JSON.stringify(r));
+  ok('L1 stesso anno', line(r) === 'Letto dal 10 marzo al 2 aprile 2025' && r.sub === '24 giorni' && r.sr === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', JSON.stringify(r));
   r = await P({ status: 'letto', started: '2024-12-10', finished: '2025-01-02' });
   ok('L1 anni diversi', line(r) === 'Letto dal 10 dicembre 2024 al 2 gennaio 2025' && r.sub === '24 giorni' && r.sr === 'Letto dal 10 dicembre 2024 al 2 gennaio 2025, 24 giorni.', JSON.stringify(r));
   r = await P({ status: 'letto', started: '2025-03-10', finished: '2025-03-10', pages: 300 });
-  ok('L1 in un giorno', r.sub === 'In un giorno · 300 pagine', r.sub);
+  ok('L1 in un giorno', r.sub === 'In un giorno', r.sub);
   r = await P({ status: 'letto', started: '2025-05-10', finished: '2025-05-01', pages: 200 });
-  ok('L1 date storte: solo le pagine', line(r) === 'Letto dal 10 maggio al 1 maggio 2025' && r.sub === '200 pagine', line(r) + '|' + r.sub);
+  ok('L1 date storte: niente sotto (le pagine stanno in alto)', line(r) === 'Letto dal 10 maggio al 1 maggio 2025' && r.sub === '', line(r) + '|' + r.sub);
   r = await P({ status: 'letto', started: '', finished: '2025-01-02' });
   ok('L2', line(r) === 'Iniziato il scegli la data e finito il 2 gennaio 2025' && r.sr === 'Iniziato il: data da scegliere; finito il 2 gennaio 2025.', line(r) + '|' + r.sr);
   r = await P({ status: 'letto', started: '2025-03-10', finished: '', pages: 300 });
-  ok('L3', line(r) === 'Iniziato il 10 marzo 2025 e finito il scegli la data' && r.sub === '300 pagine', line(r));
+  ok('L3', line(r) === 'Iniziato il 10 marzo 2025 e finito il scegli la data' && r.sub === '', line(r));
   r = await P({ status: 'letto', started: '', finished: '' });
   ok('L4', line(r) === 'Iniziato il scegli la data e finito il scegli la data' && r.sub === '', line(r));
   r = await P({ status: 'letto', started: '', finished: '', year: 2019 });
@@ -90,7 +90,7 @@ async function struttura(browser) {
   const order = (sels) => p.evaluate(ss => { const e = ss.map(s => document.querySelector('.sheet ' + s)); return e.every(Boolean) && e.every((x, i) => !i || (e[i - 1].compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING)); }, sels);
   const closeAll = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
   await openBook(p, 't1');
-  ok('ordine Letto', await order(['.sheet-top', '.seg', '#f-rate', '#f-period', '#f-quote', '#f-notes', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']));
+  ok('ordine Letto', await order(['.sheet-top', '#f-rate', '#s-syn-b', '.seg', '#f-period', '#f-quote', '#f-notes', '#s-colo', '.looks', '.sheet-bar']));
   ok('scheda .sheet.book, una sola h2, h3 Trama e Sullo scaffale', await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.classList.contains('book') && s.querySelectorAll('h2').length === 1 && [...s.querySelectorAll('h3')].map(h => h.textContent).join() === 'Trama,Sullo scaffale'; }));
   const x = p.locator('#s-close'), bx = await x.boundingBox();
   ok('✕ al posto di Chiudi', (await x.innerText()) === '✕' && (await x.getAttribute('aria-label')) === 'Chiudi la scheda' && bx.width >= 43.9 && bx.height >= 43.9, JSON.stringify(bx) + await x.innerText());
@@ -100,13 +100,13 @@ async function struttura(browser) {
   ok('Ruota e Rimuovi visibili con la foto', await p.locator('#sp-rot').isVisible() && await p.locator('#sp-del').isVisible());
   await closeAll();
   await openBook(p, 't2');
-  ok('ordine In lettura', await order(['.sheet-top', '.seg', '#f-period', '#f-pblk', '#f-quote', '#f-notes', '#f-rate', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']));
+  ok('ordine In lettura', await order(['.sheet-top', '#s-syn-b', '.seg', '#f-period', '#f-pblk', '#f-quote', '#f-notes', '#s-colo', '.looks', '.sheet-bar']));
   await closeAll();
   await openBook(p, 't3');
-  ok('ordine Da leggere', await order(['.sheet-top', '.seg', '#f-period', '#s-syn-b', '#f-quote', '#f-notes', '#f-rate', '#s-colo', '.looks', '.sheet-bar']));
+  ok('ordine Da leggere', await order(['.sheet-top', '#s-syn-b', '.seg', '#f-period', '#f-quote', '#f-notes', '#s-colo', '.looks', '.sheet-bar']));
   await closeAll();
   await openBook(p, 't4');
-  ok('ordine Desiderato', await order(['.sheet-top', '.wish-box', '#s-syn-b', '#s-colo', '.looks', '.sheet-bar']) && !(await p.locator('#f-status').count()));
+  ok('ordine Desiderato', await order(['.sheet-top', '#s-syn-b', '.wish-box', '#s-colo', '.looks', '.sheet-bar']) && !(await p.locator('#f-status').count()));
   await closeAll();
   await openBook(p, 't5');
   ok('trama vuota: sezione nascosta', await p.locator('#s-syn-b').isHidden());
@@ -132,6 +132,11 @@ async function aspetto(browser) {
   const tb = await p.locator('.sheet h2').boundingBox();
   ok('intestazione come la v73: copertina 96 px a sinistra, titolo 24 px in Fraunces accanto, riga dei dati', Math.round(cb.width) === 96 && tb.x > cb.x + cb.width && await css('.sheet h2', 'fontSize') === '24px' && /Fraunces/.test(await css('.sheet h2', 'fontFamily')) && await p.locator('.sheet-top .kv').count() === 1, JSON.stringify([cb, tb]));
   ok('barra Elimina/Salva fissa in basso', await css('.sheet-bar', 'position') === 'sticky');
+  const sy = await p.locator('#s-syn').evaluate(e => e.scrollHeight > e.clientHeight + 1);
+  ok('trama lunga: ridotta e con «…»', sy && await p.locator('#s-syn-more').isVisible());
+  await p.locator('#s-syn-more').click();
+  ok('«…» mostra tutta la trama', await p.locator('#s-syn').evaluate(e => e.scrollHeight <= e.clientHeight + 1) && await p.locator('#s-syn-more').getAttribute('aria-expanded') === 'true');
+  ok('citazione vuota: virgolette di apertura e chiusura nel testo d\'esempio', await p.locator('#f-quote').getAttribute('placeholder') === '“Una frase da ricordare”' && !(await p.locator('.quote .qm').first().isVisible()));
   await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 0; });
   const sb = await p.locator('#s-save').boundingBox();
   ok('Salva visibile senza scorrere', sb.y >= 0 && sb.y + sb.height <= 844, JSON.stringify(sb));
@@ -169,7 +174,7 @@ async function frase(browser) {
   ]);
   const close = async () => { await p.keyboard.press('Escape'); await p.locator('[data-u="drop"]').click({ timeout: 700 }).catch(() => {}); await p.waitForSelector('.sheet', { state: 'detached' }); };
   await openBook(p, 'f1');
-  ok('L1', await txt(p, '.pline') === 'Letto dal 10 marzo al 2 aprile 2025' && await txt(p, '#f-psub') === '24 giorni · 300 pagine' && await p.locator('#f-period-sr').textContent() === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', await txt(p, '.pline'));
+  ok('L1', await txt(p, '.pline') === 'Letto dal 10 marzo al 2 aprile 2025' && await txt(p, '#f-psub') === '24 giorni' && await p.locator('#f-period-sr').textContent() === 'Letto dal 10 marzo 2025 al 2 aprile 2025, 24 giorni.', await txt(p, '.pline'));
   const dt = await p.locator('#f-started').evaluate(e => ({ o: getComputedStyle(e).opacity, f: getComputedStyle(e).fontSize, h: e.getBoundingClientRect().height })); // il bersaglio è il selettore, più alto della riga
   ok('selettore trasparente a 16 px, bersaglio >= 44', dt.o === '0' && dt.f === '16px' && dt.h >= 44, JSON.stringify(dt));
   await p.click('#f-started'); const n1 = await p.evaluate(() => window.__pick);
@@ -228,7 +233,8 @@ async function voto(browser) {
   await p.click('.rate button[data-n="4"]');
   ok('stessa stella: torna al testo iniziale', await txt(p, '#f-verdict') === 'Tocca una stella per dare il voto');
   const sizes = await p.evaluate(() => [...document.querySelectorAll('.rate button, .rf .seg button')].map(b => { const r = b.getBoundingClientRect(); return [r.width, r.height]; }));
-  ok('stelle e voci di stato >= 44 px', sizes.length === 8 && sizes.every(([w, h]) => w >= 43.5 && h >= 43.5), JSON.stringify(sizes));
+  ok('stelle piccole ma toccabili (>= 24 px), voci di stato >= 44 px', sizes.length === 8 && sizes.slice(0, 5).every(([w, h]) => w >= 24 && h >= 30) && sizes.slice(5).every(([w, h]) => w >= 43.5 && h >= 43.5), JSON.stringify(sizes));
+  ok('voto nascosto se non Letto', await p.evaluate(() => { const s = document.querySelector('.sheet'); const was = s.dataset.st; s.dataset.st = 'in-lettura'; const h = getComputedStyle(document.querySelector('.rate-f')).display === 'none'; s.dataset.st = was; return h; }));
   ok('linea della voce scelta: 3 px', await p.evaluate(() => getComputedStyle(document.querySelector('.seg-ink')).height) === '3px');
   await p.emulateMedia({ reducedMotion: 'reduce' });
   ok('movimento ridotto: linea ferma', await p.evaluate(() => getComputedStyle(document.querySelector('.seg-ink')).transitionDuration) === '0s');
