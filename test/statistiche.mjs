@@ -157,7 +157,8 @@ async function pagina(browser) {
   const txt = sel => p.locator(sel).first().innerText({ timeout: 2000 }).catch(() => '');
   ok('pulsanti racconto 2025 e 2024 nelle loro mensole', (await p.$$eval('section.ys button.story-btn', els => els.map(e => e.closest('section.ys').dataset.year + '=' + e.dataset.story).join())) === '2025=2025,2024=2024' && !(await p.locator('section.ys[data-year="2019"] .story-btn').count()));
   const panels = await p.$$eval('[data-panel]', els => els.map(e => e.dataset.panel).join());
-  ok('blocchi di Sempre presenti', panels === 'voti,tempo,mesi,autori,generi', panels);
+  ok('anni precedenti nascosti dietro il pulsante', await p.locator('#ys-more').isVisible() && !(await p.locator('section.ys[data-year="2019"]').isVisible()) && await p.locator('section.ys[data-year="2025"]').isVisible());
+  ok('blocchi di Sempre presenti', panels === 'autori,tempo,mesi,voti,generi', panels);
   ok('incipit con i dati di prova', (await txt('.stats-lede')).replace(/\s+/g, ' ').trim() === 'Hai letto 8 libri, 2850 pagine in tutto. Il mese in cui finisci più libri è agosto.', await txt('.stats-lede'));
   ok('tempo: 40 giorni in media', /\b40\b/.test(await txt('[data-panel="tempo"]')));
   ok('voti: 7 libri votati, media 3,4', /7 libri votati · media 3,4/.test(await txt('[data-panel="voti"]')));
@@ -190,7 +191,7 @@ async function pagina(browser) {
     ok(`${tag}: niente scorrimento orizzontale`, await noHScroll(p));
     if (width === 1366) {
       ok(`${tag}: mensole a sinistra e Sempre a destra`, await p.evaluate(() => { const a = document.querySelector('.stats-years').getBoundingClientRect(), b = document.querySelector('.sempre').getBoundingClientRect(); return a.right <= b.left && Math.abs(a.top - b.top) < 4; }));
-      ok(`${tag}: Voti e Tempo affiancati, Autori a tutta larghezza`, await p.evaluate(() => { const r = s => document.querySelector(`[data-panel="${s}"]`).getBoundingClientRect(); return Math.abs(r('voti').top - r('tempo').top) < 4 && r('autori').width > r('voti').width * 1.8; }));
+      ok(`${tag}: Tempo e Mesi affiancati, Autori a tutta larghezza`, await p.evaluate(() => { const r = s => document.querySelector(`[data-panel="${s}"]`).getBoundingClientRect(); return Math.abs(r('mesi').top - r('tempo').top) < 4 && r('autori').width > r('tempo').width * 1.8; }));
       ok(`${tag}: file da 167 px`, await p.$eval('.ys-row', e => e.getBoundingClientRect().height >= 167));
     }
     ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
@@ -212,6 +213,7 @@ async function mensole(browser) {
   ok('tocco su un dorso: si apre la scheda di «Due»', await p.locator('.sheet').isVisible() && /Due/.test(await p.locator('.sheet').innerText()));
   await p.fill('#f-started', '2024-08-20'); await p.fill('#f-finished', '2024-08-22'); await save(p);
   ok('«Due» passa sulla mensola del 2024 senza ricaricare', await p.locator('section.ys[data-year="2024"] [data-id="Due"]').count() === 1 && !(await p.locator('section.ys[data-year="2025"] [data-id="Due"]').count()));
+  ok('2024 era tra gli anni precedenti: ora aperti', await p.locator('#ys-old').isVisible() && await p.locator('#ys-more').getAttribute('aria-expanded') === 'true');
   ok('dopo il salvataggio il focus torna sul dorso', await p.evaluate(() => document.activeElement?.dataset?.id) === 'Due');
   const lp = p.locator('section.ys[data-year="2019"] [data-id="Cinque"]');
   await lp.dispatchEvent('pointerdown', { clientX: 5, clientY: 5 }); await p.waitForTimeout(700);
@@ -296,7 +298,7 @@ async function incipit(browser) {
 async function racconto(browser) {
   let p = await statsPage(browser, FIXTURE);
   const cur = () => p.$eval('#story .slide:not([hidden])', e => e.dataset.s).catch(() => '');
-  const open = async y => { await p.locator(`button.story-btn[data-story="${y}"]`).click(); await p.waitForSelector('#story[role="dialog"][aria-modal="true"]', { timeout: 3000 }); };
+  const open = async y => { const sb = p.locator(`button.story-btn[data-story="${y}"]`); if (!(await sb.isVisible())) await p.locator('#ys-more').click(); await sb.click(); await p.waitForSelector('#story[role="dialog"][aria-modal="true"]', { timeout: 3000 }); };
   await open(2025);
   const ids = await p.$$eval('#story .slide', els => els.map(e => e.dataset.s).join());
   ok('2025: 9 schermate', ids === 'copertina,numeri,mese,tempo,autore,genere,preferito,voti,chiusura', ids);

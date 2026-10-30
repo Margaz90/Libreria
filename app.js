@@ -14,7 +14,8 @@
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
   const PAGE = 15; // libri mostrati per volta in ogni scaffale e nelle copertine: il resto si apre con "Mostra altri"
-  const resetLimits = () => { state.limit = {}; };
+  let statsOld = false; // anni precedenti aperti nelle Statistiche
+  const resetLimits = () => { state.limit = {}; statsOld = false; };
   const FILTERS = [["tutti", "Tutti"], ["in-lettura", "In lettura"], ["letto", "Letti"], ["da-leggere", "Da leggere"], ["desiderato", "Desideri"]];
 
   /* ---------- utilità ---------- */
@@ -1047,7 +1048,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <button class="rcover" data-id="${esc(b.id)}" aria-label="Apri ${esc(b.title)}">${coverHTML(b)}</button>
         <div class="rbody">
           <span class="rlabel">In lettura adesso</span>
-          <h3>${esc(b.title)}</h3><p class="rmeta">${b.series ? `<b>${esc(serLabel(b))}</b>${b.author ? " · " : ""}` : ""}${esc(b.author || "")}</p>
+          <h3>${esc(b.title)}</h3><p class="rmeta">${esc(b.author || "")}</p>${b.series ? `<p class="rmeta rser">${esc(serLabel(b))}</p>` : ""}
         </div>
         <div class="rctl">
           ${tot ? `<input type="range" min="0" max="${tot}" value="${Math.min(pg, tot)}" style="--pct:${100 * Math.min(pg, tot) / tot}%" data-range="${esc(b.id)}" aria-label="Avanzamento di ${esc(b.title)}" aria-valuetext="pagina ${Math.min(pg, tot)} di ${tot}">` : ""}
@@ -1260,7 +1261,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   let statsLast = null; // ultimi calcoli, per ridisegnare una sola mensola
   function renderStats(st) {
-    const S = st.sempre;
+    const S = st.sempre, curY = new Date().getFullYear(), old = st.anni.filter(a => a.year < curY - 1); // si vedono l'anno in corso (se ha libri) e il passato
     if (!S.read) return `<div class="stats"><p class="stats-empty">Quando segnerai un libro come Letto, qui compariranno le tue statistiche</p></div>`;
     const blk = (key, title, small, body, cls = "") => `<section class="sblk${cls}" data-panel="${key}"><h3>${title}${small ? ` <small>${small}</small>` : ""}</h3>${body}</section>`;
     const maxR = Math.max(...Object.values(S.ratings)), rated = Object.values(S.ratings).reduce((x, y) => x + y, 0), f5 = S.fiveStars.map(b => `<b>${esc(b.title)}</b>`);
@@ -1279,14 +1280,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const generi = S.genres.length ? S.genres.map(g => hbar(esc(g.name), g.count, maxG, g.name)).join("") : `<p class="hint">Aggiungi il genere nella scheda dei libri.</p>`;
     return `<div class="stats"><h2 class="stats-title" tabindex="-1">Statistiche</h2>${ledeHTML(S)}
       <div class="stats-cols"><div class="stats-years"><h2 class="sr">Anno per anno</h2>
-        ${st.anni.map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}
+        ${st.anni.filter(a => a.year >= curY - 1).map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}
+        ${old.length ? `<button class="btn ys-more" id="ys-more" type="button" aria-expanded="${statsOld}" aria-controls="ys-old">${statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${old.length})`}</button><div class="ys-old" id="ys-old"${statsOld ? "" : " hidden"}>${old.map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}</div>` : ""}
         ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
         ${st.noYear ? `<div class="stats-noyear"><b>${st.noYear === 1 ? "1 libro letto senza anno." : `${num(st.noYear)} libri letti senza anno.`}</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</div>` : ""}
       </div><div class="sempre"><h2 class="sr">Sempre</h2>
-        ${blk("voti", "Voti", rated ? `${plural(rated, "libro votato", "libri votati")} · media ${dec(S.avgRating)}` : "nessun voto", voti)}
+        ${blk("autori", "Autori", "", autori, " span2")}
         ${blk("tempo", "Tempo di lettura", D ? plural(D.count, "libro con le date", "libri con le date") : "", tempo)}
         ${blk("mesi", "Mesi", S.monthsCount ? plural(S.monthsCount, "libro con la data di fine", "libri con la data di fine") : "", mesi)}
-        ${blk("autori", "Autori", "", autori, " span2")}
+        ${blk("voti", "Voti", rated ? `${plural(rated, "libro votato", "libri votati")} · media ${dec(S.avgRating)}` : "nessun voto", voti, " span2")}
         ${blk("generi", "Generi", "", generi, " span2")}
       </div></div></div>`;
   }
@@ -1408,10 +1410,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function statsFocusRestore(k) {
     const m = $("#main"), t = (k.id && m.querySelector(`section.ys [data-id="${CSS.escape(k.id)}"]`)) || m.querySelector(`#ys-${k.year}`) || m.querySelector(".stats-title");
     if (!t) return;
+    const box = t.closest("#ys-old"); // il libro è finito in un anno nascosto: si aprono gli anni precedenti
+    if (box && box.hidden) { statsOld = true; box.hidden = false; const ym = $("#ys-more"); if (ym) { ym.setAttribute("aria-expanded", "true"); ym.textContent = "Nascondi gli anni precedenti"; } }
     if (sheetOpen()) lastFocus = t; else t.focus({ preventScroll: true });
   }
   function wireMain(root) {
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
+    const ym = root.querySelector("#ys-more");
+    if (ym) ym.onclick = () => { statsOld = !statsOld; const box = $("#ys-old"); box.hidden = !statsOld; ym.setAttribute("aria-expanded", statsOld); ym.textContent = statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${box.querySelectorAll("section.ys").length})`; };
     root.querySelectorAll("[data-choose]").forEach(btn => btn.onclick = () => { const s = openSheet(""); fillNext(s); $("button", s).focus(); });
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {

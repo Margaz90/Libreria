@@ -315,7 +315,10 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .kv { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .kv .callno { font-family: var(--mono); color: var(--ink); }
 .sheet.book .sheet-top { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
-.sheet.book .sheet-top > div:last-child { align-self: center; padding-top: 36px; align-items: flex-end; text-align: right; gap: 4px; } /* testi a destra, sotto la ✕ */
+.sheet.book .sheet-top { position: relative; }
+.sheet.book .sheet-top::before { content: ""; position: absolute; left: 127px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--coral); } /* separatore tra copertina e testi */
+.sheet.book .sheet-top > div:last-child { align-self: end; padding-top: 36px; align-items: flex-end; text-align: right; gap: 4px; } /* testi a destra, in basso */
+.sheet.book[data-st="letto"] .sheet-top > div:last-child { padding-bottom: 30px; } /* l'ultima riga all'altezza delle stelle */
 .sheet.book .sheet-top .sub { margin-top: 0; }
 .sheet.book .sheet-top .kv { justify-content: flex-end; }
 .sheet.book .sheet-top .sserie { margin-top: 2px; }
@@ -749,3 +752,9 @@ html { scroll-behavior: smooth; }
   .sheet.book .colo .refresh, .sheet.book .colo details.edit { grid-column: 1 / -1; }
   .sheet.book .colo .refresh { align-items: center; }
 }
+
+/* v75: home a tre righe, anni precedenti delle Statistiche */
+.rmeta.rser { color: var(--accent); font-weight: 600; }
+.ys-old { display: flex; flex-direction: column; gap: 30px; }
+.ys-old[hidden] { display: none; }
+.ys-more { align-self: flex-start; min-height: 44px; margin: 4px 0 12px; }
