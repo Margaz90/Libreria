@@ -314,7 +314,11 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .sheet-top .cover .ca { font-size: 8px; }
 .kv { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .kv .callno { font-family: var(--mono); color: var(--ink); }
-.sheet.book .sheet-top > div:last-child { padding-right: 36px; } /* il titolo non passa sotto la ✕ */
+.sheet.book .sheet-top { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+.sheet.book .sheet-top > div:last-child { align-self: center; padding-top: 36px; align-items: flex-end; text-align: right; gap: 4px; } /* testi a destra, sotto la ✕ */
+.sheet.book .sheet-top .sub { margin-top: 0; }
+.sheet.book .sheet-top .kv { justify-content: flex-end; }
+.sheet.book .sheet-top .sserie { margin-top: 2px; }
 .synopsis { font-size: 14px; color: var(--muted); margin: 0; white-space: pre-line; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label, .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -651,10 +655,13 @@ html { scroll-behavior: smooth; }
 .grid-serie { display: grid; grid-template-columns: 1fr 84px; gap: 10px; }
 
 /* Scheda del libro: frontespizio */
+.sheet[data-st="in-lettura"] .rf-head > .field:first-child { order: -2; } /* In lettura: stato, pagina, poi le date */
+.sheet[data-st="in-lettura"] .rf-head #f-pblk { order: -1; margin-bottom: 6px; }
+.sheet[data-st="in-lettura"] .rf .period { gap: 10px; }
 .sheet[data-st]:not([data-st="letto"]) .rate-f { display: none; } /* voto solo per i Letto */
 .sheet-top .stc { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .sheet-top .stc > .cover { align-self: stretch; }
-.sheet-top .rate-f { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0 -12px; }
+.sheet-top .rate-f { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .sheet-top .rate-f .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .sheet-top .rate { gap: 0; }
 .sheet-top .rate button { width: 24px; height: 32px; padding: 0; font-size: 18px; color: var(--muted); }
