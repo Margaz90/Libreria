@@ -21,9 +21,9 @@ Diego ha chiesto di pubblicare: invocare questa skill vale come approvazione per
 - Se un test fallisce: **non pubblicare**. Correggi la causa (non il test), rilancia, e pubblica solo con tutto verde. Se la correzione esce da quanto chiesto, fermati e spiega a Diego cosa non va.
 - Se la modifica tocca l'aspetto, guarda anche uno screenshot a 390x844 e 1366x860.
 
-## 4. Storia in CLAUDE.md
-- Aggiungi in cima a "Storia del lavoro" una riga: **titolo breve** (vNN): cosa cambia per Diego, in una frase.
-- Aggiorna le sezioni di `CLAUDE.md` che descrivono funzioni toccate dalla modifica.
+## 4. Storia e funzioni
+- Aggiungi in cima a `docs/storia.md` una riga: **titolo breve** (vNN): cosa cambia per Diego, in una frase. In `CLAUDE.md`, sezione "Storia del lavoro", aggiorna l'elenco delle ultime tre versioni.
+- Aggiorna in `docs/funzioni.md` le voci delle funzioni toccate dalla modifica, e il riassunto in `CLAUDE.md` solo se cambia qualcosa di essenziale (nomi di funzioni, regole).
 
 ## 5. Commit e unione
 - Commit in italiano: titolo breve con la versione tra parentesi, poi il perché in poche righe; chiudi con le righe di attribuzione richieste dall'ambiente.

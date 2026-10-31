@@ -10,7 +10,7 @@ Rispondi in italiano. Se la verifica è partita dal promemoria automatico, fai p
 ## 1. Cosa è cambiato
 - Data dell'ultima verifica: `.claude/verifica-hook.json` (campo `ultima`).
 - `git log --oneline --since=<ultima>` e `git diff --stat <primo commit dopo quella data>^ HEAD`: file nuovi, funzioni nuove, librerie o servizi esterni aggiunti, file che cambiano spesso.
-- "Storia del lavoro" in `CLAUDE.md`: problemi ripetuti o errori costati tempo (sono i candidati migliori per un hook).
+- Storia del lavoro in `docs/storia.md`: problemi ripetuti o errori costati tempo (sono i candidati migliori per un hook).
 - Hook già presenti: `.claude/settings.json` e `.claude/hooks/`. Controlla anche che funzionino ancora, passando a ogni script un JSON di prova su stdin.
 - Se è installato il plugin `claude-code-setup`, usa la sua skill `claude-automation-recommender` per un secondo parere.
 
@@ -18,7 +18,7 @@ Rispondi in italiano. Se la verifica è partita dal promemoria automatico, fai p
 - Proponi **da 0 a 3** nuovi hook, solo se c'è un motivo concreto legato a quanto è cambiato. Se non serve nulla, dillo chiaramente: è un esito normale.
 - Valuta anche se un hook esistente va corretto o tolto (es. avvisa troppo spesso, o controlla qualcosa che non esiste più).
 - Presenta tutto in una tabella: hook, cosa fa, perché ora (il cambiamento che lo motiva), pro, contro. Indica quale consigli.
-- **Non creare né modificare hook** finché Diego non approva. Quando approva, seguili come gli altri: script in `.claude/hooks/`, prova con input simulato, voce in `.claude/settings.json`, descrizione in `CLAUDE.md`.
+- **Non creare né modificare hook** finché Diego non approva. Quando approva, seguili come gli altri: script in `.claude/hooks/`, prova con input simulato, voce in `.claude/settings.json`, descrizione in `docs/strumenti.md` e una riga nel riassunto di `CLAUDE.md`.
 
 ## 3. Registra la verifica
 - Aggiorna `ultima` in `.claude/verifica-hook.json` con la data di oggi (AAAA-MM-GG), anche se non hai proposto nulla.
