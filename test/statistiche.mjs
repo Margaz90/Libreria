@@ -70,7 +70,9 @@ async function scheda(browser) {
   await p.locator('.quick [data-st="letto"]').click();
   await p.waitForTimeout(800);
   b = await book(p, 's5');
-  ok('menu rapido: libro con solo l\'anno passa a Letto senza la data di oggi', b.status === 'letto' && !b.finished && b.finishedYear === 2019, JSON.stringify(b));
+  // v76: un Da leggere non tiene più il vecchio «solo l'anno» (sistemato all'avvio), quindi a Letto prende la data di oggi.
+  // Che un anno già noto non venga coperto dalla data di oggi lo controlla il gruppo `lettura` (passa → Letto con l'anno).
+  ok('menu rapido: Da leggere con un vecchio anno (tolto all\'avvio) → Letto con la data di oggi', b.status === 'letto' && b.finished === isoToday() && b.finishedAuto === true && b.finishedYear === undefined, JSON.stringify(b));
 
   // Riletto: rimesso In lettura dal menu rapido perde l'anno vecchio, e «Finito» mette la data di oggi
   await p.locator('#main [data-id="s5"]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 });

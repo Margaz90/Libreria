@@ -136,8 +136,45 @@
     if (!out.added) out.added = Date.now();
     return out;
   }
+  // Regole della lettura (v76): cambio di stato, coerenza dei campi, anno in cui un libro risulta letto.
+  // Le usano menu rapido, «Finito!», «Inizia», scheda, import, cloud e obiettivo: lo stesso gesto dà lo stesso risultato ovunque.
+  // Funzioni pure: restituiscono una copia e non salvano. `oggi` è AAAA-MM-GG.
+  const lettura = {
+    // Il libro dopo il passaggio allo stato `st`.
+    passa(b, st, oggi) {
+      const nb = { ...b, status: st };
+      if (st !== b.status) {
+        // A Letto: la data di oggi (messa dall'app), mai se si conosce già la fine o l'anno.
+        if (st === "letto" && !nb.finished && !nb.finishedYear) { nb.finished = oggi; nb.finishedAuto = true; }
+        // A In lettura: una rilettura riparte da oggi; un libro nuovo da oggi se non ha già un inizio.
+        if (st === "in-lettura" && (b.status === "letto" || !nb.started)) nb.started = oggi;
+      }
+      if (st === "letto" && Number(nb.pages) > 0) nb.page = Number(nb.pages); // letto = tutte le pagine
+      return lettura.sistema(nb);
+    },
+    // Coerenza: fine, anno e fine automatica solo per un libro letto (mai fine e anno insieme); un letto con una pagina
+    // scritta ha letto tutte le pagine (senza pagina scritta resta senza: la scheda mostra comunque il totale).
+    sistema(b) {
+      const nb = { ...b };
+      if (nb.status !== "letto") { delete nb.finished; delete nb.finishedYear; delete nb.finishedAuto; }
+      else if (Number(nb.pages) > 0 && nb.page !== undefined) nb.page = Number(nb.pages);
+      if (nb.finished) delete nb.finishedYear;
+      if (!nb.finished) delete nb.finishedAuto;
+      return nb;
+    },
+    // Anno di lettura come nelle Statistiche: la fine se valida e non futura, altrimenti «solo l'anno» se plausibile.
+    annoLetto(b, oggi) {
+      if (b.status !== "letto") return null;
+      if (typeof b.finished === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.finished) && b.finished <= oggi) return Number(b.finished.slice(0, 4));
+      const fy = Number(b.finishedYear);
+      return Number.isInteger(fy) && fy >= 1900 && fy <= Number(oggi.slice(0, 4)) ? fy : null;
+    },
+  };
+  window.libreriaLettura = Object.freeze(lettura);
+  // Il libro com'è salvato: formato (clean) e regole della lettura.
+  const tidy = b => lettura.sistema(clean(b));
   function upsert(b) {
-    const data = clean(b);
+    const data = tidy(b);
     let id = b.id, i = id ? state.books.findIndex(x => x.id === id) : -1;
     const prev = i >= 0 ? state.books[i] : null;
     data.updated = Date.now();
@@ -183,11 +220,19 @@
       const cur = known.get(keyOf(raw)), now = Date.now();
       if (cur && !update) { skipped++; continue; }
       if (cur) {
-        const nb = { ...cur, ...clean(raw), id: cur.id, added: cur.added || now, updated: now };
+        // «Aggiorna»: cambiano solo i campi presenti nel file (validi); gli altri restano come sono. clean() da solo
+        // riempirebbe stato e voto mancanti con «Da leggere» e 0, e riporterebbe indietro i libri.
+        const c = clean(raw), merged = { ...cur };
+        const given = k => raw[k] !== undefined && raw[k] !== null && raw[k] !== "" && c[k] !== undefined && (k !== "status" || STATUS_ONE[raw.status]);
+        for (const k of FIELDS) if (given(k)) merged[k] = c[k];
+        // Campi che vanno insieme: una fine dal file non è «messa dall'app»; una serie nuova non tiene numero e seguito della vecchia.
+        if (given("finished") && !given("finishedAuto")) delete merged.finishedAuto;
+        if (given("series") && c.series !== cur.series) ["seriesNo", "seriesNext"].forEach(k => { if (!given(k)) delete merged[k]; });
+        const nb = { ...tidy(merged), id: cur.id, added: cur.added || now, updated: now };
         if (nb.spine && nb.spine !== cur.spine) nb.spineAt = now;
         state.books[state.books.indexOf(cur)] = nb; known.set(keyOf(nb), nb); ids.push(nb.id); updated++;
       } else {
-        const b = { ...clean(raw), id: newId(), updated: now };
+        const b = { ...tidy(raw), id: newId(), updated: now };
         if (b.spine) b.spineAt = now;
         state.books.push(b); known.set(keyOf(b), b); ids.push(b.id); added++;
       }
@@ -207,7 +252,7 @@
       if (!raw || !raw.title) continue;
       const i = state.books.findIndex(x => samePurchase(x, raw));
       if (i < 0) {
-        const b = { ...clean({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
+        const b = { ...tidy({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
         state.books.push(b); ids.push(b.id); newIds.push(b.id); added++;
       } else if (state.books[i].status === "desiderato") {
         state.books[i] = { ...state.books[i], status: "da-leggere", updated: now }; ids.push(state.books[i].id); moved++;
@@ -843,7 +888,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function renderTally() {
     const read = state.books.filter(b => b.status === "letto");
     const y = new Date().getFullYear();
-    const done = read.filter(b => yearOf(b.finished) === y).length;
+    const t = today(), done = read.filter(b => lettura.annoLetto(b, t) === y).length; // come le Statistiche
     const goal = (getSet().goals || {})[y] || 0;
     const pct = goal ? Math.min(1, done / goal) : 0;
     const C = 2 * Math.PI * 19;
@@ -1078,16 +1123,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       ${moreBtn}</section>`;
   }
   function setStatus(b, st) {
-    const nb = { ...b, status: st };
-    // La data di oggi solo al passaggio a Letto, e mai se si conosce già l'anno di lettura.
-    if (st === "letto" && b.status !== "letto" && !nb.finished && !nb.finishedYear) { nb.finished = today(); nb.finishedAuto = true; }
-    if (st === "in-lettura") { // si rilegge: la fine e l'anno della lettura precedente non valgono più, l'inizio riparte da oggi
-      delete nb.finishedYear;
-      if (nb.finished) { delete nb.finished; nb.started = today(); } else if (!nb.started) nb.started = today();
-    }
-    if (st === "letto" && nb.pages) nb.page = nb.pages;
+    const nb = lettura.passa(b, st, today());
     upsert(nb);
-    toast(`Spostato in ${STATUS[st]}`);
+    // Se il cambio toglie delle date (fine, anno, vecchio inizio), un tocco sbagliato si recupera con «Annulla».
+    const lost = ["started", "finished", "finishedYear"].some(k => b[k] && b[k] !== nb[k]);
+    if (!lost) { toast(`Spostato in ${STATUS[st]}`); return; }
+    const id = b.id, before = {}; NX_FIELDS.forEach(f => { if (f in b) before[f] = b[f]; });
+    toast(`Spostato in ${STATUS[st]}`, { label: "Annulla", run: () => {
+      const cur = state.books.find(x => x.id === id);
+      if (!cur || cur.status !== st) { toast("Non annullato: il libro è cambiato nel frattempo"); return; }
+      const back = { ...cur }; NX_FIELDS.forEach(f => delete back[f]);
+      upsert({ ...back, ...before });
+      toast(`Rimesso in ${STATUS[before.status] || ""}`.trim());
+    } });
   }
 
   function cardHTML(b) {
@@ -1660,15 +1708,26 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="field"><label for="d-call">Segnatura</label><input id="d-call" value="${esc(b.callNo || "")}" placeholder="853.914 LEV"></div>
       </div>`;
   }
-  function wireRating(sheet, holder) {
+  // `esistente`: scheda di un libro già in libreria. Lì cambiare lo stato è un passaggio (regole di lettura): l'inizio
+  // si aggiorna subito, così si vede prima di salvare. In Nuovo libro no: non c'è uno stato di partenza.
+  function wireRating(sheet, holder, { esistente = false } = {}) {
     const seg = $(".seg", sheet);
+    const s0 = $("#f-started", sheet), f0 = $("#f-finished", sheet), st0 = $("#f-status", sheet);
+    const orig = esistente && s0 && f0 && st0 ? { st: st0.value, started: s0.value, finished: f0.value, auto: f0.dataset.auto } : null;
+    if (orig) [s0, f0].forEach(el => el.addEventListener("change", () => { el.dataset.hand = "1"; })); // date scelte a mano: non le rimetto com'erano
     if (seg) {
       const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
         if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
       seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
+        if (btn.dataset.v === $("#f-status", sheet).value) return; // stato già scelto: niente da cambiare
         seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
         $("#f-status", sheet).value = btn.dataset.v; sync();
         const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
+        if (orig) { // come lettura.passa, a partire dallo stato con cui si è aperta la scheda
+          const v = btn.dataset.v, back = v === orig.st;
+          if (!s0.dataset.hand) { s0.value = s0.dataset.ok = back ? orig.started : (v === "in-lettura" && (orig.st === "letto" || !orig.started) ? today() : orig.started); s0.max = today(); }
+          if (back && v === "letto" && !f0.dataset.hand && !s0.dataset.hand) { f0.value = f0.dataset.ok = orig.finished; if (orig.auto) f0.dataset.auto = orig.auto; else delete f0.dataset.auto; }
+        }
         if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
         syncYearRow(sheet); syncPage(sheet); syncPeriod(sheet);
         const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating || 0, btn.dataset.v);
@@ -2099,7 +2158,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="fp-main">${body}</div>
       <div class="sheet-bar"><button class="btn danger" id="s-del">Elimina</button><button class="btn primary" id="s-save">Salva</button></div>`, "book");
     sheet.dataset.st = b.status || "da-leggere"; // il voto si vede solo per i Letto
-    wireRating(sheet, b); wirePageCtl(sheet); syncColophon(sheet); synClamp(sheet);
+    wireRating(sheet, b, { esistente: true }); wirePageCtl(sheet); syncColophon(sheet); synClamp(sheet);
     $("#s-syn-more", sheet).onclick = e => { const o = $("#s-syn", sheet).classList.toggle("open"); e.currentTarget.setAttribute("aria-expanded", o); e.currentTarget.setAttribute("aria-label", o ? "Mostra meno trama" : "Mostra tutta la trama"); e.currentTarget.textContent = o ? "Mostra meno" : "…"; };
     if (!$("#f-status", sheet)) sheet.querySelectorAll("[id^=d-]").forEach(el => el.addEventListener("input", () => syncColophon(sheet))); // Desiderato: niente blocchi della lettura
     wireSearch(sheet, hit => fillData(sheet, hit, b, { keepYear: true }));
@@ -2287,7 +2346,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   function openMore() {
     const y = new Date().getFullYear(), goal = (getSet().goals || {})[y];
-    const done = state.books.filter(b => b.status === "letto" && yearOf(b.finished) === y).length;
+    const t = today(), done = state.books.filter(b => lettura.annoLetto(b, t) === y).length;
     const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
     const missing = state.books.filter(b => !b.cover && !b.noCover).length;
     const sheet = openSheet(`<h2>Altro</h2>
@@ -2329,7 +2388,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     setLocal(id, book) {
       const i = state.books.findIndex(x => x.id === id);
       if (!book) { if (i >= 0) state.books.splice(i, 1); return; }
-      const nb = { ...clean(book), id };
+      const nb = { ...tidy(book), id }; // regole della lettura anche sui libri in arrivo, senza cambiare `updated`
       if (i >= 0) state.books[i] = nb; else state.books.push(nb);
     },
     renameLocal(from, to) {
@@ -2451,9 +2510,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const g = n => (ix(n) >= 0 ? (r[ix(n)] || "").trim() : "");
       return {
         title: g("Title").replace(/\s*\([^)]*#\d+[^)]*\)\s*$/, ""), author: g("Author").replace(/\s+/g, " "),
-        rating: Number(g("My Rating")) || 0, pages: Number(g("Number of Pages")) || undefined,
+        rating: Number(g("My Rating")) || undefined, pages: Number(g("Number of Pages")) || undefined,
         year: Number(g("Original Publication Year")) || Number(g("Year Published")) || undefined,
-        finished: g("Date Read").replace(/\//g, "-"), status: shelf[g("Exclusive Shelf")] || "da-leggere",
+        finished: g("Date Read").replace(/\//g, "-"), status: shelf[g("Exclusive Shelf")], // voto 0 e scaffale sconosciuto = dato assente: con «aggiorna» non cambiano il libro (un libro nuovo va in Da leggere)
         notes: g("My Review").replace(/<br\s*\/?>/gi, "\n")
       };
     }).filter(b => b.title);
@@ -2735,6 +2794,18 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       persist(); localStorage.setItem("libreria-schema", "2");
     }
   } catch {}
+  // Regole della lettura (v76) sui libri già salvati: un Da leggere con la vecchia fine, un Letto a metà pagine…
+  // Li sistemo senza cambiare `updated` (niente invii al cloud). La prima volta prima salvo una copia dei dati com'erano.
+  {
+    const RK = ["finished", "finishedYear", "finishedAuto", "page"];
+    const fixed = state.books.map(b => { const nb = lettura.sistema(b); return RK.some(k => nb[k] !== b[k]) ? nb : null; });
+    if (fixed.some(Boolean)) {
+      let first = true; try { first = localStorage.getItem("libreria-regole") !== "1"; } catch {}
+      const copy = first ? snapshot("Prima delle regole di lettura") : Promise.resolve(); // legge i libri adesso, prima delle correzioni
+      state.books = state.books.map((b, i) => fixed[i] || b);
+      copy.catch(() => {}).finally(() => { persist(); try { localStorage.setItem("libreria-regole", "1"); } catch {} });
+    }
+  }
   render();
   // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
   try { if (cloudInfo().uid || /oobCode=/.test(location.search) || sessionStorage.getItem("libreria-auth-pending")) loadCloud().catch(() => {}); } catch {}

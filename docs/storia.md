@@ -2,6 +2,7 @@
 
 Estratta verbatim da `CLAUDE.md`. Le voci nuove vanno in cima (le scrive `/pubblica`).
 
+- **Regole della lettura uguali ovunque** (v76): menu rapido e scheda danno lo stesso risultato per lo stesso cambio di stato (rilettura da oggi, Da leggere senza vecchie date), «Annulla» nel menu rapido quando si tolgono delle date, anello dell'obiettivo contato come le Statistiche, import con «aggiorna» che non tocca i campi assenti nel file (prima riportava a Da leggere e azzerava il voto), libri incoerenti sistemati all'avvio con una copia. Prima proposta della revisione dell'architettura (2 novembre 2026).
 - **Menu e layout** (c931d51 → eb9688c, v24-v28): barra a icone in basso sotto 1024 px, colonna laterale con conteggi, filtri a pillole, barra in alto fissa, selettore scaffale/copertina, libri in lettura in primo piano, sezione in alto come da mockup.
 - **Obiettivo e filtri** (fa53371, 4f56e26, v29-v30): obiettivo su una riga con anello, selettore vista alla stessa altezza, niente numeri sui filtri sotto 700 px, obiettivo senza mancanti.
 - **Desideri e copertine** (c813fc4, cacf429, v22-v23): lista dei desideri con "Ho acquistato", scelta della copertina in Nuovo libro.
