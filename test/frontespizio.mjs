@@ -185,7 +185,8 @@ async function frase(browser) {
   await p.focus('#f-started'); await p.keyboard.press('Enter'); const n2 = await p.evaluate(() => window.__pick);
   ok('clic e Invio chiamano showPicker', n1 === 1 && n2 === 2, n1 + ',' + n2);
   await p.click('.seg [data-v="in-lettura"]');
-  ok('cambio di stato: R1 e suggerimento', await txt(p, '.pline') === 'In lettura dal 10 marzo 2025' && await vis(p, '#f-pend-hint') && !(await vis(p, '#f-pc-end')), await txt(p, '.pline'));
+  // v76: rimettere In lettura un libro letto è una rilettura, che riparte da oggi (orologio fisso al 29 ottobre 2026)
+  ok('cambio di stato: R1 e suggerimento', await txt(p, '.pline') === 'In lettura dal 29 ottobre 2026' && await vis(p, '#f-pend-hint') && !(await vis(p, '#f-pc-end')), await txt(p, '.pline'));
   await close();
   await openBook(p, 'f4');
   ok('L3 con segnale e anno', await txt(p, '.pline') === 'Iniziato il 10 marzo 2025 e finito il scegli la data' && await vis(p, '#s-stale') && await vis(p, '#f-year-row'), await txt(p, '.pline'));
@@ -326,7 +327,7 @@ async function colophon(browser) {
   await p.fill('#d-genre', '');
   ok('senza genere: solo pagine', (await facts())[1] === '400 pagine');
   await p.click('.seg [data-v="in-lettura"]');
-  ok('cambio di stato: In lettura dal mese di dicembre 2024', (await txt(p, '#s-colo .l1')) === 'In lettura dal mese di dicembre 2024', await fin());
+  ok('cambio di stato (rilettura da oggi, v76): In lettura dal mese di ottobre 2026', (await txt(p, '#s-colo .l1')) === 'In lettura dal mese di ottobre 2026', await fin());
   await close();
   await openBook(p, 'c2'); const f2 = await fin(); await close();
   await openBook(p, 'c3'); const f3 = await fin(); const fc3 = await facts(); await close();
