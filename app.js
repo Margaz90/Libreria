@@ -223,7 +223,11 @@
         // «Aggiorna»: cambiano solo i campi presenti nel file (validi); gli altri restano come sono. clean() da solo
         // riempirebbe stato e voto mancanti con «Da leggere» e 0, e riporterebbe indietro i libri.
         const c = clean(raw), merged = { ...cur };
-        for (const k of FIELDS) if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "" && c[k] !== undefined && (k !== "status" || STATUS_ONE[raw.status])) merged[k] = c[k];
+        const given = k => raw[k] !== undefined && raw[k] !== null && raw[k] !== "" && c[k] !== undefined && (k !== "status" || STATUS_ONE[raw.status]);
+        for (const k of FIELDS) if (given(k)) merged[k] = c[k];
+        // Campi che vanno insieme: una fine dal file non è «messa dall'app»; una serie nuova non tiene numero e seguito della vecchia.
+        if (given("finished") && !given("finishedAuto")) delete merged.finishedAuto;
+        if (given("series") && c.series !== cur.series) ["seriesNo", "seriesNext"].forEach(k => { if (!given(k)) delete merged[k]; });
         const nb = { ...tidy(merged), id: cur.id, added: cur.added || now, updated: now };
         if (nb.spine && nb.spine !== cur.spine) nb.spineAt = now;
         state.books[state.books.indexOf(cur)] = nb; known.set(keyOf(nb), nb); ids.push(nb.id); updated++;
@@ -248,7 +252,7 @@
       if (!raw || !raw.title) continue;
       const i = state.books.findIndex(x => samePurchase(x, raw));
       if (i < 0) {
-        const b = { ...clean({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
+        const b = { ...tidy({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
         state.books.push(b); ids.push(b.id); newIds.push(b.id); added++;
       } else if (state.books[i].status === "desiderato") {
         state.books[i] = { ...state.books[i], status: "da-leggere", updated: now }; ids.push(state.books[i].id); moved++;
@@ -1710,18 +1714,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const seg = $(".seg", sheet);
     const s0 = $("#f-started", sheet), f0 = $("#f-finished", sheet), st0 = $("#f-status", sheet);
     const orig = esistente && s0 && f0 && st0 ? { st: st0.value, started: s0.value, finished: f0.value, auto: f0.dataset.auto } : null;
-    if (orig) s0.addEventListener("change", () => { s0.dataset.hand = "1"; }); // inizio scelto a mano: non lo tocco più
+    if (orig) [s0, f0].forEach(el => el.addEventListener("change", () => { el.dataset.hand = "1"; })); // date scelte a mano: non le rimetto com'erano
     if (seg) {
       const sync = () => { const on = seg.querySelector('[aria-checked="true"]'); const ink = seg.querySelector(".seg-ink");
         if (on && ink) { ink.style.width = on.offsetWidth + "px"; ink.style.transform = `translateX(${on.offsetLeft - 3}px)`; ink.style.opacity = 1; } };
       seg.querySelectorAll("button").forEach(btn => btn.onclick = () => {
+        if (btn.dataset.v === $("#f-status", sheet).value) return; // stato già scelto: niente da cambiare
         seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === btn)));
         $("#f-status", sheet).value = btn.dataset.v; sync();
         const fin = $("#f-finished", sheet); // la data di fine ha senso solo per un libro letto
         if (orig) { // come lettura.passa, a partire dallo stato con cui si è aperta la scheda
           const v = btn.dataset.v, back = v === orig.st;
           if (!s0.dataset.hand) { s0.value = s0.dataset.ok = back ? orig.started : (v === "in-lettura" && (orig.st === "letto" || !orig.started) ? today() : orig.started); s0.max = today(); }
-          if (back && v === "letto") { f0.value = f0.dataset.ok = orig.finished; if (orig.auto) f0.dataset.auto = orig.auto; else delete f0.dataset.auto; }
+          if (back && v === "letto" && !f0.dataset.hand && !s0.dataset.hand) { f0.value = f0.dataset.ok = orig.finished; if (orig.auto) f0.dataset.auto = orig.auto; else delete f0.dataset.auto; }
         }
         if (fin) { fin.disabled = btn.dataset.v !== "letto"; if (fin.disabled) { fin.value = ""; fin.dataset.ok = ""; } fin.min = $("#f-started", sheet).value || ""; }
         syncYearRow(sheet); syncPage(sheet); syncPeriod(sheet);
@@ -2505,9 +2510,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const g = n => (ix(n) >= 0 ? (r[ix(n)] || "").trim() : "");
       return {
         title: g("Title").replace(/\s*\([^)]*#\d+[^)]*\)\s*$/, ""), author: g("Author").replace(/\s+/g, " "),
-        rating: Number(g("My Rating")) || 0, pages: Number(g("Number of Pages")) || undefined,
+        rating: Number(g("My Rating")) || undefined, pages: Number(g("Number of Pages")) || undefined,
         year: Number(g("Original Publication Year")) || Number(g("Year Published")) || undefined,
-        finished: g("Date Read").replace(/\//g, "-"), status: shelf[g("Exclusive Shelf")] || "da-leggere",
+        finished: g("Date Read").replace(/\//g, "-"), status: shelf[g("Exclusive Shelf")], // voto 0 e scaffale sconosciuto = dato assente: con «aggiorna» non cambiano il libro (un libro nuovo va in Da leggere)
         notes: g("My Review").replace(/<br\s*\/?>/gi, "\n")
       };
     }).filter(b => b.title);

@@ -153,6 +153,25 @@ async function gesti(browser) {
   await p.waitForTimeout(200);
   const s5 = await book(p, 's5');
   ok('scheda chiusa senza salvare: libro invariato', s5.status === 'letto' && s5.finished === '2025-03-20', JSON.stringify(s5));
+  // Ritoccare lo stato già scelto non cambia nulla; una fine scelta a mano non viene rimessa com'era
+  await load(p, [{ ...base, id: 's6', title: 'Fine a mano', status: 'letto', started: '2025-03-01', finished: '2025-03-20' }]);
+  await openBook(p, 's6');
+  await p.evaluate(v => { const el = document.querySelector('#f-finished'); el.value = v; el.dispatchEvent(new Event('change')); }, '2025-03-25');
+  await p.locator('.seg [data-v="letto"]').click();
+  ok('scheda: ritoccare Letto tiene la fine scelta a mano', (await p.inputValue('#f-finished')) === '2025-03-25');
+  await p.locator('.seg [data-v="in-lettura"]').click(); await p.locator('.seg [data-v="letto"]').click();
+  ok('scheda: dopo In lettura e Letto non torna la fine di prima se l\'avevi cambiata', (await p.inputValue('#f-finished')) !== '2025-03-20');
+  await p.locator('#s-close').click(); await p.waitForTimeout(250);
+  const drop2 = p.locator('.unsaved [data-u="drop"]'); if (await drop2.count()) await drop2.click();
+  await p.waitForTimeout(200);
+  await openBook(p, 's6');
+  await p.evaluate(v => { const el = document.querySelector('#f-started'); el.value = v; el.dispatchEvent(new Event('change')); }, '2025-04-01');
+  const moved = await p.inputValue('#f-finished');
+  await p.locator('.seg [data-v="in-lettura"]').click(); await p.locator('.seg [data-v="letto"]').click();
+  const fin6 = await p.inputValue('#f-finished');
+  ok('scheda: nuovo inizio a mano, poi In lettura e Letto: nessuna fine prima dell\'inizio', !fin6 || fin6 >= '2025-04-01', JSON.stringify([moved, fin6]));
+  await p.locator('#s-close').click(); await p.waitForTimeout(250);
+  const drop3 = p.locator('.unsaved [data-u="drop"]'); if (await drop3.count()) await drop3.click();
   ok('gesti: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
@@ -212,6 +231,34 @@ async function importAggiorna(browser) {
   ok('import «aggiorna»: file parziale non cambia stato, voto, date e note', i1.status === 'letto' && i1.rating === 4 && i1.finished === '2025-04-01' && i1.notes === 'mie note' && i1.isbn === '9788804668237', JSON.stringify(i1));
   ok('import «aggiorna»: fine e anno mai insieme', i2.finished === '2025-05-01' && i2.finishedYear === undefined, JSON.stringify(i2));
   ok('import «aggiorna»: i campi presenti nel file vincono', i3.status === 'letto' && i3.rating === 5 && i3.finished === '2025-06-01' && i3.pages === 120, JSON.stringify(i3));
+  // Fine automatica e serie: i campi che vanno insieme cambiano insieme
+  await load(p, [
+    { ...base, id: 'i4', title: 'Fine auto', status: 'letto', finished: '2025-07-01', finishedAuto: true },
+    { ...base, id: 'i5', title: 'Serie vecchia', status: 'da-leggere', series: 'Vecchia', seriesNo: '3', seriesNext: 'Il quarto' },
+  ]);
+  await importa(p, [
+    { title: 'Fine auto', author: 'Autore Uno', finished: '2025-06-15' },
+    { title: 'Serie vecchia', author: 'Autore Uno', series: 'Nuova' },
+  ], true);
+  const [i4, i5] = [await book(p, 'i4'), await book(p, 'i5')];
+  ok('import «aggiorna»: una fine dal file non è più «messa dall\'app»', i4.finished === '2025-06-15' && i4.finishedAuto === undefined, JSON.stringify(i4));
+  ok('import «aggiorna»: serie nuova senza numero non tiene numero e seguito della vecchia', i5.series === 'Nuova' && i5.seriesNo === undefined && i5.seriesNext === undefined, JSON.stringify(i5));
+  // CSV Goodreads: un libro non votato su Goodreads o su uno scaffale sconosciuto non perde voto e stato
+  await load(p, [
+    { ...base, id: 'g1', title: 'Votato qui', status: 'letto', rating: 5, finished: '2025-01-05' },
+    { ...base, id: 'g2', title: 'Scaffale mio', status: 'in-lettura', rating: 0, started: '2025-10-01' },
+  ]);
+  await (async () => {
+    await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-file');
+    await p.setInputFiles('#i-file', { name: 'goodreads.csv', mimeType: 'text/csv', buffer: Buffer.from('Title,Author,My Rating,Exclusive Shelf,Date Read\nVotato qui,Autore Uno,0,read,\nScaffale mio,Autore Uno,0,favorites,\n') });
+    await p.locator('#i-upd').check();
+    await p.waitForFunction(() => !document.querySelector('#i-go').disabled, null, { timeout: 5000 });
+    await p.locator('#i-go').click(); await p.waitForTimeout(1200);
+    const close = p.locator('#i-close'); if (await close.isVisible().catch(() => false)) await close.click();
+  })();
+  const [g1, g2] = [await book(p, 'g1'), await book(p, 'g2')];
+  ok('CSV «aggiorna»: voto 0 su Goodreads non azzera il voto', g1.rating === 5 && g1.status === 'letto' && g1.finished === '2025-01-05', JSON.stringify(g1));
+  ok('CSV «aggiorna»: scaffale sconosciuto non cambia lo stato', g2.status === 'in-lettura' && g2.started === '2025-10-01', JSON.stringify(g2));
   ok('import «aggiorna»: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
