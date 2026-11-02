@@ -1,5 +1,5 @@
 // Serie e numero del volume: campi controllati da clean(), titoli simili, scheda (Serie e N.), pulsante serie, bollino, ordine Autore.
-import { APP, ok, newPage, localBooks } from './lib.mjs';
+import { APP, ok, newPage, localBooks, wait } from './lib.mjs';
 
 const load = async (p, books, set) => {
   await p.goto(APP + '/');
@@ -148,6 +148,8 @@ async function bollino(browser) {
   ok('scheda In lettura: autore e poi «Slough House · 4» su una riga sua, senza bollino', /Slough House · 4/.test(await rc.locator('.rser').innerText().catch(() => '')) && !/Slough/.test(await rc.locator('.rmeta:not(.rser)').innerText().catch(() => '')) && await rc.locator('.sno').count() === 0);
   await p.locator('.viewsw [data-mode="copertine"]').first().click();
   await p.waitForSelector('#main .card[data-id="d1"] .sno');
+  // A volte, solo nella suite completa, il primo controllo arriva prima che le copertine siano stabili: aspetta lo stato atteso.
+  await wait(async () => (await sno('d1').innerText()).trim() === '3' && await sno('n1').count() === 0).catch(() => {});
   const cvTxt = await sno('d1').innerText().catch(e => 'ERR ' + e.message.split('\n')[0]);
   const cvDom = await p.evaluate(() => [...document.querySelectorAll('#main [data-id="d1"], #main [data-id="n1"]')].map(e => e.dataset.id + ':' + e.className + ':' + getComputedStyle(e).display + ':' + (e.querySelector('.sno')?.innerText ?? '-')));
   ok('bollino su copertina', cvTxt.trim() === '3' && await sno('n1').count() === 0, JSON.stringify([cvTxt, cvDom]));
