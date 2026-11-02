@@ -148,7 +148,9 @@ async function bollino(browser) {
   ok('scheda In lettura: autore e poi «Slough House · 4» su una riga sua, senza bollino', /Slough House · 4/.test(await rc.locator('.rser').innerText().catch(() => '')) && !/Slough/.test(await rc.locator('.rmeta:not(.rser)').innerText().catch(() => '')) && await rc.locator('.sno').count() === 0);
   await p.locator('.viewsw [data-mode="copertine"]').first().click();
   await p.waitForSelector('#main .card[data-id="d1"] .sno');
-  ok('bollino su copertina', (await sno('d1').innerText().catch(() => '')).trim() === '3' && await sno('n1').count() === 0);
+  const cvTxt = await sno('d1').innerText().catch(e => 'ERR ' + e.message.split('\n')[0]);
+  const cvDom = await p.evaluate(() => [...document.querySelectorAll('#main [data-id="d1"], #main [data-id="n1"]')].map(e => e.dataset.id + ':' + e.className + ':' + getComputedStyle(e).display + ':' + (e.querySelector('.sno')?.innerText ?? '-')));
+  ok('bollino su copertina', cvTxt.trim() === '3' && await sno('n1').count() === 0, JSON.stringify([cvTxt, cvDom]));
   ok('etichetta della copertina con serie e numero', /Slough House numero 3/.test(await p.locator('#main [data-id="d1"]').getAttribute('aria-label')));
   ok('bollino: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
