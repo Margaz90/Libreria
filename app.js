@@ -304,6 +304,11 @@
   }
   // Lingua di un risultato: quella del testo della trama se si riconosce, altrimenti quella dichiarata dalla fonte.
   const linguaDi = h => linguaTesto(h.synopsis) || String(h.lang || "").slice(0, 2).toLowerCase();
+  // Lingua dell'edizione di un risultato: quella dichiarata (Google), «it» per Apple Books Italia e per Open Library con
+  // la lingua italiana, altrimenti quella della trama (v82).
+  const linguaEdizione = h => String(h.lang || "").slice(0, 2).toLowerCase() || (h.ita ? "it" : "") || linguaTesto(h.synopsis);
+  // Il primo elemento di una lista ordinata la cui edizione è nella lingua voluta; altrimenti il primo (lista vuota: null).
+  const primaNellaLingua = (list, lingua) => list.find(h => linguaEdizione(h) === lingua) || list[0] || null;
   // La trama migliore fra i risultati dello stesso libro: la prima nella lingua voluta, altrimenti la prima che c'è.
   function tramaMigliore(hits, lingua) {
     const con = (hits || []).filter(h => h && h.synopsis);
@@ -335,7 +340,9 @@
     if (!pool.length) return null;
     const pick = k => (pool.find(x => x[k]) || {})[k];
     const guess = c => /covers\.openlibrary\.org\/b\/isbn\//.test(c); // copertina "a tentativo" per ISBN: solo se non c'è altro
-    const cover = (byIsbn.find(x => x.cover && !guess(x.cover)) || ranked.find(x => x.cover) || pool.find(x => x.cover) || {}).cover || "";
+    // Copertina: prima l'edizione nella lingua del telefono (v82); a parità, l'ordine di prima (ISBN, titolo e autore, tentativo per ISBN).
+    const covs = [...byIsbn.filter(x => x.cover && !guess(x.cover)), ...ranked.filter(x => x.cover), ...pool.filter(x => x.cover)];
+    const cover = (primaNellaLingua(covs, LINGUA) || {}).cover || "";
     return {
       author: (idHit && idHit.author) || (ranked[0] && ranked[0].author) || "",
       edYear: pick("edYear"), pages: pick("pages"), genre: pick("genre"), synopsis: tramaMigliore(pool, LINGUA) || undefined, // prima nella lingua del telefono
@@ -831,7 +838,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     let sc = 0;
     if (xt && t && (xt === t || xt.startsWith(t + " ") || t.startsWith(xt + " "))) sc += 4;
     else if (xt && t && (xt.includes(t) || t.includes(xt))) sc += 2;
-    if (x.lang === "it") sc += 3;
+    // Edizione nella lingua del telefono: con la lingua dichiarata (Google) come prima; per Apple e Open Library (v82) solo se
+    // anche il titolo corrisponde, così un altro libro dello stesso autore non supera la soglia.
+    if (x.lang ? x.lang.slice(0, 2).toLowerCase() === LINGUA : sc > 0 && linguaEdizione(x) === LINGUA) sc += 3;
     if (orig && orig !== t && xt && (xt === orig || xt.startsWith(orig))) sc -= 3;
     if (x.src === "Apple Books") sc += 1;
     return sc;

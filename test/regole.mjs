@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -116,6 +116,11 @@ export default async function run() {
   ok('linguaDi: il testo vince sulla lingua dichiarata, senza testo riconoscibile vale quella dichiarata', R.linguaDi({ synopsis: EN, lang: 'it' }) === 'en' && R.linguaDi({ synopsis: 'Breve.', lang: 'it' }) === 'it');
   ok('tramaMigliore: prima quella nella lingua del telefono, poi la prima che c\'è', R.tramaMigliore([{ synopsis: EN, lang: 'en' }, { synopsis: '' }, { synopsis: IT }], 'it') === IT
     && R.tramaMigliore([{ synopsis: EN }, { synopsis: FR }], 'it') === EN && R.tramaMigliore([{ synopsis: EN }, { synopsis: IT }], 'en') === EN && R.tramaMigliore([{}, null], 'it') === '');
+
+  // ---- Lingua dell'edizione e copertina (v82) ----
+  ok('linguaEdizione: dichiarata, Apple/Open Library italiana, dalla trama, sconosciuta', R.linguaEdizione({ lang: 'en-GB', ita: true }) === 'en' && R.linguaEdizione({ ita: true }) === 'it' && R.linguaEdizione({ synopsis: EN }) === 'en' && R.linguaEdizione({}) === '');
+  const cv = [{ c: 1, lang: 'en' }, { c: 2 }, { c: 3, ita: true }, { c: 4, lang: 'it' }];
+  ok('primaNellaLingua: la prima nella lingua voluta, altrimenti la prima; lista vuota = null', R.primaNellaLingua(cv, 'it').c === 3 && R.primaNellaLingua(cv, 'fr').c === 1 && R.primaNellaLingua([], 'it') === null);
 
   // ---- Statistiche: misure e file della mensola ----
   const rows = R.ysRows(Array.from({ length: 40 }, (_, i) => ({ pages: (i * 97) % 900 })));
