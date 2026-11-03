@@ -13,6 +13,7 @@ I nomi che usiamo per parlare dell'app e del suo codice. Quando un concetto nuov
 - **Regole della lettura**: il modulo `lettura` (v76) con `passa`, `sistema` (coerenza dei campi) e `annoLetto`. È l'unico posto dove stanno le regole su stato, date e pagina.
 - **Salvare un libro**: sempre con `salvaLibro` (v77), che sostituisce il libro, applica tidy, aggiorna `updated`, salva, ridisegna e avvisa il cloud.
 - **Spostarsi** (di un libro): cambiare posto negli scaffali, nell'ordine o nei filtri; lo decide `sposta(prima, dopo)`.
+- **Tratto segnato** (`// <regole>` … `// </regole>`): un pezzo di `app.js` con sole funzioni pure, provato da Node dal gruppo `regole` (v79).
 - **Tidy**: `sistema(clean(b))`, cioè il libro com'è salvato: formato valido e regole della lettura.
 
 ## Ricerche
