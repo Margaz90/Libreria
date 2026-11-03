@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,7 +23,7 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (9) e caricati senza browser', parts.length === 9, String(parts.length));
+  ok('regole: tratti segnati trovati (10) e caricati senza browser', parts.length === 10, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
@@ -107,6 +107,15 @@ export default async function run() {
     R.readingPace({ started: '2026-10-01', page: 10, pages: 10 }, '2026-10-29').why === 'done',
     R.readingPace({ started: '2020-01-01', page: 2, pages: 900 }, '2026-10-29').why === 'odd',
   ].every(Boolean));
+
+  // ---- Lingua della trama (v80) ----
+  const IT = 'Un giovane uomo si trova a vivere in una città che non conosce e cerca di capire il senso della sua vita, tra amici e nemici.';
+  const EN = 'A young man finds himself living in a city he does not know and tries to understand the meaning of his life, with friends and enemies.';
+  const FR = 'Un jeune homme se retrouve à vivre dans une ville qu\'il ne connaît pas et cherche le sens de sa vie, entre les amis et les ennemis.';
+  ok('linguaTesto: italiano, inglese, francese; troppo corto = sconosciuta', R.linguaTesto(IT) === 'it' && R.linguaTesto(EN) === 'en' && R.linguaTesto(FR) === 'fr' && R.linguaTesto('Ubik') === '', [IT, EN, FR].map(R.linguaTesto).join());
+  ok('linguaDi: il testo vince sulla lingua dichiarata, senza testo riconoscibile vale quella dichiarata', R.linguaDi({ synopsis: EN, lang: 'it' }) === 'en' && R.linguaDi({ synopsis: 'Breve.', lang: 'it' }) === 'it');
+  ok('tramaMigliore: prima quella nella lingua del telefono, poi la prima che c\'è', R.tramaMigliore([{ synopsis: EN, lang: 'en' }, { synopsis: '' }, { synopsis: IT }], 'it') === IT
+    && R.tramaMigliore([{ synopsis: EN }, { synopsis: FR }], 'it') === EN && R.tramaMigliore([{ synopsis: EN }, { synopsis: IT }], 'en') === EN && R.tramaMigliore([{}, null], 'it') === '');
 
   // ---- Statistiche: misure e file della mensola ----
   const rows = R.ysRows(Array.from({ length: 40 }, (_, i) => ({ pages: (i * 97) % 900 })));
