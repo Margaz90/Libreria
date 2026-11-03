@@ -8,8 +8,10 @@
   const GBOOKS_KEY = "AIzaSyDsTZ7a1APohAMSTQ_eUuVOKKwoe7ozeLE";
   const BINDINGS = ["#7E2E2A", "#2D4F45", "#23395B", "#A06A1F", "#4B5563", "#5B3557", "#1F6266", "#9A4A28", "#3F4A2B", "#6B2F3F"];
   const STATUS = { "in-lettura": "In lettura", "letto": "Letti", "da-leggere": "Da leggere", "desiderato": "Lista dei desideri" };
+  // <regole>
   const STATUS_ONE = { "in-lettura": "In lettura", "letto": "Letto", "da-leggere": "Da leggere", "desiderato": "Desiderato" };
   const FIELDS = ["title", "author", "year", "pages", "genre", "status", "rating", "started", "finished", "finishedYear", "notes", "quote", "callNo", "synopsis", "color", "isbn", "cover", "noCover", "spine", "spineRatio", "page", "pageStep", "coverManual", "added", "updated", "spineAt", "series", "seriesNo", "seriesNext", "seriesManual", "finishedAuto"];
+  // </regole>
   const GENRES_EN = { "Fiction": "Narrativa", "Biography & Autobiography": "Biografia", "History": "Storia", "Science": "Scienza", "Juvenile Fiction": "Ragazzi", "Young Adult Fiction": "Ragazzi", "True Crime": "True crime", "Poetry": "Poesia", "Philosophy": "Filosofia", "Business & Economics": "Economia", "Travel": "Viaggi", "Psychology": "Psicologia", "Comics & Graphic Novels": "Fumetti", "Cooking": "Cucina", "Religion": "Religione", "Political Science": "Politica", "Self-Help": "Crescita personale", "Social Science": "Scienze sociali", "Literary Criticism": "Saggistica", "Music": "Musica", "Sports & Recreation": "Sport", "Art": "Arte", "Drama": "Teatro" };
 
   const state = { books: [], view: "libreria", mode: "dorsi", filter: "tutti", q: "", sort: "recenti", coverJob: null, limit: {} };
@@ -30,8 +32,10 @@
   const newId = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Serie: chiave dei nomi, riga «Serie · N», etichetta, bollino.
+  // <regole>
   const SER = ["series", "seriesNo", "seriesNext"], volNo = x => parseFloat(x.seriesNo);
   const seriesKey = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // </regole>
   const serLabel = b => b.series ? b.series + (b.seriesNo ? " · " + b.seriesNo : "") : "";
   const serAria = b => b.seriesNo ? `, ${esc(b.series)} numero ${esc(b.seriesNo)}` : "";
   const snoHTML = b => b.seriesNo ? `<span class="sno${/\.|.../.test(b.seriesNo) ? " long" : ""}" aria-hidden="true">${esc(b.seriesNo)}</span>` : "";
@@ -66,7 +70,9 @@
     return v;
   }
   // Data di oggi nel fuso del dispositivo (toISOString darebbe quella di Greenwich: dopo mezzanotte risulterebbe ieri).
+  // <regole>
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  // </regole>
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
   const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
@@ -112,6 +118,7 @@
   function schedulePersist() { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 700); }
   document.addEventListener("visibilitychange", () => { if (document.hidden && persistTimer) persist(); });
   window.addEventListener("pagehide", () => { if (persistTimer) persist(); });
+  // <regole>
   function clean(b) {
     const out = {};
     for (const k of FIELDS) if (b[k] !== undefined && b[k] !== null && b[k] !== "") out[k] = b[k];
@@ -173,6 +180,7 @@
   window.libreriaLettura = Object.freeze(lettura);
   // Il libro com'è salvato: formato (clean) e regole della lettura.
   const tidy = b => lettura.sistema(clean(b));
+  // </regole>
   // Campi che spostano un libro (scaffale, ordine, filtro): se cambiano si ridisegna, altrimenti basta il suo dorso.
   // Un solo elenco per l'app e per il cloud (libreriaHost.moved); la serie conta solo nell'ordine Autore o con una ricerca attiva.
   const SPOSTA = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages"];
@@ -572,7 +580,9 @@
     })).filter(x => x.title);
   }
 
+  // <regole>
   const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  // </regole>
   function sameAuthor(a, b) {
     const la = norm(a).split(" ").pop(), lb = norm(b);
     return !la || lb.includes(la);
@@ -589,6 +599,7 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
       genre: "", synopsis: "", isbn, lang: "", ita: false, cover: ""
     })).filter(x => x.title);
   }
+  // <regole>
   // ISBN con i trattini, in ogni divisione (come su Wikidata).
   const wdIsbn = isbn => { isbn = isbn.toUpperCase(); const i13 = isbn.length === 13 ? isbn : isbn13From10(isbn), i10 = isbn.length === 10 ? isbn : isbn10From13(isbn), o = [];
     for (const [p, s] of [[i13.slice(0, 3) + "-", i13.slice(3)], ["", i10]]) if (s) for (let i = 1; i < 6; i++) for (let j = i + 1; j < 9; j++) o.push(`"${p}${s.slice(0, i)}-${s.slice(i, j)}-${s.slice(j, 9)}-${s[9]}"`);
@@ -598,6 +609,7 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
   const isbn10From13 = i => { if (!i.startsWith("978")) return ""; const core = i.slice(3, 12); const s = [...core].reduce((t, c, k) => t + Number(c) * (10 - k), 0); const c = (11 - (s % 11)) % 11; return core + (c === 10 ? "X" : String(c)); };
   // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
+  // </regole>
   // Salute delle fonti (v78). Wikidata: dopo due errori 429/503 di fila dello stesso servizio (interrogazioni o ricerca
   // degli autori: sono due servizi diversi) va in pausa per 5 minuti in tutta l'app: Cerca le serie, Completa autori e
   // copertine, Aggiorna informazioni, Nuovo libro. Durante la pausa l'errore è lo stesso che l'ha causata, come per Google.
@@ -1192,6 +1204,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   // Tutti i numeri delle Statistiche, solo dai libri letti. Funzione pura: nessun accesso alla pagina.
   // Una data di fine nel futuro vale come nessuna data; senza data vale l'eventuale anno di lettura (finishedYear).
+  // <regole>
   function computeStats(books, oggi) {
     const iso = new Date(oggi - oggi.getTimezoneOffset() * 6e4).toISOString().slice(0, 10), thisYear = oggi.getFullYear();
     const isDate = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= iso;
@@ -1246,7 +1259,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return rows;
   }
   window.libreriaStats = Object.freeze({ compute: computeStats, dim: statDim, rows: ysRows });
+  // </regole>
 
+  // <regole>
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const num = n => Number(n).toLocaleString("it-IT");
   // Prossimo volume dopo b (pura): il primo non letto, o il seguito confermato se manca; after = volume precedente.
@@ -1294,6 +1309,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (x.length > y.length) [x, y] = [y, x];
     return x === y || (x.length >= 8 && y.startsWith(x + " "));
   }
+  // </regole>
 
   const dec = n => n == null ? "–" : n.toFixed(1).replace(".", ",");
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
@@ -2093,6 +2109,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return `<div class="snext"><span class="lab">Prossimo della serie</span>${x ? `<button class="snb" type="button" data-next-open="${esc(x.id)}">${t} <span class="st">· ${NEXT_ST[x.status]} <span aria-hidden="true">›</span></span></button>` : `<span>${t} <span class="st">· non ce l'hai</span></span><button class="btn" type="button" data-wish-next="${esc(r.title)}"${r.no ? ` data-no="${esc(r.no)}"` : ""} aria-label="Aggiungi «${esc(r.title)}» alla lista dei desideri">Lista dei desideri</button>`}</div>`;
   }
   // ---- Scheda «Frontespizio»: frasi delle date e ritmo di lettura (funzioni pure) ----
+  // <regole>
   const DFMT = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
   const isoOk = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T12:00"));
   const longDate = (iso, year = true) => { if (!isoOk(iso)) return ""; const t = DFMT.format(new Date(iso + "T12:00")); return year ? t : t.replace(/\s\d{4}$/, ""); };
@@ -2106,7 +2123,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (status === "da-leggere") { r.lead = "Ancora da iniziare."; r.sr = r.lead; return r; }
     if (status === "in-lettura") {
       r.showStart = true; r.startWord = "In lettura " + prep("dal", S); if (S) r.startText = longDate(S);
-      r.sr = "In lettura dal" + (S ? " " + longDate(S) : ": data da scegliere") + "."; return r;
+      r.sr = "In lettura " + (S ? prep("dal", S) + longDate(S) : "dal: data da scegliere") + "."; return r; // «dall'8», come sullo schermo
     }
     if (status !== "letto") return r;
     r.showStart = r.showEnd = true; r.sub = ""; // le pagine stanno già nell'intestazione
@@ -2116,12 +2133,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       r.startWord = "Letto " + prep("dal", S); r.endWord = " " + prep("al", F);
       r.startText = longDate(S, S.slice(0, 4) !== F.slice(0, 4)); r.endText = fx;
       r.sub = n < 1 ? "" : n === 1 ? "In un giorno" : n + " giorni";
-      r.sr = `Letto dal ${sx} al ${fx}${n < 1 ? "" : n === 1 ? ", in un giorno" : ", " + n + " giorni"}.`; return r;
+      r.sr = `Letto ${prep("dal", S)}${sx} ${prep("al", F)}${fx}${n < 1 ? "" : n === 1 ? ", in un giorno" : ", " + n + " giorni"}.`; return r;
     }
     if (y) r.lead = "Letto nel " + y + ".";
     r.startWord = "Iniziato " + prep("il", S); r.endWord = " e finito " + prep("il", F);
     if (S) r.startText = sx; if (F) r.endText = fx;
-    r.sr = (r.lead ? r.lead + " " : "") + `Iniziato il${S ? " " + sx : ": data da scegliere"}; finito il${F ? " " + fx : ": data da scegliere"}.`;
+    r.sr = (r.lead ? r.lead + " " : "") + `Iniziato ${S ? prep("il", S) + sx : "il: data da scegliere"}; finito ${F ? prep("il", F) + fx : "il: data da scegliere"}.`;
     return r;
   }
   function readingPace({ started, page, pages }, oggi) {
@@ -2150,6 +2167,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       default: return d + ".";
     }
   }
+  // </regole>
   function openBook(book) {
     const b = { ...book }, ser0 = { ...book }; // ser0: serie all'apertura
     const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p><button class="syn-more" id="s-syn-more" type="button" aria-expanded="false" aria-label="Mostra tutta la trama" hidden>…</button></section>`;
