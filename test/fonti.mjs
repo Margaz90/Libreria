@@ -14,9 +14,10 @@ const backup = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await
 
 async function apri(browser) {
   const p = await newPage(browser, { external: 'allow' });
-  p.wd = { calls: 0, fail: null, failFirst: 0 };
+  p.wd = { calls: 0, fail: null, failFirst: 0, seq: [] };
   const wd = r => {
     p.wd.calls++;
+    if (p.wd.seq.length) { const st = p.wd.seq.shift(); if (st !== 200) return json(r, {}, st); }
     if (p.wd.failFirst > 0) { p.wd.failFirst--; return json(r, {}, 503); }
     if (p.wd.fail) return json(r, {}, p.wd.fail);
     if (/wbsearchentities/.test(r.request().url())) return json(r, { search: [] });
@@ -77,6 +78,37 @@ async function pausa(browser) {
   await backup(p); await p.locator('#i-authors').click();
   await waitToast(p, /Informazioni aggiornate/, 20000);
   ok('Completa autori: un errore di Wikidata non ferma le serie degli altri libri', p.wd.calls - c0 >= 3, `chiamate ${p.wd.calls - c0} · ${await toasts(p)}`);
+  // Messaggio di «Completa autori» con Wikidata giù: quanti libri sono rimasti senza ricerca della serie
+  await load(p, [1, 2, 3].map(i => ({ ...base, id: 'd' + i, title: 'Giù ' + i, author: 'Autore ' + i })));
+  await p.evaluate(() => window.libreriaFonti.riprova('wikidata'));
+  p.wd.fail = 503;
+  await p.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await backup(p); await p.locator('#i-authors').click();
+  await waitToast(p, /Informazioni aggiornate/, 20000);
+  const m3 = await toasts(p);
+  ok('Completa autori: il messaggio dice per quanti libri le serie non sono state cercate', /Serie non cercate per 3 libri: Wikidata non risponde\./.test(m3), m3);
+  p.wd.fail = null;
+
+  // «Cerca le serie» con Wikidata già in pausa: nessuna copia inutile, messaggio subito
+  const copie = () => p.evaluate(() => new Promise(res => { const r = indexedDB.open('libreria-copie'); r.onsuccess = () => { try { const q = r.result.transaction('copie').objectStore('copie').getAll(); q.onsuccess = () => res(Math.max(0, ...q.result.map(c => c.at))); } catch { res(0); } }; r.onerror = () => res(-1); })); // la copia più recente
+  const k0 = await copie(); const c3 = p.wd.calls;
+  await p.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await backup(p); await p.locator('#i-series').click();
+  await waitToast(p, /Wikidata non risponde/, 5000);
+  const m4 = await toasts(p);
+  ok('Cerca le serie in pausa: messaggio subito, nessuna richiesta', /Wikidata non risponde/.test(m4) && p.wd.calls === c3, `${m4} · ${p.wd.calls - c3}`);
+  ok('Cerca le serie in pausa: nessuna copia nuova', (await copie()) === k0, `${await copie()} vs ${k0}`);
+
+  // Errori non di fila: un 500 tra due 503 interrompe la serie, niente pausa
+  await p.evaluate(() => window.libreriaFonti.riprova('wikidata'));
+  await load(p, [1, 2, 3].map(i => ({ ...base, id: 'f' + i, title: 'Fila ' + i, author: 'Autore ' + i })));
+  p.wd.seq = [503, 500, 503]; const c4 = p.wd.calls;
+  await p.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await backup(p); await p.locator('#i-series').click();
+  await waitToast(p, /Serie trovate/, 15000);
+  const m5 = await toasts(p);
+  ok('503, 500, 503: non sono due errori di fila, nessuna pausa', !/interrotta/.test(m5) && p.wd.calls - c4 >= 3 && (await p.evaluate(() => window.libreriaFonti.stato('wikidata').pausaFino)) <= Date.now(), `${m5} · ${p.wd.calls - c4}`);
+  p.wd.seq = [];
   ok('pausa: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
