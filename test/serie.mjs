@@ -560,6 +560,17 @@ async function cercaSerie(browser) {
   ok('Completa autori con Wikidata giù: «Serie non cercate: Wikidata non risponde.»', /Serie non cercate: Wikidata non risponde\./.test(hm), hm);
   p.cfg.fail = null;
 
+  // Completa autori e copertine: nello stesso giro arrivano l'autore e poi la serie, cercata con l'autore appena trovato
+  await clear();
+  await load(p, [{ ...base, id: 'x1', title: 'Tigri vere', author: '', isbn: '9788845299997' }]);
+  p.cfg.google = ['Tigri vere']; p.cfg.works = [W('Q10', 'Real Tigers|Tigri vere', 'Slough House', '3')];
+  await backup(); await p.locator('#i-authors').click();
+  await waitToast(/Informazioni aggiornate/, 15000);
+  await until(p, 'x1', { series: 'Slough House' });
+  const x1 = await book(p, 'x1');
+  ok('Completa autori: autore e serie nello stesso giro', x1.author === 'Mick Herron' && x1.series === 'Slough House' && x1.seriesNo === '3', JSON.stringify(x1));
+  p.cfg.google = []; p.cfg.works = [];
+
   // Letti con la serie: solo il seguito, mai serie o numero
   await clear();
   const L = { status: 'letto', finishedYear: 2020 };
