@@ -115,6 +115,22 @@ async function limiti(browser) {
   ok('limiti: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 
+  // Menu rapido aperto mentre un lavoro in sottofondo salva lo stesso libro: il cambio di stato non cancella quel salvataggio
+  const m = await newPage(browser);
+  await load(m, [{ ...base, id: 'q1', title: 'Senza copertina', author: 'A' }]);
+  await m.locator('#main [data-id="q1"]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 });
+  await m.waitForSelector('.quick'); await m.waitForTimeout(150);
+  await m.evaluate(() => { const b = window.libreriaHost.books().find(x => x.id === 'q1'); window.libreriaSalva.salva({ ...b, cover: 'https://example.org/c.jpg', author: 'Autore Trovato' }, { ridisegno: 'libro' }); });
+  await m.locator('.quick [data-st="in-lettura"]').click(); await m.waitForTimeout(900);
+  const q1 = await book(m, 'q1');
+  ok('menu rapido: il cambio di stato tiene quanto salvato in sottofondo nel frattempo', q1.status === 'in-lettura' && q1.cover === 'https://example.org/c.jpg' && q1.author === 'Autore Trovato', JSON.stringify(q1));
+  // Con una ricerca attiva anche la serie sposta un libro (la ricerca guarda la serie)
+  await m.fill('#q', 'Senza'); await m.waitForTimeout(450);
+  const conRicerca = await m.evaluate(() => { const a = { title: 'T', series: 'S', seriesNo: '1' }; return window.libreriaSalva.sposta(a, { ...a, series: 'Altra' }); });
+  ok('sposta: con una ricerca attiva la serie conta', conRicerca === true, String(conRicerca));
+  ok('menu rapido: nessun errore in console', !m.errs.length, m.errs.join(' / '));
+  await m.close2();
+
   const q = await newPage(browser);
   await load(q, [{ ...base, id: 'x1', title: 'Mio libro', author: 'Io', rating: 4 }]);
   await importa(q, [{ id: 'x1', title: 'Altro libro', author: 'Altri' }]);

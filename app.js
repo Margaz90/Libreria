@@ -174,10 +174,10 @@
   // Il libro com'è salvato: formato (clean) e regole della lettura.
   const tidy = b => lettura.sistema(clean(b));
   // Campi che spostano un libro (scaffale, ordine, filtro): se cambiano si ridisegna, altrimenti basta il suo dorso.
-  // Un solo elenco per l'app e per il cloud (libreriaHost.moved); la serie conta solo nell'ordine Autore.
+  // Un solo elenco per l'app e per il cloud (libreriaHost.moved); la serie conta solo nell'ordine Autore o con una ricerca attiva.
   const SPOSTA = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages"];
   const nz = v => (v === undefined || v === null || v === "" ? null : v);
-  const sposta = (a, b) => [...SPOSTA, ...(state.sort === "autore" ? ["series", "seriesNo"] : [])].some(k => nz(a[k]) !== nz(b[k]));
+  const sposta = (a, b) => [...SPOSTA, ...(state.sort === "autore" || state.q ? ["series", "seriesNo"] : [])].some(k => nz(a[k]) !== nz(b[k])); // la ricerca guarda anche la serie
   // Unico modo di salvare un libro (v77): il libro passato sostituisce quello salvato (un campo assente sparisce),
   // passa da formato e regole della lettura (tidy), prende un `updated` nuovo, si scrive sul dispositivo e va al cloud.
   // ridisegno: "auto" (solo il dorso se il libro non si sposta, altrimenti tutto), "libro" (solo il dorso),
@@ -1131,7 +1131,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : st === "desiderato" ? "Nessun desiderio. Con + Libro puoi salvare un libro nella lista dei desideri." : "Scaffale vuoto."}</div>`}</div>`}
       ${moreBtn}</section>`;
   }
-  function setStatus(b, st) {
+  function setStatus(b0, st) {
+    // Il libro com'è adesso: chi chiama (menu rapido aperto, hero) può tenere una copia superata da un salvataggio in sottofondo.
+    const b = state.books.find(x => x.id === b0.id) || b0;
     const nb = lettura.passa(b, st, today());
     salvaLibro(nb);
     // Se il cambio toglie delle date (fine, anno, vecchio inizio), un tocco sbagliato si recupera con «Annulla».
@@ -1595,7 +1597,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
       <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn danger" id="q-del" type="button">Elimina</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
     sheet.querySelectorAll("[data-st]").forEach(btn => btn.onclick = () => { closeSheet(); setStatus(b, btn.dataset.st); });
-    $("#q-open", sheet).onclick = () => { closeSheet(); openBook(b); };
+    $("#q-open", sheet).onclick = () => { closeSheet(); openBook(state.books.find(x => x.id === b.id) || b); };
     // Eliminazione in due tocchi, come nella scheda del libro.
     const del = $("#q-del", sheet);
     del.onclick = () => {
