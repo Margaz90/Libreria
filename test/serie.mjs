@@ -557,7 +557,7 @@ async function cercaSerie(browser) {
   await backup(); await p.locator('#i-authors').click();
   await waitToast(/Informazioni aggiornate/, 15000);
   const hm = await toasts();
-  ok('Completa autori con Wikidata giù: «Serie non cercate: Wikidata non risponde.»', /Serie non cercate: Wikidata non risponde\./.test(hm), hm);
+  ok('Completa autori con Wikidata giù: «Serie non cercate per 3 libri: Wikidata non risponde.» (v78: con il numero)', /Serie non cercate per 3 libri: Wikidata non risponde\./.test(hm), hm);
   p.cfg.fail = null;
 
   // Completa autori e copertine: nello stesso giro arrivano l'autore e poi la serie, cercata con l'autore appena trovato

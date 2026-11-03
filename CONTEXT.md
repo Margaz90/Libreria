@@ -15,6 +15,10 @@ I nomi che usiamo per parlare dell'app e del suo codice. Quando un concetto nuov
 - **Spostarsi** (di un libro): cambiare posto negli scaffali, nell'ordine o nei filtri; lo decide `sposta(prima, dopo)`.
 - **Tidy**: `sistema(clean(b))`, cioè il libro com'è salvato: formato valido e regole della lettura.
 
+## Ricerche
+- **Fonte**: un servizio esterno che conosce i libri: Google Books, Open Library, Apple Books Italia, Wikidata.
+- **Pausa** (di una fonte): un periodo in cui l'app non la interroga dopo errori ripetuti (Google: `state.googleDown`; Wikidata: `salute.wikidata`, 5 minuti dopo due errori di fila). «Verifica ricerche» la toglie.
+
 ## Dati e sicurezza
 - **Copia**: un'istantanea dei libri in IndexedDB (`snapshot`), prima delle operazioni su molti libri; si ripristina da Backup → Annulla.
 - **Segnaposto** (tomb): un libro eliminato, ricordato per non farlo tornare dal cloud.
