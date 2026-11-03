@@ -281,7 +281,7 @@
     ], errors) : [];
     const idHit = byIsbn.find(x => x.author) || byIsbn[0];
     const author = b.author || (idHit && idHit.author) || "";
-    const last = author.split(",")[0].trim().split(/\s+/).pop() || ""; // cognome del primo autore
+    const last = cognome(author);
     const t = String(b.title || "").split(/[.:]/)[0].trim(); // "Joe Country. Le indagini…" → "Joe Country"
     const byTitle = t ? await settle([
       () => appleSearch(`${t} ${last}`.trim(), 8).then(tag("Apple Books")),
@@ -341,8 +341,10 @@
           Object.entries(errs).forEach(([c, n]) => { errors[c] = (errors[c] || 0) + n; });
         }
       }
+      wdOff = fonti.inPausa("wikidata"); // Wikidata in pausa (due errori di fila, anche da un'altra ricerca): niente serie
       if (b && !wdOff && !b.series && !b.seriesManual) { // anche la serie
-        const r = await findSeries(b, sc).catch(e => { wdOff = /wikidata-(429|503)/.test(e && e.code); return null; });
+        const r = await findSeries(b, sc).catch(() => null);
+        wdOff = fonti.inPausa("wikidata");
         if (gen !== dataGen) return;
         const cur = state.books.find(x => x.id === ids[k]); // il libro di adesso (la ricerca dura qualche secondo)
         if (r && cur) { b = salvaLibro(applySeries(cur, r), { ridisegno: "libro" }); ser++; }
@@ -362,18 +364,16 @@
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
     const ids = state.books.filter(b => b.title && (b.series ? b.status === "letto" && !b.seriesNext : !b.seriesManual)).map(b => b.id);
     if (!ids.length) { toast("Nessun libro da cercare."); return; }
-    const gen = dataGen, line = $("#enrich"), cache = new Map(); let found = 0, bad = 0, down = 0; // down: errori 429/503 di fila
+    const gen = dataGen, line = $("#enrich"), cache = new Map(); let found = 0, bad = 0, down = false; // down: Wikidata in pausa
     enrich.busy = true;
     await snapshot("Prima di «Cerca le serie»");
     if (gen !== dataGen) return; // copia ripristinata durante la copia
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Ricerca delle serie: ${k + 1} di ${ids.length} · tieni l'app aperta`; }
       const b = state.books.find(x => x.id === ids[k]);
-      let err = false;
-      const r = b && await findSeries(b, cache).catch(e => { bad++; err = /wikidata-(429|503)/.test(e && e.code); return null; });
+      const r = b && await findSeries(b, cache).catch(() => { bad++; return null; });
       if (gen !== dataGen) return; // copia ripristinata nel frattempo
-      down = err ? down + 1 : 0;
-      if (down >= 2) break; // Wikidata giù: inutile insistere
+      if (fonti.inPausa("wikidata")) { down = true; break; } // Wikidata giù (due errori di fila): inutile insistere
       const cur = r && state.books.find(x => x.id === ids[k]);
       if (cur && applySeriesTo(cur, r, true)) found++;
       await sleep(300);
@@ -383,7 +383,7 @@
     if (line) line.hidden = true;
     if (found) render(); else renderTally(); // un solo ridisegno: l'ordine Autore può cambiare
     const msg = `Serie trovate per ${found} libri su ${ids.length}.`;
-    toast(down >= 2 ? `Wikidata non risponde: ricerca interrotta, riprova più tardi. ${msg}` : msg + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
+    toast(down ? `Wikidata non risponde: ricerca interrotta, riprova più tardi. ${msg}` : msg + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
   function removeBook(id) {
@@ -597,10 +597,30 @@ SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en". } } LIMIT 5`
   const isbn10From13 = i => { if (!i.startsWith("978")) return ""; const core = i.slice(3, 12); const s = [...core].reduce((t, c, k) => t + Number(c) * (10 - k), 0); const c = (11 - (s % 11)) % 11; return core + (c === 10 ? "X" : String(c)); };
   // ISBN scritto in qualunque modo (spazi, trattini, prefisso «ISBN», X finale): il codice pulito, altrimenti "".
   const parseIsbn = s => { const c = String(s || "").replace(/^\s*ISBN[:\s-]*/i, "").replace(/[\s-]/g, "").toUpperCase(); return /^(\d{9}[\dX]|\d{13})$/.test(c) ? c : ""; };
+  // Salute delle fonti (v78). Wikidata: dopo due errori 429/503 di fila dello stesso servizio (interrogazioni o ricerca
+  // degli autori: sono due servizi diversi) va in pausa per 5 minuti in tutta l'app: Cerca le serie, Completa autori e
+  // copertine, Aggiorna informazioni, Nuovo libro. Durante la pausa l'errore è lo stesso che l'ha causata, come per Google.
+  // Google ha la sua pausa (state.googleDown); «Verifica ricerche» toglie entrambe.
+  const PAUSA_FONTE = 5 * 60e3;
+  const salute = { wikidata: { errori: { query: 0, api: 0 }, pausaFino: 0, codice: 503 } };
+  const fonti = {
+    inPausa: nome => Date.now() < salute[nome].pausaFino,
+    stato: nome => ({ pausaFino: salute[nome].pausaFino, codice: salute[nome].codice, errori: { ...salute[nome].errori } }),
+    riprova: nome => { const x = salute[nome]; x.pausaFino = 0; Object.keys(x.errori).forEach(k => { x.errori[k] = 0; }); },
+  };
+  window.libreriaFonti = Object.freeze({ stato: fonti.stato, riprova: fonti.riprova });
   async function wdGet(url) {
+    const w = salute.wikidata, srv = /query\.wikidata\.org/.test(url) ? "query" : "api";
+    if (fonti.inPausa("wikidata")) throw { code: "wikidata-" + w.codice };
     let r;
     try { r = await fetchT(url, { headers: { Accept: "application/sparql-results+json, application/json" } }); } catch { throw { code: "wikidata-rete" }; }
-    if (!r.ok) throw { code: "wikidata-" + r.status };
+    if (!r.ok) {
+      if (r.status === 429 || r.status === 503) {
+        if (++w.errori[srv] >= 2) { w.pausaFino = Date.now() + PAUSA_FONTE; w.codice = r.status; w.errori[srv] = 0; }
+      }
+      throw { code: "wikidata-" + r.status };
+    }
+    w.errori[srv] = 0;
     return r.json();
   }
   const wdSparql = q => wdGet("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(q)).then(j => j.results.bindings || []);
@@ -782,8 +802,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
   }
   const tag = src => list => list.map(x => ({ ...x, src }));
+  // Cognome del primo autore, per le ricerche («Mario Rossi, Luca Bianchi» → «Rossi»).
+  const cognome = a => String(a || "").split(",")[0].trim().split(/\s+/).pop() || "";
   async function findCover(b, errors) {
-    const last = String(b.author || "").split(/\s+/).pop();
+    const last = cognome(b.author); // con più autori, il primo
     const orig = originalTitle(b);
     const ok = list => list.filter(x => x.cover && sameAuthor(b.author, x.author))
       .map(x => ({ ...x, score: itScore(b, x) })).sort((p, q) => q.score - p.score);
@@ -803,7 +825,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   // Copertine alternative per un libro: fino a 6, dalle tre fonti, solo dello stesso autore.
   async function coverCandidates(b) {
-    const last = String(b.author || "").split(/\s+/).pop();
+    const last = cognome(b.author); // con più autori, il primo
     const orig = originalTitle(b);
     const jobs = [
       appleSearch(`${b.title} ${last}`, 8).then(r => r.map(x => ({ ...x, src: "Apple Books" }))),
@@ -2636,13 +2658,20 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
     const iv = $("#i-verify", sheet), vs = $("#v-status", sheet);
     if (iv) iv.onclick = async () => {
-      vs.textContent = "Verifico le ricerche…"; state.googleDown = null; // la verifica prova sempre Google, anche se prima era giù
-      const out = [];
-      try { const g = await googleSearch("isbn:9788804731481", { italian: false, max: 1 }); out.push(`Google Books: OK (${g.length} risultati)`); }
-      catch (e) { out.push(`Google Books: ${e.code || "errore"}${e.msg ? " — " + e.msg : ""}`); }
-      try { const o = await openLibrarySearch("isbn:9788804731481", "", 1); out.push(`Open Library: OK (${o.length} risultati)`); }
-      catch (e) { out.push(`Open Library: ${e.code || "errore"}`); }
-      vs.textContent = out.join(" · ");
+      vs.textContent = "Verifico le ricerche…";
+      state.googleDown = null; fonti.riprova("wikidata"); // la verifica prova sempre tutte le fonti, anche se prima erano in pausa
+      // Le quattro fonti insieme; ogni riga compare appena la sua fonte risponde, sempre nello stesso ordine.
+      const ISBN = "9788804731481", rows = ["Google Books", "Open Library", "Apple Books", "Wikidata"].map(n => n + ": …");
+      const show = () => { vs.textContent = rows.join(" · "); };
+      const one = (i, run) => run().then(list => { rows[i] = rows[i].replace(": …", `: OK (${list.length} risultati)`); },
+        e => { rows[i] = rows[i].replace(": …", `: ${(e && e.code) || "errore"}${e && e.msg ? " — " + e.msg : ""}`); }).then(show);
+      show();
+      await Promise.all([
+        one(0, () => googleSearch("isbn:" + ISBN, { italian: false, max: 1 })),
+        one(1, () => openLibrarySearch("isbn:" + ISBN, "", 1)),
+        one(2, () => appleSearch(ISBN, 1)),
+        one(3, () => wikidataSearch(ISBN)),
+      ]);
     };
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
