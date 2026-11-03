@@ -163,7 +163,8 @@
         if ((H.tombs()[id] || 0) >= (r.updated || 0)) return;      // ho un'eliminazione più recente in coda
         if (r.deleted) { if (lb) { H.setLocal(id, null); list.push({ id, removed: true }); } return; }
         // Cosa è cambiato: se cambia qualcosa che sposta il libro (stato, ordine, filtro) ridisegno lo scaffale, altrimenti aggiorno solo quel libro.
-        const moved = !lb || MOVES.some(k => nz(lb[k]) !== nz(r[k]));
+        // L'elenco dei campi che spostano un libro è in app.js (libreriaHost.moved); MOVES resta per un app.js più vecchio ancora in cache.
+        const moved = !lb || (H.moved ? H.moved(lb, r) : MOVES.some(k => nz(lb[k]) !== nz(r[k])));
         list.push({ id, from: lb ? lb.status : null, to: r.status, moved, added: !lb });
         jobs.push(adopt(id, r));
       });

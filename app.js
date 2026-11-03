@@ -173,24 +173,35 @@
   window.libreriaLettura = Object.freeze(lettura);
   // Il libro com'è salvato: formato (clean) e regole della lettura.
   const tidy = b => lettura.sistema(clean(b));
-  function upsert(b) {
+  // Campi che spostano un libro (scaffale, ordine, filtro): se cambiano si ridisegna, altrimenti basta il suo dorso.
+  // Un solo elenco per l'app e per il cloud (libreriaHost.moved); la serie conta solo nell'ordine Autore.
+  const SPOSTA = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "pages"];
+  const nz = v => (v === undefined || v === null || v === "" ? null : v);
+  const sposta = (a, b) => [...SPOSTA, ...(state.sort === "autore" ? ["series", "seriesNo"] : [])].some(k => nz(a[k]) !== nz(b[k]));
+  // Unico modo di salvare un libro (v77): il libro passato sostituisce quello salvato (un campo assente sparisce),
+  // passa da formato e regole della lettura (tidy), prende un `updated` nuovo, si scrive sul dispositivo e va al cloud.
+  // ridisegno: "auto" (solo il dorso se il libro non si sposta, altrimenti tutto), "libro" (solo il dorso),
+  // "hero" (letture in corso e obiettivo), "nessuno" (ridisegna chi chiama). Restituisce il libro salvato.
+  function salvaLibro(b, { ridisegno = "auto" } = {}) {
     const data = tidy(b);
-    let id = b.id, i = id ? state.books.findIndex(x => x.id === id) : -1;
+    let id = b.id; const i = id ? state.books.findIndex(x => x.id === id) : -1;
     const prev = i >= 0 ? state.books[i] : null;
     data.updated = Date.now();
     if (data.spine && (!prev || prev.spine !== data.spine)) data.spineAt = data.updated;
     if (!id) id = newId();
-    if (i >= 0) state.books[i] = { ...data, id }; else state.books.push({ ...data, id });
+    const nb = { ...data, id };
+    if (i >= 0) state.books[i] = nb; else state.books.push(nb);
     schedulePersist();
-    // Se cambiano solo dati che non spostano il libro, aggiorno solo il suo dorso/copertina.
-    const keep = ["status", "title", "author", "rating", "finished", "started", "added", "genre", "page", "pages", ...(state.sort === "autore" ? ["series", "seriesNo"] : [])]; // la serie sposta il libro solo nell'ordine Autore
-    if (prev && state.view !== "stats" && data.status !== "in-lettura" && keep.every(k => prev[k] === state.books.find(x => x.id === id)[k])) {
-      patchBook(id); renderTally();
-    } else render();
+    if (ridisegno === "auto") {
+      if (prev && state.view !== "stats" && nb.status !== "in-lettura" && !sposta(prev, nb)) { patchBook(id); renderTally(); }
+      else render();
+    } else if (ridisegno === "libro") patchBook(id);
+    else if (ridisegno === "hero") { renderHero(); renderTally(); }
     cloudHook("changed", id);
-    return id;
+    return nb;
   }
-  // Pagina rapida: salva come upsert ma ridisegna solo l'hero. add = pagine da aggiungere, to = pagina esatta;
+  window.libreriaSalva = Object.freeze({ salva: salvaLibro, sposta });
+  // Pagina rapida: salva e ridisegna solo l'hero. add = pagine da aggiungere, to = pagina esatta;
   // manual (campo numerico o cursore) ricorda il salto in pageStep. «Annulla» ripristina page e pageStep di prima di questo gesto.
   function pageQuick(id, { add, to, manual } = {}) {
     const prev = state.books.find(x => x.id === id); if (!prev) return;
@@ -205,8 +216,7 @@
       const k = state.books.findIndex(x => x.id === id); if (k < 0) return;
       if (undo && state.books[k].status !== "in-lettura") return; // già finito o spostato: Annulla non tocca la pagina
       const ae = document.activeElement, fk = ae && ae.closest && ae.closest("#hero") ? ["data-add", "data-repeat"].find(a => ae.hasAttribute(a)) : null;
-      state.books[k] = { ...clean({ ...state.books[k], page, pageStep }), id, updated: Date.now() };
-      schedulePersist(); renderHero(); renderTally(); cloudHook("changed", id);
+      salvaLibro({ ...state.books[k], page, pageStep }, { ridisegno: "hero" });
       if (fk) { const sel = fk === "data-add" ? `[data-add][data-id-add="${CSS.escape(id)}"]` : `[${fk}="${CSS.escape(id)}"]`; const nb = $("#hero " + sel); if (nb) nb.focus({ preventScroll: true }); }
     };
     apply(v, step);
@@ -228,17 +238,15 @@
         // Campi che vanno insieme: una fine dal file non è «messa dall'app»; una serie nuova non tiene numero e seguito della vecchia.
         if (given("finished") && !given("finishedAuto")) delete merged.finishedAuto;
         if (given("series") && c.series !== cur.series) ["seriesNo", "seriesNext"].forEach(k => { if (!given(k)) delete merged[k]; });
-        const nb = { ...tidy(merged), id: cur.id, added: cur.added || now, updated: now };
-        if (nb.spine && nb.spine !== cur.spine) nb.spineAt = now;
-        state.books[state.books.indexOf(cur)] = nb; known.set(keyOf(nb), nb); ids.push(nb.id); updated++;
+        const nb = salvaLibro({ ...merged, id: cur.id, added: cur.added || now }, { ridisegno: "nessuno" });
+        known.set(keyOf(nb), nb); ids.push(nb.id); updated++;
       } else {
-        const b = { ...tidy(raw), id: newId(), updated: now };
-        if (b.spine) b.spineAt = now;
-        state.books.push(b); known.set(keyOf(b), b); ids.push(b.id); added++;
+        const { id: _fileId, ...fresh } = raw; // libro nuovo: sempre un id nuovo, mai quello scritto nel file
+        const b = salvaLibro(fresh, { ridisegno: "nessuno" });
+        known.set(keyOf(b), b); ids.push(b.id); added++;
       }
     }
-    schedulePersist(); render();
-    ids.forEach(id => cloudHook("changed", id));
+    render(); // un solo ridisegno alla fine
     return { added, updated, skipped };
   }
   // Stesso libro? Per ISBN; altrimenti titolo e autore; se il file non ha l'autore, basta il titolo.
@@ -246,20 +254,20 @@
   const samePurchase = (x, raw) => (raw.isbn && x.isbn && String(x.isbn) === String(raw.isbn)) || keyOf(x) === keyOf(raw) || (!raw.author && baseTitle(x.title) === baseTitle(raw.title));
   // Acquisti: un libro nuovo va in Da leggere; uno già nella lista dei desideri passa in Da leggere; gli altri non si toccano.
   function addPurchases(list) {
-    const now = Date.now(), ids = [], newIds = [];
+    const ids = [], newIds = [];
     let added = 0, moved = 0;
     for (const raw of list) {
       if (!raw || !raw.title) continue;
       const i = state.books.findIndex(x => samePurchase(x, raw));
       if (i < 0) {
-        const b = { ...tidy({ ...raw, status: "da-leggere" }), id: newId(), updated: now };
-        state.books.push(b); ids.push(b.id); newIds.push(b.id); added++;
+        const { id: _fileId, ...fresh } = raw;
+        const b = salvaLibro({ ...fresh, status: "da-leggere" }, { ridisegno: "nessuno" });
+        ids.push(b.id); newIds.push(b.id); added++;
       } else if (state.books[i].status === "desiderato") {
-        state.books[i] = { ...state.books[i], status: "da-leggere", updated: now }; ids.push(state.books[i].id); moved++;
+        salvaLibro({ ...state.books[i], status: "da-leggere" }, { ridisegno: "nessuno" }); ids.push(state.books[i].id); moved++;
       }
     }
-    schedulePersist(); render();
-    ids.forEach(id => cloudHook("changed", id));
+    render(); // un solo ridisegno alla fine
     return { added, moved, newIds };
   }
   // Tutte le informazioni su un libro: prima per ISBN (Google Books, Open Library), poi per titolo e autore
@@ -300,8 +308,10 @@
   const enrich = { busy: false };
   // Generazione dei dati: il ripristino di una copia la incrementa e i lavori in sottofondo partiti prima si fermano.
   let dataGen = 0;
-  // Riempie i campi vuoti con quanto trovato da fetchInfo; il dorso o la copertina compaiono subito.
-  function fillInfo(b, hit) {
+  // Riempie i campi vuoti con quanto trovato da fetchInfo e salva; il dorso o la copertina compaiono subito.
+  // Restituisce il libro salvato (un oggetto nuovo: chi continua a lavorarci usa questo).
+  function fillInfo(b0, hit) {
+    const b = { ...b0 };
     if (!b.author && hit.author) b.author = hit.author;
     if (!b.year && hit.edYear) b.year = hit.edYear;
     if (!b.pages && hit.pages) b.pages = hit.pages;
@@ -310,7 +320,7 @@
     if (!b.isbn && hit.isbn) b.isbn = hit.isbn;
     if (!b.callNo && b.author) b.callNo = surname3(b.author);
     if (!b.cover && !b.noCover && hit.cover) b.cover = hit.cover;
-    b.updated = Date.now(); cloudHook("changed", b.id); patchBook(b.id);
+    return salvaLibro(b, { ridisegno: "libro" });
   }
   async function enrichBooks(ids) {
     if (enrich.busy) { toast("Aggiornamento già in corso."); return; }
@@ -319,12 +329,14 @@
     const errors = {}, sc = new Map(); let fixed = 0, missed = 0, ser = 0, wdOff = false;
     for (let k = 0; k < ids.length; k++) {
       if (line) { line.hidden = false; line.textContent = `Aggiornamento informazioni dei libri: ${k + 1} di ${ids.length}`; }
-      const b = state.books.find(x => x.id === ids[k]);
+      let b = state.books.find(x => x.id === ids[k]);
       if (b && (!b.author || (!b.cover && !b.noCover))) {
         const errs = {};
         const hit = await fetchInfo(b, errs).catch(() => null);
         if (gen !== dataGen) return; // copia ripristinata nel frattempo
-        if (hit && (hit.author || hit.cover)) { fillInfo(b, hit); fixed++; } else {
+        b = state.books.find(x => x.id === ids[k]); // il libro di adesso: eliminato nel frattempo → non lo risalvo
+        if (!b) continue;
+        if (hit && (hit.author || hit.cover)) { b = fillInfo(b, hit); fixed++; } else {
           missed++;
           Object.entries(errs).forEach(([c, n]) => { errors[c] = (errors[c] || 0) + n; });
         }
@@ -332,7 +344,8 @@
       if (b && !wdOff && !b.series && !b.seriesManual) { // anche la serie
         const r = await findSeries(b, sc).catch(e => { wdOff = /wikidata-(429|503)/.test(e && e.code); return null; });
         if (gen !== dataGen) return;
-        if (r) { Object.assign(b, clean(applySeries(b, r)), { updated: Date.now() }); ser++; cloudHook("changed", b.id); patchBook(b.id); }
+        const cur = state.books.find(x => x.id === ids[k]); // il libro di adesso (la ricerca dura qualche secondo)
+        if (r && cur) { b = salvaLibro(applySeries(cur, r), { ridisegno: "libro" }); ser++; }
       }
       await sleep(250);
       if (gen !== dataGen) return;
@@ -419,6 +432,7 @@
     const gone = state.books.filter(b => !keep.has(b.id)).map(b => b.id);
     gone.forEach(x => { t[x] = now; }); keep.forEach(x => delete t[x]); setTombs(t); // come removeBook, ma con un solo render
     state.books = c.books.map(b => {
+      // Unica scrittura fuori da salvaLibro, di proposito: la copia torna com'era (solo clean, niente regole della lettura).
       const o = cur.get(b.id) || {}, nb = { ...clean(b), id: b.id, updated: now };
       for (const k of ["spine", "spineRatio", "spineAt"]) if (o[k]) nb[k] = o[k];
       return nb;
@@ -701,13 +715,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (r.next && s && seriesKey(o.series) === seriesKey(s)) o.seriesNext = r.next;
     return o;
   }
-  // Salva la serie trovata (upsert: un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
+  // Salva la serie trovata (un solo salvataggio e un solo cloudHook); true se è cambiato qualcosa.
   function applySeriesTo(b, r, quiet) { // quiet: niente ridisegno completo, lo fa chi chiama alla fine
     const nb = clean(applySeries(b, r, !!b.series)), ob = clean(b); // confronto dopo clean(): un numero che clean() toglie non è un cambio
     if (!SER.some(k => nb[k] !== ob[k])) return false;
-    if (!quiet) { upsert({ ...nb, id: b.id }); return true; }
-    state.books[state.books.indexOf(b)] = { ...nb, id: b.id, updated: Date.now() };
-    schedulePersist(); patchBook(b.id); cloudHook("changed", b.id); return true;
+    salvaLibro({ ...nb, id: b.id }, { ridisegno: quiet ? "libro" : "auto" }); return true;
   }
   // Nuovo libro: serie in sottofondo.
   function seriesLater(id) {
@@ -821,10 +833,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         if (gen !== dataGen) return; // copia ripristinata nel frattempo: niente più modifiche né messaggi
         const cur = state.books.find(x => x.id === b.id);
         if (cur && hit && cur.cover !== hit.cover) {
-          cur.cover = hit.cover; if (!cur.isbn && hit.isbn) cur.isbn = hit.isbn; if (!cur.pages && hit.pages) cur.pages = hit.pages;
-          cur.updated = Date.now(); cloudHook("changed", cur.id);
+          salvaLibro({ ...cur, cover: hit.cover, isbn: cur.isbn || hit.isbn, pages: cur.pages || hit.pages }, { ridisegno: "libro" });
           state.coverJob.found++;
-          patchBook(cur.id);
         } else if (cur && hit) state.coverJob.found++;
         state.coverJob.done++;
         if (state.coverJob.done % 10 === 0) schedulePersist();
@@ -1073,8 +1083,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const k = state.books.findIndex(x => x.id === id), cur = state.books[k];
       if (!cur || cur.status !== "in-lettura") { toast("Non annullato: «" + short + "» è cambiato nel frattempo"); return; }
       const nb = { ...cur }; NX_FIELDS.forEach(f => delete nb[f]);
-      state.books[k] = { ...clean({ ...nb, ...before }), id, updated: Date.now() };
-      schedulePersist(); cloudHook("changed", id); nx.sel = id;
+      salvaLibro({ ...nb, ...before, id }, { ridisegno: "nessuno" }); nx.sel = id;
       refreshChanged([{ id, from: "in-lettura", to: "da-leggere", moved: true }]);
       const f = $("#hero [role=tab][aria-selected=true]") || $("#hero [data-start]"); if (f) f.focus();
     } }, { focus: true });
@@ -1124,7 +1133,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function setStatus(b, st) {
     const nb = lettura.passa(b, st, today());
-    upsert(nb);
+    salvaLibro(nb);
     // Se il cambio toglie delle date (fine, anno, vecchio inizio), un tocco sbagliato si recupera con «Annulla».
     const lost = ["started", "finished", "finishedYear"].some(k => b[k] && b[k] !== nb[k]);
     if (!lost) { toast(`Spostato in ${STATUS[st]}`); return; }
@@ -1133,7 +1142,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const cur = state.books.find(x => x.id === id);
       if (!cur || cur.status !== st) { toast("Non annullato: il libro è cambiato nel frattempo"); return; }
       const back = { ...cur }; NX_FIELDS.forEach(f => delete back[f]);
-      upsert({ ...back, ...before });
+      salvaLibro({ ...back, ...before });
       toast(`Rimesso in ${STATUS[before.status] || ""}`.trim());
     } });
   }
@@ -2254,8 +2263,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (nxo) nxo.onclick = () => dismissSheet(() => { const x = state.books.find(y => y.id === nxo.dataset.nextOpen); if (x) openBook(x); });
     if (wn) wn.onclick = () => dismissSheet(() => { // desiderato, poi copertina e dati in sottofondo
       const cur = state.books.find(x => x.id === book.id) || book, get = id => state.books.find(x => x.id === id);
-      const id = upsert({ title: wn.dataset.wishNext, author: cur.author, series: cur.series, seriesNo: wn.dataset.no, status: "desiderato", rating: 0 });
-      fetchInfo(get(id)).then(h => { const x = get(id); if (x && h && (h.author || h.cover)) { fillInfo(x, h); schedulePersist(); } }).catch(() => {});
+      const id = salvaLibro({ title: wn.dataset.wishNext, author: cur.author, series: cur.series, seriesNo: wn.dataset.no, status: "desiderato", rating: 0 }).id;
+      fetchInfo(get(id)).then(h => { const x = get(id); if (x && h && (h.author || h.cover)) { fillInfo(x, h); } }).catch(() => {});
       toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
     });
     $("#s-save", sheet).onclick = () => {
@@ -2263,7 +2272,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       readReading(sheet, b); readData(sheet, b);
       const live = state.books.find(x => x.id === b.id); // serie arrivata in sottofondo a scheda aperta: si tiene
       if (live && SER.every(k => (b[k] || "") === (ser0[k] || ""))) SER.forEach(k => { b[k] = live[k]; });
-      upsert(b); closeSheet(); toast("Salvato");
+      salvaLibro(b); closeSheet(); toast("Salvato");
     };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
@@ -2332,14 +2341,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       readReading(sheet, b);
       if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
-      seriesLater(upsert(b)); closeSheet(); toast("Aggiunto alla libreria");
+      seriesLater(salvaLibro(b).id); closeSheet(); toast("Aggiunto alla libreria");
     };
     $("#a-wish", sheet).onclick = () => {
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
       b.status = "desiderato";
-      seriesLater(upsert(b)); closeSheet(); toast("Aggiunto alla lista dei desideri");
+      seriesLater(salvaLibro(b).id); closeSheet(); toast("Aggiunto alla lista dei desideri");
     };
     guardSheet(sheet, () => $("#a-save", sheet).click(), () => JSON.stringify(b));
   }
@@ -2383,6 +2392,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   window.libreriaHost = {
     books: () => state.books,
     keyOf,
+    moved: sposta, // stesso elenco di salvaLibro per decidere se un libro arrivato dal cloud si sposta
     tombs: getTombs,
     clearTomb(id) { const t = getTombs(); delete t[id]; setTombs(t); },
     setLocal(id, book) {
