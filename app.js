@@ -48,6 +48,13 @@
     let ab;
     if (action) { ab = document.createElement("button"); ab.textContent = action.label; ab.onclick = () => { t.remove(); action.run(); }; t.append(ab); }
     document.body.append(t);
+    // Messaggi della sincronizzazione (opts.top), sul telefono: in alto, così non coprono il menu in basso.
+    // Sotto la barra di ricerca se è attaccata in cima, altrimenti in cima allo schermo (sotto l'avviso «Nuova versione», se c'è).
+    if (opts.top && innerWidth < 1024) {
+      const tb = $("#toolbar"), r = tb && tb.getBoundingClientRect(), up = $(".update-bar"), ur = up && up.getBoundingClientRect();
+      const y = r && r.height && r.top <= 1 ? r.bottom + 8 : ur && ur.height ? ur.bottom + 8 : 0;
+      t.classList.add("top"); if (y) t.style.top = y + "px";
+    }
     if (ab && opts.focus) ab.focus();
     setTimeout(() => {
       if (ab && document.activeElement === ab) { // il focus non resta nel vuoto: torna all'hero o al filtro attivo
@@ -280,6 +287,29 @@
   }
   // Tutte le informazioni su un libro: prima per ISBN (Google Books, Open Library), poi per titolo e autore
   // (Apple Books Italia, Google Books, Open Library), così basta che una fonte risponda.
+  // <regole>
+  // Lingua di un testo dalle parole più comuni (italiano, inglese, francese, spagnolo, tedesco); "" se il testo è corto o incerto.
+  const PAROLE = {
+    it: ["il", "lo", "gli", "di", "che", "e", "un", "una", "per", "non", "con", "del", "della", "nel", "sono", "è", "si", "suo", "sua", "tra"],
+    en: ["the", "and", "of", "to", "in", "is", "that", "with", "his", "her", "for", "was", "on", "as", "by", "he", "she", "does"],
+    fr: ["le", "les", "et", "des", "du", "une", "est", "dans", "que", "pour", "sur", "pas", "qui", "il", "sa", "se", "entre"],
+    es: ["el", "los", "las", "y", "que", "en", "una", "es", "por", "con", "para", "su", "del", "se", "lo"],
+    de: ["der", "die", "das", "und", "ist", "nicht", "mit", "ein", "eine", "den", "zu", "von", "sie", "auf", "dem"],
+  };
+  function linguaTesto(t) {
+    const w = String(t || "").toLowerCase().match(/[a-zàâçèéêëìîïòôùûüäöß]+/g) || [];
+    if (w.length < 8) return "";
+    const n = Object.entries(PAROLE).map(([l, ps]) => { const set = new Set(ps); return [l, w.filter(x => set.has(x)).length]; }).sort((a, b) => b[1] - a[1]);
+    return n[0][1] >= 3 && n[0][1] > n[1][1] ? n[0][0] : "";
+  }
+  // Lingua di un risultato: quella del testo della trama se si riconosce, altrimenti quella dichiarata dalla fonte.
+  const linguaDi = h => linguaTesto(h.synopsis) || String(h.lang || "").slice(0, 2).toLowerCase();
+  // La trama migliore fra i risultati dello stesso libro: la prima nella lingua voluta, altrimenti la prima che c'è.
+  function tramaMigliore(hits, lingua) {
+    const con = (hits || []).filter(h => h && h.synopsis);
+    return (con.find(h => linguaDi(h) === lingua) || con[0] || {}).synopsis || "";
+  }
+  // </regole>
   async function fetchInfo(b, errors = {}, rounds = 2) { // rounds: giri di Google per l'ISBN (2 in sottofondo, tutti da «Aggiorna informazioni»)
     const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
     const byIsbn = isbn ? await settle([
@@ -308,7 +338,7 @@
     const cover = (byIsbn.find(x => x.cover && !guess(x.cover)) || ranked.find(x => x.cover) || pool.find(x => x.cover) || {}).cover || "";
     return {
       author: (idHit && idHit.author) || (ranked[0] && ranked[0].author) || "",
-      edYear: pick("edYear"), pages: pick("pages"), genre: pick("genre"), synopsis: pick("synopsis"),
+      edYear: pick("edYear"), pages: pick("pages"), genre: pick("genre"), synopsis: tramaMigliore(pool, LINGUA) || undefined, // prima nella lingua del telefono
       isbn: isbn || pick("isbn") || "", cover
     };
   }
@@ -815,6 +845,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
   }
   const tag = src => list => list.map(x => ({ ...x, src }));
+  // Lingua del telefono (prime due lettere, «it» se non si sa): la trama si cerca prima in questa lingua (v80).
+  const LINGUA = (() => { try { return String(navigator.language || "it").slice(0, 2).toLowerCase() || "it"; } catch { return "it"; } })();
+  // Nuovo libro: se il risultato scelto non ha la trama nella lingua del telefono, la prende da un altro risultato dello stesso libro.
+  function conTrama(hit, all) {
+    const ok = h => h && h.synopsis && linguaDi(h) === LINGUA;
+    if (ok(hit)) return hit;
+    const alt = all.find(h => h !== hit && ok(h) && sameTitle(h.title, hit.title) && sameAuthor(hit.author || "", h.author || ""));
+    return alt ? { ...hit, synopsis: alt.synopsis } : hit;
+  }
   // Cognome del primo autore, per le ricerche («Mario Rossi, Luca Bianchi» → «Rossi»).
   const cognome = a => String(a || "").split(",")[0].trim().split(/\s+/).pop() || "";
   async function findCover(b, errors) {
@@ -2018,7 +2057,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
           <div><b>${esc(r.title)}</b><span>${esc(r.author || "Autore sconosciuto")}${r.edYear ? " · " + r.edYear : ""}${r.pages ? " · " + r.pages + " pp." : ""}${r.isbn ? " · ISBN " + esc(r.isbn) : ""}${r.lang && r.lang !== "it" ? " · " + r.lang.toUpperCase() : ""}</span></div></button>`).join("");
-        box.querySelectorAll(".result").forEach(el => el.onclick = () => { onPick(results[Number(el.dataset.i)]); box.innerHTML = ""; status.textContent = "Dati inseriti: controllali prima di salvare."; });
+        box.querySelectorAll(".result").forEach(el => el.onclick = () => { onPick(conTrama(results[Number(el.dataset.i)], results)); box.innerHTML = ""; status.textContent = "Dati inseriti: controllali prima di salvare."; });
         if (!results.length && parseIsbn(q)) { // le fonti possono avere il libro senza il suo ISBN: si cerca per titolo e autore
           const alt = document.createElement("button");
           alt.type = "button"; alt.className = "btn"; alt.id = "s-title"; alt.textContent = "Cerca per titolo e autore";
@@ -2453,9 +2492,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     snapshot,
     tally: () => renderTally(),
     status(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; },
-    error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg); },
-    done(msg) { if ($("#sy-status")) closeSheet(); toast(msg); },
-    notice(msg) { if ($("#sy-status")) closeSheet(); toast(msg, { label: "OK", run: () => {} }); }, // messaggio lungo: resta 10 secondi
+    error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg, null, { top: true }); },
+    done(msg) { if ($("#sy-status")) closeSheet(); toast(msg, null, { top: true }); },
+    notice(msg) { if ($("#sy-status")) closeSheet(); toast(msg, { label: "OK", run: () => {} }, { top: true }); }, // messaggio lungo: resta 10 secondi
     connected(email) { cloud.email = email || ""; },
     goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
     setGoals(goals, updated) { try { localStorage.setItem(SET_KEY, JSON.stringify({ ...getSet(), goals, goalsAt: updated })); } catch {} },

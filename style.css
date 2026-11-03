@@ -354,6 +354,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
 .result span { font-size: 12.5px; color: var(--muted); }
 
 .toast { position: fixed; left: 50%; bottom: calc(var(--dock-h, 70px) + 12px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 0 6px 0 16px; min-height: 44px; width: max-content; border-radius: 999px; font-size: 13.5px; z-index: 20; max-width: calc(100% - 32px); text-align: center; display: flex; gap: 10px; align-items: center; }
+.toast.top { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 10px); } /* sincronizzazione sul telefono: in alto, lontano dal menu (il punto esatto lo scrive toast()) */
 .toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; min-height: 44px; padding: 0 10px; text-underline-offset: 3px; }
 .update-bar { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 13.5px; z-index: 30; max-width: calc(100% - 32px); display: flex; gap: 12px; align-items: center; white-space: nowrap; }
 .update-bar button { border: 0; background: none; color: inherit; font-weight: 700; padding: 0; }
