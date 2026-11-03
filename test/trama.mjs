@@ -29,6 +29,25 @@ async function aggiorna(browser) {
   await p.close2();
 }
 
+// Copertina (v82): l'ISBN porta a un'edizione inglese, Apple Books ha quella italiana dello stesso libro → copertina italiana
+async function copertina(browser) {
+  const p = await newPage(browser, { external: 'allow', init: italiano });
+  await p.route(/www\.googleapis\.com\/books/, r => json(r, { totalItems: 1, items: [{ volumeInfo: { title: 'La città', authors: ['Mario Rossi'], language: 'en', description: EN, imageLinks: { thumbnail: 'http://books.google.com/inglese.jpg' }, industryIdentifiers: [{ type: 'ISBN_13', identifier: '9781000000001' }] } }] }));
+  await p.route(/itunes\.apple\.com/, r => { const cb = new URL(r.request().url()).searchParams.get('callback'); const term = new URL(r.request().url()).searchParams.get('term') || '';
+    const res = /città/i.test(term) ? [{ trackName: 'La città', artistName: 'Mario Rossi', description: IT, artworkUrl100: 'https://is1.mzstatic.com/italiana/100x100bb.jpg' }, { trackName: 'Un altro libro', artistName: 'Mario Rossi', artworkUrl100: 'https://is1.mzstatic.com/altro/100x100bb.jpg' }] : [];
+    r.fulfill({ status: 200, contentType: 'application/javascript', body: `${cb}(${JSON.stringify({ results: res })})` }); });
+  await p.route(/openlibrary\.org|wikidata\.org|mzstatic\.com|books\.google\.com/, r => r.abort());
+  await load(p, [{ added: 1, rating: 0, status: 'da-leggere', id: 'c1', title: 'La città', author: 'Mario Rossi', isbn: '9781000000001' }]);
+  await p.locator('#main [data-id="c1"]').first().click(); await p.waitForSelector('.sheet');
+  await p.click('#s-refresh'); await p.waitForFunction(() => !/Cerco/.test(document.querySelector('#s-ref-status').textContent), null, { timeout: 40000 });
+  await p.locator('#s-save').click(); await p.waitForTimeout(900);
+  const c1 = (await localBooks(p)).find(b => b.id === 'c1');
+  ok('Aggiorna informazioni: copertina dell\'edizione italiana, non quella inglese dell\'ISBN', /italiana/.test(c1.cover || ''), c1.cover);
+  ok('copertina: mai quella di un altro libro dello stesso autore', !/altro/.test(c1.cover || ''), c1.cover);
+  ok('copertina: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 async function nuovo(browser) {
   const p = await apri(browser);
   await load(p, []);
@@ -85,6 +104,7 @@ async function avviso(browser) {
 
 export default async function run({ browser }) {
   await aggiorna(browser);
+  await copertina(browser);
   await nuovo(browser);
   await avviso(browser);
 }
