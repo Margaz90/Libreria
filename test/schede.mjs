@@ -16,7 +16,7 @@ const errText = p => p.locator('#f-date-err').innerText({ timeout: 800 }).catch(
 // Segnale (pallino rosso con «!») sui libri letti con il periodo di lettura da aggiornare.
 async function segnale(browser) {
   const p = await newPage(browser);
-  const base = { added: 1, rating: 0 };
+  const base = { added: 1, rating: 3 };
   await load(p, [
     { ...base, id: 'g1', title: 'Senza date', author: 'A', status: 'letto', pages: 200 },
     { ...base, id: 'g2', title: 'Con fine', author: 'B', status: 'letto', pages: 200, finished: '2025-03-10' },
@@ -50,7 +50,7 @@ async function segnale(browser) {
 // Fine stimata: per un libro letto senza fine, scegliere l'inizio propone la fine 20 giorni dopo (mai nel futuro, mai sopra una fine o un anno già scritti).
 async function stima(browser) {
   const p = await newPage(browser);
-  const base = { added: 1, rating: 0, pages: 200 };
+  const base = { added: 1, rating: 3, pages: 200 };
   await load(p, [
     { ...base, id: 'e1', title: 'Letto senza date', author: 'A', status: 'letto' },
     { ...base, id: 'e2', title: 'Letto con fine', author: 'B', status: 'letto', finished: '2025-05-01' },
@@ -102,7 +102,7 @@ export default async function ({ browser }) {
   await segnale(browser);
   await stima(browser);
   const p = await newPage(browser);
-  const base = { added: 1, rating: 0 };
+  const base = { added: 1, rating: 3 };
   await load(p, [
     { ...base, id: 'd1', title: 'Date', author: 'A', status: 'letto', pages: 300, started: '2025-03-01', finished: '2025-03-10' },
     { ...base, id: 'd2', title: 'Storto', author: 'B', status: 'letto', pages: 200, started: '2025-05-10', finished: '2025-05-01' },
@@ -181,6 +181,7 @@ export default async function ({ browser }) {
   ok('Nuovo libro: Letto con 250 pagine → pagina attuale 250', (await val(p2, '#f-page')) === '250');
   await p2.fill('#f-finished', iso(1));
   ok('Nuovo libro: niente date future', !(await val(p2, '#f-finished')));
+  await p2.locator('#f-rate button[data-n="4"]').click(); // v83: Letto con le stelle
   await p2.locator('#a-save').click(); await p2.waitForTimeout(700);
   const n = (await localBooks(p2))[0];
   ok('Nuovo libro letto: page = 250', n && n.page === 250 && n.status === 'letto', JSON.stringify(n));

@@ -2,6 +2,7 @@
 
 Estratta verbatim da `CLAUDE.md`. Le voci nuove vanno in cima (le scrive `/pubblica`).
 
+- **Stelle obbligatorie per i Letti** (v83): menu rapido e «Finito!» chiedono prima «Quante stelle?», Salva si blocca senza voto per i Letti, pallino «da aggiornare» sui Letti senza voto (anche i 18 libri Goodreads non votati). Richiesta di Diego.
 - **Copertina nella lingua del telefono** (v82): come per la trama, «Aggiorna informazioni», il completamento in sottofondo e la ricerca delle copertine mettono prima l'edizione nella lingua del telefono (italiana per Diego), anche quando l'ISBN porta a un'edizione straniera. Richiesta di Diego.
 - **Nuova icona «La M dei dorsi»** (v81): cinque dorsi le cui cime disegnano una M, segnalibro corallo nella valle centrale; stessi colori dell'app, piatta, senza foglie, cuciture, libro inclinato e riflessi. Scelta da Diego tra sette proposte (tre sobrie, poi quattro nate dalla prima, ispirate allo spazio negativo di FedEx, ai fermalibri di Penguin Random House e alle icone con una sola forma e un accento). Icone da 84 a 9 KB.
 - **Trama in italiano e avviso in alto** (v80): «Aggiorna informazioni» e Nuovo libro scelgono la trama nella lingua del telefono (prima prendevano la prima trovata, spesso quella inglese di Google per ISBN), anche da un altro risultato dello stesso libro; i messaggi della sincronizzazione sull'iPhone compaiono in alto invece che sopra il menu in basso. Richieste di Diego.

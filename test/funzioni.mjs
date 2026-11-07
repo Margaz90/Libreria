@@ -84,7 +84,7 @@ async function paginaRapida(browser) {
   // Annulla dopo «Finito!»: il libro letto non deve tornare indietro di pagina.
   await load(p, [{ ...base, id: 'p1', title: 'Con totale', author: 'A', pages: 300, page: 295 }]);
   await add10('p1').click(); await until(p, 'p1', { page: 300 });
-  await card('p1').locator('[data-finish]').click(); await until(p, 'p1', { status: 'letto' });
+  await card('p1').locator('[data-finish]').click(); await p.locator('#q-rate button[data-n="4"]').click(); await until(p, 'p1', { status: 'letto' }); // v83: prima le stelle
   if (await toastBtn().count()) { await toastBtn().first().click(); await wait(p); }
   const fb = await book(p, 'p1');
   ok('Annulla dopo Finito: il libro resta letto con tutte le pagine', fb.status === 'letto' && fb.page === 300, `${fb.status} ${fb.page}`);
