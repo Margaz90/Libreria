@@ -15,12 +15,12 @@ async function scheda(browser) {
   const p = await newPage(browser);
   const base = { added: 1, rating: 0 };
   await load(p, [
-    { ...base, id: 's1', title: 'Storico', author: 'A', status: 'letto' },
-    { ...base, id: 's2', title: 'Anno', author: 'B', status: 'letto' },
+    { ...base, id: 's1', title: 'Storico', author: 'A', status: 'letto', rating: 3 }, // v83: un Letto ha sempre le stelle
+    { ...base, id: 's2', title: 'Anno', author: 'B', status: 'letto', rating: 3 },
     { ...base, id: 's3', title: 'Voti', author: 'C', status: 'letto' },
     { ...base, id: 's4', title: 'Nuovo', author: 'D', status: 'da-leggere' },
     { ...base, id: 's5', title: 'Ripreso', author: 'E', status: 'da-leggere', finishedYear: 2019, pages: 100 },
-    { ...base, id: 's6', title: 'Errato', author: 'F', status: 'letto' },
+    { ...base, id: 's6', title: 'Errato', author: 'F', status: 'letto', rating: 3 },
   ]);
   const shown = () => p.locator('#f-year-row').isVisible().catch(() => false);
 
@@ -61,6 +61,7 @@ async function scheda(browser) {
 
   await openBook(p, 's4');
   await p.locator('.seg [data-v="letto"]').click();
+  await p.locator('#f-rate button[data-n="5"]').click(); // v83: a Letto solo con le stelle
   await save(p);
   ok('da leggere → letto mette la data di oggi', (await book(p, 's4')).finished === isoToday());
 
@@ -68,6 +69,7 @@ async function scheda(browser) {
   await el.dispatchEvent('pointerdown', { clientX: 5, clientY: 5 });
   await p.waitForTimeout(700);
   await p.locator('.quick [data-st="letto"]').click();
+  await p.locator('#q-rate button[data-n="4"]').click(); // v83: prima le stelle
   await p.waitForTimeout(800);
   b = await book(p, 's5');
   // v76: un Da leggere non tiene più il vecchio «solo l'anno» (sistemato all'avvio), quindi a Letto prende la data di oggi.

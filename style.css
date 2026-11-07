@@ -331,6 +331,11 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .grid2 > * { min-width: 0; }
 .rate { display: flex; gap: 2px; }
 .rate button { border: 0; background: none; font-size: 26px; line-height: 1; padding: 2px 4px; color: var(--rule); }
+.ask-rate { display: grid; gap: 10px; justify-items: center; text-align: center; } /* «Quante stelle?» (v83) */
+.ask-rate .sub { color: var(--muted); font-size: 14px; margin: 0; }
+.ask-rate .rate button { width: 48px; height: 48px; padding: 0; font-size: 34px; color: var(--muted); }
+.ask-rate .rate button.on { color: var(--accent); }
+.ask-rate .verdict { min-height: 1.4em; margin: 0; }
 .rate button.on { color: var(--accent); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn { border: 1px solid var(--rule); background: var(--bg); padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; }

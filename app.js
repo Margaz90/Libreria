@@ -1036,14 +1036,18 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   // Dorso: foto vera se l'hai scattata, altrimenti una striscia della copertina, altrimenti il dorso disegnato.
   // Libro letto con il periodo di lettura da aggiornare: manca quando l'ha finito (data o almeno l'anno) oppure le date non sono coerenti.
   const needsDates = b => b.status === "letto" && ((!b.finished && !b.finishedYear) || !!dateProblem(b.started || "", b.finished || ""));
+  // v83: un libro Letto deve avere le stelle; senza, ha lo stesso pallino delle date mancanti.
+  const senzaVoto = b => b.status === "letto" && !(Number(b.rating) > 0);
+  const daAggiornare = b => needsDates(b) || senzaVoto(b);
   const STALE = "periodo di lettura da aggiornare";
-  const badgeHTML = b => needsDates(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
+  const staleText = b => needsDates(b) && senzaVoto(b) ? "periodo di lettura e voto da aggiornare" : senzaVoto(b) ? "voto da aggiungere" : STALE;
+  const badgeHTML = b => daAggiornare(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
   function spineHTML(b, tag = "button", dim) { // dim: { w (%), h (px) } per le mensole delle Statistiche
     const p = Math.min(Number(b.pages) || 280, 900);
     const h = dim ? dim.h : Math.round(132 + p / 900 * 72);
     let w = dim ? dim.w : Math.round(26 + p / 900 * 24) + "px";
-    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)}${dim ? ", " : " di "}${esc(b.author || "")}${serAria(b)}${!dim && needsDates(b) ? ", " + STALE : ""}"` : `aria-hidden="true"`;
-    const stale = !dim && tag === "button" && needsDates(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
+    const attrs = tag === "button" ? `data-id="${esc(b.id)}" aria-label="${esc(b.title)}${dim ? ", " : " di "}${esc(b.author || "")}${serAria(b)}${!dim && daAggiornare(b) ? ", " + staleText(b) : ""}"` : `aria-hidden="true"`;
+    const stale = !dim && tag === "button" && daAggiornare(b), sno = snoHTML(b), bd = (stale ? badgeHTML(b) : "") + sno, ser = sno ? " ser" : "";
     const last = String(b.author || "").trim().split(/\s+/).pop() || "";
     if (b.spine) {
       if (b.spineRatio && !dim) w = Math.max(16, Math.min(80, Math.round(h * b.spineRatio))) + "px";
@@ -1214,10 +1218,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : st === "desiderato" ? "Nessun desiderio. Con + Libro puoi salvare un libro nella lista dei desideri." : "Scaffale vuoto."}</div>`}</div>`}
       ${moreBtn}</section>`;
   }
-  function setStatus(b0, st) {
+  function setStatus(b0, st, extra = {}) {
     // Il libro com'è adesso: chi chiama (menu rapido aperto, hero) può tenere una copia superata da un salvataggio in sottofondo.
     const b = state.books.find(x => x.id === b0.id) || b0;
-    const nb = lettura.passa(b, st, today());
+    // v83: a Letto solo con le stelle; senza, prima si chiedono (chiudendo senza sceglierle il libro resta com'era).
+    if (st === "letto" && b.status !== "letto" && !(Number(b.rating) > 0) && !(Number(extra.rating) > 0)) { chiediStelle(b, n => setStatus(b, st, { ...extra, rating: n })); return; }
+    const nb = lettura.passa({ ...b, ...extra }, st, today());
     salvaLibro(nb);
     // Se il cambio toglie delle date (fine, anno, vecchio inizio), un tocco sbagliato si recupera con «Annulla».
     const lost = ["started", "finished", "finishedYear"].some(k => b[k] && b[k] !== nb[k]);
@@ -1232,8 +1238,24 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     } });
   }
 
+  // «Quante stelle?»: scheda piccola con le 5 stelle; onPick(n) solo se ne scegli una.
+  function chiediStelle(b, onPick) {
+    const sheet = openSheet(`<div class="ask-rate"><h2>Quante stelle?</h2><p class="sub">«${esc(b.title)}» passa tra i letti quando scegli il voto.</p>
+      <div class="rate" id="q-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} ${n === 1 ? "stella" : "stelle"}">★</button>`).join("")}</div>
+      <p class="verdict" id="q-verdict" aria-live="polite"></p>
+      <div class="actions"><button class="btn ghost" type="button" id="q-rate-no">Annulla</button></div></div>`);
+    const bs = sheet.querySelectorAll("#q-rate button");
+    bs.forEach(btn => {
+      const n = Number(btn.dataset.n);
+      const show = () => { bs.forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= n)); $("#q-verdict", sheet).textContent = verdict(n, "letto"); };
+      btn.onpointerenter = show; btn.onfocus = show;
+      btn.onclick = () => { closeSheet(); onPick(n); };
+    });
+    $("#q-rate-no", sheet).onclick = () => closeSheet();
+    bs[0].focus();
+  }
   function cardHTML(b) {
-    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${needsDates(b) ? ", " + STALE : ""}">${coverHTML(b, 300, true)}${badgeHTML(b)}
+    return `<button class="card" data-id="${esc(b.id)}" aria-label="${esc(b.title)} di ${esc(b.author || "")}${serAria(b)}${daAggiornare(b) ? ", " + staleText(b) : ""}">${coverHTML(b, 300, true)}${badgeHTML(b)}
       <div class="meta">${b.rating ? `<span class="stars">${starStr(b.rating)}</span>` : ""}</div></button>`;
   }
   function renderCovers(list) {
@@ -1745,7 +1767,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
   const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
-  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
+  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p><p class="hint err" id="f-rate-err" role="alert" hidden></p></div>`;
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
   function readingHead(b, rate = true) {
     return `<div class="rf rf-head">
@@ -1763,6 +1785,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <p class="hint" id="f-date-est" hidden>Fine stimata: 20 giorni dopo l'inizio, modificala se serve.</p>
         <div class="field" id="f-year-row"${b.status === "letto" && !b.finished ? "" : " hidden"}><label for="f-year">oppure solo l'anno</label><input id="f-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" value="${esc(b.finishedYear || "")}" placeholder="es. 2019" aria-describedby="f-year-err"><p class="hint err" id="f-year-err" role="alert" hidden></p></div>
         ${needsDates(b) ? `<p class="hint stale-note" id="s-stale"><i class="badge inline" aria-hidden="true">!</i><span>Periodo di lettura da aggiornare: ${b.finished || b.finishedYear ? esc(dateProblem(b.started || "", b.finished || "").msg) : "aggiungi la data di fine, o almeno l'anno."}</span></p>` : ""}
+        ${senzaVoto(b) ? `<p class="hint stale-note" id="s-stale-voto"><i class="badge inline" aria-hidden="true">!</i><span>Manca il voto: scegli le stelle sotto la copertina.</span></p>` : ""}
       </div>
       <div class="pblk" id="f-pblk">
         <div class="pbig"><label for="f-page">pag.</label> <input id="f-page" type="number" inputmode="numeric" min="0" value="${esc(b.status === "letto" && b.pages ? b.pages : b.page || "")}" placeholder="${b.pages ? "su " + b.pages : ""}"> <span id="f-pof"></span></div>
@@ -1838,6 +1861,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
+      const re = $("#f-rate-err", sheet); if (re && holder.rating) re.hidden = true;
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
       const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating, ($("#f-status", sheet) || { value: "letto" }).value);
     });
@@ -1963,6 +1987,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     pg.addEventListener("input", () => syncPage(sheet));
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
+  // v83: un libro Letto si salva solo con le stelle (scheda e Nuovo libro).
+  function badRating(sheet, holder) {
+    const st = $("#f-status", sheet); if (!st || st.value !== "letto" || Number(holder.rating) > 0) return false;
+    const err = $("#f-rate-err", sheet); if (err) { err.hidden = false; err.textContent = "Scegli le stelle per segnarlo come letto."; }
+    const first = $("#f-rate button", sheet); if (first) first.focus();
+    return true;
+  }
   function badYear(sheet) {
     const row = $("#f-year-row", sheet), inp = $("#f-year", sheet), err = $("#f-year-err", sheet);
     if (!row || !inp) return false;
@@ -2359,7 +2390,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
     });
     $("#s-save", sheet).onclick = () => {
-      if (badYear(sheet) || badDates(sheet)) return;
+      if (badYear(sheet) || badDates(sheet) || badRating(sheet, b)) return;
       readReading(sheet, b); readData(sheet, b);
       const live = state.books.find(x => x.id === b.id); // serie arrivata in sottofondo a scheda aperta: si tiene
       if (live && SER.every(k => (b[k] || "") === (ser0[k] || ""))) SER.forEach(k => { b[k] = live[k]; });
@@ -2427,7 +2458,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (!scan) setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || !sheet.contains(a)) $("#s-q", sheet).focus(); }, 50); // non rubo il cursore a un campo già scelto
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
-      if (badYear(sheet) || badDates(sheet)) return;
+      if (badYear(sheet) || badDates(sheet) || badRating(sheet, b)) return;
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       readReading(sheet, b);

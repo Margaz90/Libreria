@@ -51,7 +51,7 @@ export default async function ({ browser }) {
 
   // 4. Modifica su A → arriva su B
   await openBook(A, t0.id);
-  await A.locator('.seg [data-v="letto"]').click(); await A.locator('#s-save').click();
+  await A.locator('.seg [data-v="letto"]').click(); await A.locator('#f-rate button[data-n="4"]').click(); await A.locator('#s-save').click(); // v83: Letto con le stelle
   await wait(async () => (await localBook(B, t0.id))?.status === 'letto', 6000).catch(() => {});
   ok('modifica su A arriva su B senza ricaricare', (await localBook(B, t0.id))?.status === 'letto');
 
@@ -66,6 +66,8 @@ export default async function ({ browser }) {
   await openBook(A, t2.id);
   await A.setInputFiles('#sp-file', { name: 'dorso.png', mimeType: 'image/png', buffer: PNG });
   await A.waitForTimeout(300); await A.locator('#s-save').click();
+  // v83: un libro Goodreads letto senza stelle non si salva finché non ha il voto
+  if (await A.locator('#f-rate-err').isVisible().catch(() => false)) { await A.locator('#f-rate button[data-n="4"]').click(); await A.locator('#s-save').click(); }
   await wait(async () => !!(await localBook(B, t2.id))?.spine, 8000).catch(() => {});
   ok('foto del dorso arriva su B', !!(await localBook(B, t2.id))?.spine);
 
