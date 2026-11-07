@@ -101,7 +101,82 @@ async function verifica(browser) {
   await p.close2();
 }
 
+// Memoria pronta per la sezione: un'uscita futura, una recente, due proposte
+export const MEM = () => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: {},
+  uscite: [
+    { id: 'u2', title: 'Uscito da poco', author: 'Mick Herron', uscita: iso(-10), cover: '', perche: 'Nuovo di Herron: uscito il …', autoreLetto: true, voto: null },
+    { id: 'u1', title: 'Il nuovo di Herron', author: 'Mick Herron', isbn: '9788804111111', uscita: iso(35), cover: '', perche: 'Nuovo di Herron: esce il …', autoreLetto: true, voto: { media: 4.6, voti: 48, fonte: 'Apple Books' } },
+  ],
+  proposte: [
+    { id: 'p1', title: 'La spia nuova', author: 'Anna Nuova', isbn: '9788804222222', cover: '', synopsis: 'Trama.', year: 2025, perche: 'Hai letto 2 thriller', voto: { media: 4.2, voti: 1350, fonte: 'Google Books' }, genere: 'Thriller' },
+    { id: 'p2', title: 'Il pendolo di Foucault', author: 'Umberto Eco', cover: '', perche: 'Dello stesso autore di «Il nome della rosa», a cui hai dato 4 stelle', voto: null },
+  ] });
+const vai = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov'); };
+
+async function sezione(browser) {
+  const p = await apri(browser, { memoria: MEM() });
+  await riapri(p);
+  ok('barra in basso: «Novità» al posto di «Cerca»', await p.locator('#dock [data-view="novita"]').count() === 1 && await p.locator('#dock [data-act="search"]').count() === 0 && /Novità/.test(await p.locator('#dock [data-view="novita"]').innerText()));
+  ok('pallino con uscite non viste', await p.locator('#nov-dot').isVisible());
+  await vai(p);
+  const tit = await p.locator('.nov h3').allInnerTexts();
+  ok('sezione: «Uscite dei tuoi autori» e «Proposte per te»', JSON.stringify(tit) === JSON.stringify(['Uscite dei tuoi autori', 'Proposte per te']), JSON.stringify(tit));
+  const us = await p.locator('.nov-out li').allInnerTexts();
+  ok('uscite: prima la futura, con «esce il…»; poi la recente con «uscito il…»', us.length === 2 && /Il nuovo di Herron/.test(us[0]) && /esce il/.test(us[0]) && /uscito il/.test(us[1]), JSON.stringify(us));
+  const pr = await p.locator('.nov-card').allInnerTexts();
+  ok('proposta con voto, fonte e motivazione', /★ 4,2 · 1\.350 voti \(Google Books\)/.test(pr[0]) && /Hai letto 2 thriller/.test(pr[0]), pr[0]);
+  ok('proposta senza voto: niente stelle', !/★/.test(pr[1]) && /Il pendolo di Foucault/.test(pr[1]), pr[1]);
+  ok('nota in fondo: aggiornate e prossime tra 6 giorni', /Aggiornate il .+ · le prossime tra 6 giorni/.test(await p.locator('.nov-foot').innerText()), await p.locator('.nov-foot').innerText());
+  ok('aperta la sezione il pallino sparisce', await p.locator('#nov-dot').isHidden());
+  ok('la barra di ricerca è nascosta nelle novità', await p.locator('#toolbar').isHidden());
+  // Lista dei desideri con Annulla
+  const btn = p.locator('.nov-card [data-wish="p1"]');
+  ok('pulsante con il titolo per VoiceOver e alto 44 px', /Metti «La spia nuova» nella lista dei desideri/.test(await btn.getAttribute('aria-label')) && (await btn.boundingBox()).height >= 44);
+  await btn.click(); await p.waitForTimeout(800);
+  const w = (await localBooks(p)).find(b => b.title === 'La spia nuova');
+  ok('Lista dei desideri: libro desiderato con autore, ISBN e trama', w && w.status === 'desiderato' && w.author === 'Anna Nuova' && w.isbn === '9788804222222' && w.synopsis === 'Trama.', JSON.stringify(w));
+  ok('Lista dei desideri: sparisce dalle novità', !(await p.locator('.nov-card').allInnerTexts()).some(t => /La spia nuova/.test(t)));
+  await p.locator('.toast button', { hasText: 'Annulla' }).click(); await p.waitForTimeout(800);
+  ok('Annulla: tolto dalla lista e di nuovo tra le novità', !(await localBooks(p)).some(b => b.title === 'La spia nuova') && (await p.locator('.nov-card').allInnerTexts()).some(t => /La spia nuova/.test(t)));
+  // Libro arrivato dal cloud: sparisce al ridisegno
+  await p.evaluate(() => { window.libreriaHost.setLocal('c9', { title: 'Il pendolo di Foucault', author: 'Umberto Eco', status: 'da-leggere', updated: 5 }); window.libreriaHost.refresh(); });
+  await p.waitForTimeout(300);
+  ok('libro arrivato dal cloud: sparisce dalle novità', !(await p.locator('.nov-card').allInnerTexts()).some(t => /Foucault/.test(t)));
+  // La ricerca resta raggiungibile con «/»
+  await p.keyboard.press('/'); await p.waitForTimeout(300);
+  ok('«/» porta alla ricerca', await p.evaluate(() => document.activeElement && document.activeElement.id === 'q'));
+  ok('sezione: niente scorrimento laterale, nessun errore', (await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)) && !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
+async function vuoti(browser) {
+  let p = await apri(browser, { memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} }, libri: [L('a', 'Uno', 'Autore Uno', 5, 'Giallo')] });
+  await riapri(p); await vai(p);
+  ok('vuoto: pochi voti → «Dai qualche voto…»', /Dai qualche voto ai libri che hai letto: le proposte partono da lì\./.test(await p.locator('.nov').innerText()));
+  await p.close2();
+  p = await apri(browser, { memoria: null });
+  await p.route(/itunes|googleapis|openlibrary/, r => r.abort());
+  await riapri(p); await p.context().setOffline(true); await vai(p);
+  ok('vuoto: mai cercate → «Le novità arrivano quando sei online…»', /Le novità arrivano quando sei online: le cerco una volta a settimana\./.test(await p.locator('.nov').innerText()), await p.locator('.nov').innerText());
+  await p.context().setOffline(false); await p.close2();
+}
+
+async function computer(browser) {
+  for (const dark of [false, true]) {
+    const p = await newPage(browser, { width: 1366, height: 860, dark });
+    await p.goto(APP + '/');
+    await p.evaluate(([b, m]) => { localStorage.setItem('libreria-diego-v1', JSON.stringify(b)); localStorage.setItem('libreria-novita', JSON.stringify(m)); }, [LIB, MEM()]);
+    await p.reload(); await p.waitForSelector('#main');
+    await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov');
+    ok(`computer${dark ? ' (scuro)' : ''}: proposte in più colonne, niente scorrimento laterale`, (await p.evaluate(() => getComputedStyle(document.querySelector('.nov-grid')).gridTemplateColumns.split(' ').length)) >= 3 && (await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)) && !p.errs.length, p.errs.join(' / '));
+    await p.close2();
+  }
+}
+
 export default async function run({ browser }) {
   await giro(browser);
   await verifica(browser);
+  await sezione(browser);
+  await vuoti(browser);
+  await computer(browser);
 }

@@ -573,6 +573,51 @@
     }
   }
   window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita });
+  // Un libro delle novità è già in libreria (anche se arrivato dal cloud o aggiunto a mano dopo il giro)?
+  const giaInLibreria = x => state.books.some(b => (x.isbn && parseIsbn(b.isbn) === parseIsbn(x.isbn)) || (sameTitle(b.title, x.title) && chiaveAutore(b.author) === chiaveAutore(x.author)));
+  const novitaVisibili = n => {
+    const oggi = today(), fut = x => String(x.uscita || "") > oggi; // prima le future (dalla più vicina), poi le recenti (dalla più recente)
+    const uscite = n.uscite.filter(x => x && x.title && !giaInLibreria(x))
+      .sort((a, b) => fut(a) !== fut(b) ? (fut(a) ? -1 : 1) : fut(a) ? String(a.uscita).localeCompare(String(b.uscita)) : String(b.uscita).localeCompare(String(a.uscita)));
+    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)) };
+  };
+  function aggiornaPallinoNovita() {
+    const dot = $("#nov-dot"); if (!dot) return;
+    const n = leggiNovita(), v = novitaVisibili(n);
+    dot.hidden = !(v.uscite.some(x => !n.viste[x.id]) || (v.proposte.length && n.aperta < n.ultimoGiro));
+  }
+  // Aprire la sezione vuol dire aver visto tutto: niente più pallino né pop-up per queste uscite.
+  function segnaNovitaViste() {
+    const n = leggiNovita(); let cambiato = n.aperta < n.ultimoGiro;
+    n.uscite.forEach(x => { if (x && x.id && !n.viste[x.id]) { n.viste[x.id] = x.uscita || today(); cambiato = true; } });
+    if (cambiato) { n.aperta = Date.now(); scriviNovita(n); }
+  }
+  const migliaia = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "."); // «1.350» anche con 4 cifre
+  const votoTxt = v => v ? `★ ${Number(v.media).toFixed(1).replace(".", ",")} · ${migliaia(v.voti)} voti (${esc(v.fonte)})` : "";
+  const wishBtn = x => `<button class="btn" type="button" data-wish="${esc(x.id)}" aria-label="Metti «${esc(x.title)}» nella lista dei desideri">Lista dei desideri</button>`;
+  function renderNovita() {
+    const n = leggiNovita(), v = novitaVisibili(n), oggi = today();
+    const votati = state.books.filter(b => b.status === "letto" && Number(b.rating) > 0).length;
+    const msg = t => `<section class="nov"><h2 class="nov-h">Novità per te</h2><p class="hint">${t}</p></section>`;
+    if (votati < 3) return msg("Dai qualche voto ai libri che hai letto: le proposte partono da lì.");
+    if (!n.ultimoGiro) return msg(novita.busy ? "Sto cercando le novità per te…" : "Le novità arrivano quando sei online: le cerco una volta a settimana.");
+    const giorni = Math.max(0, Math.ceil((n.ultimoGiro + NOV_GIORNI * 864e5 - Date.now()) / 864e5));
+    const quando = x => x.uscita ? (x.uscita > oggi ? "esce il " : "uscito il ") + dataBreve(x.uscita, oggi) : "";
+    const cover = x => coverHTML({ id: x.id, title: x.title, author: x.author, cover: x.cover }, 200);
+    const mini = x => x.cover ? cover(x) : `<div class="cover nov-nocover" style="background:${colorOf(x)}" aria-hidden="true"></div>`; // 56 px: niente scritte
+    const uscite = v.uscite.length ? `<h3>Uscite dei tuoi autori</h3><ul class="nov-out">${v.uscite.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}</div>${wishBtn(x)}</li>`).join("")}</ul>` : "";
+    const proposte = v.proposte.length ? `<h3>Proposte per te</h3><div class="nov-grid">${v.proposte.map(x => `<article class="nov-card">${cover(x)}<b>${esc(x.title)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`).join("")}</div>` : "";
+    const nulla = !uscite && !proposte ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
+    const agg = new Date(n.ultimoGiro), dataAgg = `${agg.getDate()} ${MONTHS[agg.getMonth()]}`;
+    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
+  }
+  // «Lista dei desideri» da una novità: il libro entra completo e sparisce dalla sezione; «Annulla» lo toglie.
+  function aggiungiDesiderio(id) {
+    const n = leggiNovita(), x = n.uscite.concat(n.proposte).find(y => y && y.id === id); if (!x) return;
+    const nb = salvaLibro({ title: x.title, author: x.author, isbn: x.isbn || undefined, cover: x.cover || undefined, year: x.year || undefined, pages: x.pages || undefined, synopsis: x.synopsis || undefined, status: "desiderato", rating: 0 });
+    seriesLater(nb.id);
+    toast("Nella lista dei desideri", { label: "Annulla", run: () => removeBook(nb.id) });
+  }
 
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
@@ -1703,12 +1748,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const main = $("#main");
     const sk = state.view === "stats" ? statsFocusKey() : null;
     if (state.view === "stats") main.innerHTML = renderStats(statsLast = computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
+    else if (state.view === "novita") { main.innerHTML = renderNovita(); segnaNovitaViste(); }
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
       else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
     }
-    $("#toolbar").hidden = state.view === "stats";
+    $("#toolbar").hidden = state.view === "stats" || state.view === "novita";
+    aggiornaPallinoNovita();
     wireMain(main);
     if (sk) statsFocusRestore(sk);
   }
@@ -1730,6 +1777,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (sheetOpen()) lastFocus = t; else t.focus({ preventScroll: true });
   }
   function wireMain(root) {
+    root.querySelectorAll("[data-wish]").forEach(btn => btn.onclick = () => aggiungiDesiderio(btn.dataset.wish)); // novità (v84)
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     const ym = root.querySelector("#ys-more");
     if (ym) ym.onclick = () => { statsOld = !statsOld; const box = $("#ys-old"); box.hidden = !statsOld; ym.setAttribute("aria-expanded", statsOld); ym.textContent = statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${box.querySelectorAll("section.ys").length})`; };
