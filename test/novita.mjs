@@ -9,8 +9,8 @@ export const LIB = [L('l1', 'Un covo di bastardi', 'Mick Herron', 5, 'Thriller')
   { id: 'd1', title: 'In pila', author: 'Donato Carrisi', status: 'da-leggere', rating: 0, added: 1 }];
 
 // Fonti simulate. cfg.fail: tutte in errore; cfg.slowGoogle: Google lento (per «Completa autori»).
-export async function apri(browser, { libri = LIB, memoria = null, cfg = {} } = {}) {
-  const p = await newPage(browser, { external: 'allow', init: { fn: () => { window.libreriaNovitaMs = 0; Object.defineProperty(navigator, 'language', { get: () => 'it-IT' }); } } });
+export async function apri(browser, { libri = LIB, memoria = null, cfg = {}, lingua = 'it-IT' } = {}) {
+  const p = await newPage(browser, { external: 'allow', init: { fn: l => { window.libreriaNovitaMs = 0; Object.defineProperty(navigator, 'language', { get: () => l }); }, arg: lingua } });
   p.n = { apple: 0, google: 0, ol: 0 }; p.cfg = cfg;
   await p.route(/itunes\.apple\.com/, r => {
     p.n.apple++; const u = new URL(r.request().url()), cb = u.searchParams.get('callback'), term = u.searchParams.get('term') || '';
@@ -87,6 +87,33 @@ async function giro(browser) {
   await p.locator('#i-authors').click(); await p.waitForTimeout(500);
   const fatto = await p.evaluate(async () => { const a = JSON.parse(localStorage.getItem('libreria-novita')).ultimoGiro; await window.libreriaNovita.giro({ forza: true }); return JSON.parse(localStorage.getItem('libreria-novita')).ultimoGiro === a; });
   ok('giro: non parte durante «Completa autori e copertine»', fatto === true);
+  await p.close2();
+}
+
+// Memoria del telefono piena: si salva almeno quando è stato fatto il giro (altrimenti si ripeterebbe a ogni apertura)
+async function piena(browser) {
+  const p = await apri(browser, { memoria: { ultimoGiro: Date.now() - 8 * DAY, proposte: [], uscite: [], viste: {}, mostrate: {} } });
+  await p.addInitScript(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'libreria-novita' && String(v).length > 300) throw new DOMException('pieno', 'QuotaExceededError'); return set.call(this, k, v); }; });
+  await riapri(p); await finito(p); await p.waitForTimeout(500);
+  const m = await memoria(p);
+  ok('memoria piena: il giro resta segnato, niente ripetizione a ogni apertura', m && m.ultimoGiro > Date.now() - 60e3, JSON.stringify(m));
+  const n = p.n.google; await riapri(p); await p.waitForTimeout(2500);
+  ok('memoria piena: alla riapertura nessun nuovo giro', p.n.google === n, `${n} → ${p.n.google}`);
+  await p.close2();
+}
+
+// Telefono in inglese: Google senza filtro italiano; Open Library in inglese scartata su un telefono italiano
+async function lingue(browser) {
+  let p = await apri(browser, { memoria: { ultimoGiro: Date.now() - 8 * DAY, proposte: [], uscite: [], viste: {}, mostrate: {} }, lingua: 'en-US' });
+  p.gq = []; await p.route(/www\.googleapis\.com\/books/, r => { p.gq.push(r.request().url()); json(r, { totalItems: 0, items: [] }); });
+  await riapri(p); await finito(p);
+  ok('telefono in inglese: Google senza filtro sulla lingua italiana', p.gq.length > 0 && !p.gq.some(u => /langRestrict=it/.test(u)), p.gq[0]);
+  await p.close2();
+  p = await apri(browser, { memoria: { ultimoGiro: Date.now() - 8 * DAY, proposte: [], uscite: [], viste: {}, mostrate: {} } });
+  await p.route(/openlibrary\.org/, r => json(r, { docs: [{ title: 'English thriller', author_name: ['Some Writer'], language: ['eng'], first_publish_year: 2025 }, { title: 'Giallo italiano', author_name: ['Una Scrittrice'], language: ['ita'], first_publish_year: 2025 }] }));
+  await riapri(p); await finito(p);
+  const t = ((await memoria(p)) || { proposte: [] }).proposte.map(x => x.title);
+  ok('Open Library: libro in inglese scartato, quello italiano tenuto', !t.includes('English thriller') && t.includes('Giallo italiano'), JSON.stringify(t));
   await p.close2();
 }
 
@@ -169,6 +196,8 @@ async function computer(browser) {
     await p.evaluate(([b, m]) => { localStorage.setItem('libreria-diego-v1', JSON.stringify(b)); localStorage.setItem('libreria-novita', JSON.stringify(m)); }, [LIB, MEM({ giaMostrate: true })]);
     await p.reload(); await p.waitForSelector('#main');
     await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov');
+    const [sh, nv, ad] = [await p.locator('#side-shelves').boundingBox(), await p.locator('#dock [data-view="novita"]').boundingBox(), await p.locator('#dock .add').boundingBox()];
+    ok(`computer${dark ? ' (scuro)' : ''}: «Novità» sotto gli scaffali nella colonna laterale`, nv.y > sh.y + sh.height - 1 && nv.y > ad.y, JSON.stringify({ sh, nv, ad }));
     ok(`computer${dark ? ' (scuro)' : ''}: proposte in più colonne, niente scorrimento laterale`, (await p.evaluate(() => getComputedStyle(document.querySelector('.nov-grid')).gridTemplateColumns.split(' ').length)) >= 3 && (await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)) && !p.errs.length, p.errs.join(' / '));
     await p.close2();
   }
@@ -220,6 +249,8 @@ async function popup(browser) {
 export default async function run({ browser }) {
   await popup(browser);
   await giro(browser);
+  await piena(browser);
+  await lingue(browser);
   await verifica(browser);
   await sezione(browser);
   await vuoti(browser);

@@ -379,10 +379,11 @@
       const h = { ...r, uscita: isoOk2(String(r.uscita || "")) ? r.uscita : "", voti: (r.voti || []).slice() };
       const d = uniti.find(x => (parseIsbn(x.isbn) && parseIsbn(x.isbn) === parseIsbn(h.isbn)) || (sameTitle(x.title, h.title) && chiaveAutore(x.author) === chiaveAutore(h.author)));
       if (!d) { uniti.push(h); continue; }
-      for (const k of ["isbn", "cover", "synopsis", "uscita", "year", "pages", "genere"]) if (!d[k] && h[k]) d[k] = h[k];
+      for (const k of ["isbn", "cover", "synopsis", "uscita", "year", "edYear", "pages", "genere"]) if (!d[k] && h[k]) d[k] = h[k];
       d.voti.push(...h.voti);
     }
-    const voce = h => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: Number(h.year) || (h.uscita ? Number(h.uscita.slice(0, 4)) : undefined),
+    const annoDi = h => Number(h.year || h.edYear) || (h.uscita ? Number(h.uscita.slice(0, 4)) : undefined); // le fonti danno edYear
+    const voce = h => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: annoDi(h),
       pages: h.pages, synopsis: h.synopsis || "", uscita: h.uscita, genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche(h, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true });
     const da = addDays(oggi, -90), a = addDays(oggi, 365);
     const isUscita = h => tuoi.has(chiaveAutore(h.author)) && h.uscita && h.uscita >= da && h.uscita <= a;
@@ -391,7 +392,7 @@
     const forza = h => { const au = (gusti.autori || []).find(x => x.chiave === chiaveAutore(h.author)); if (au) return au.punti; const g = (gusti.generi || []).find(x => x.nome.toLowerCase() === String(h.genere || "").toLowerCase()); return g ? g.n : 0; };
     const anno = Number(oggi.slice(0, 4));
     const cand = uniti.filter(h => !isUscita(h) && !(h.uscita && h.uscita > oggi) && forza(h) > 0).map(h => {
-      const v = votoMostrato(h.voti), y = h.uscita ? Number(h.uscita.slice(0, 4)) : Number(h.year) || anno;
+      const v = votoMostrato(h.voti), y = annoDi(h) || anno;
       return { h, sc: forza(h) + (linguaEdizione(h) === lingua ? 1 : 0) + (v ? v.media - 3 : 0) - Math.max(0, anno - y) / 5 };
     }).sort((x, y) => y.sc - x.sc);
     const perA = new Map(), perG = new Map(), proposte = [];
@@ -530,13 +531,25 @@
 
   // ---- Novità per te (v84): giro settimanale in sottofondo e memoria sul dispositivo (mai nel cloud né nei backup) ----
   const NOV_KEY = "libreria-novita", NOV_GIORNI = 7;
+  // Lingua dell'edizione da Open Library (codici a tre lettere): quella del telefono se c'è tra le sue lingue, altrimenti la prima.
+  const OL_LINGUE = { ita: "it", eng: "en", fre: "fr", spa: "es", ger: "de", por: "pt", dut: "nl" };
+  const olLingua = l => { const c = (l || []).map(x => OL_LINGUE[x]).filter(Boolean); return c.includes(LINGUA) ? LINGUA : c[0] || ""; };
   function leggiNovita() {
     let n = null; try { n = JSON.parse(localStorage.getItem(NOV_KEY) || "null"); } catch {}
+    if (novitaMem && (!n || Number(n.ultimoGiro) < novitaMem.ultimoGiro || (!(n.proposte || []).length && novitaMem.proposte.length))) n = novitaMem; // la versione completa di questa sessione
     const obj = x => x && typeof x === "object" && !Array.isArray(x) ? x : {};
     return { ultimoGiro: Number(n && n.ultimoGiro) || 0, proposte: Array.isArray(n && n.proposte) ? n.proposte : [], uscite: Array.isArray(n && n.uscite) ? n.uscite : [],
       viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0 };
   }
-  function scriviNovita(n) { try { localStorage.setItem(NOV_KEY, JSON.stringify(n)); } catch {} }
+  // Memoria piena (le foto dei dorsi occupano spazio): si riprova più leggeri, e almeno si ricorda il giro e cosa è stato mostrato,
+  // altrimenti il giro si ripeterebbe a ogni apertura. La copia in memoria copre la sessione.
+  let novitaMem = null;
+  function scriviNovita(n) {
+    novitaMem = n;
+    const leggera = { ...n, proposte: n.proposte.slice(0, 6).map(({ synopsis, ...x }) => x), uscite: n.uscite.map(({ synopsis, ...x }) => x) };
+    const minima = { ultimoGiro: n.ultimoGiro, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [] };
+    for (const v of [n, leggera, minima]) { try { localStorage.setItem(NOV_KEY, JSON.stringify(v)); return; } catch {} }
+  }
   const novita = { busy: false };
   // Un giro: fino a 15 autori (Apple Books Italia e Google Books) e 5 generi (Google Books e Open Library), una richiesta alla volta.
   // Non parte offline, durante un altro lavoro in sottofondo, prima di 7 giorni (salvo forza) o con meno di 3 Letti con voto.
@@ -554,12 +567,12 @@
       for (const a of gusti.autori) {
         if (gen !== dataGen) return;
         await prova(() => appleSearch(a.nome, 25));
-        await prova(() => googleSearch(`inauthor:"${a.nome}"`, { max: 20, newest: true }));
+        await prova(() => googleSearch(`inauthor:"${a.nome}"`, { max: 20, newest: true, italian: LINGUA === "it" }));
       }
       for (const g of gusti.generi) {
         if (gen !== dataGen) return;
-        await prova(() => googleSearch(`subject:"${g.nome}"`, { max: 20, newest: true }), { genere: g.nome });
-        await prova(() => openLibrarySearch("subject:" + g.nome.toLowerCase(), "", 20), { genere: g.nome });
+        await prova(() => googleSearch(`subject:"${g.nome}"`, { max: 20, newest: true, italian: LINGUA === "it" }), { genere: g.nome });
+        await prova(() => openLibrarySearch("subject:" + g.nome.toLowerCase(), "", 20).then(l => l.map(x => ({ ...x, lang: x.lang || olLingua(x.lingue) }))), { genere: g.nome });
       }
       if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
       const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
@@ -822,7 +835,8 @@
       edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
       isbn: (d.isbn || [])[0] || "", lang: "", ita: (d.language || []).includes("ita"),
       cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "",
-      voti: d.ratings_count ? [{ media: d.ratings_average, voti: d.ratings_count, fonte: "Open Library" }] : []
+      voti: d.ratings_count ? [{ media: d.ratings_average, voti: d.ratings_count, fonte: "Open Library" }] : [],
+      lingue: d.language || [] // codici delle lingue, per le novità (v84); lang resta vuoto come prima per non cambiare le altre ricerche
     })).filter(x => x.title);
   }
 

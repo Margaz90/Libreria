@@ -166,6 +166,8 @@ export default async function run() {
   const molti = Array.from({ length: 10 }, (_, i) => ({ title: 'Herron ' + i, author: 'Mick Herron' })).concat(Array.from({ length: 10 }, (_, i) => ({ title: 'Thr ' + i, author: 'Autrice ' + i, genere: 'Thriller' })), Array.from({ length: 10 }, (_, i) => ({ title: 'Sto ' + i, author: 'Storica ' + i, genere: 'Storico' })));
   const M = R.novitaDa(molti, lib, OGGI, 'it', G).proposte;
   ok('novitaDa: al massimo 12 proposte, 3 per autore, 4 per genere', M.length <= 12 && M.filter(x => x.author === 'Mick Herron').length <= 3 && M.filter(x => x.genere === 'Thriller').length <= 4 && M.filter(x => x.genere === 'Storico').length <= 4, JSON.stringify(M.map(x => x.title)));
+  const EY = R.novitaDa([{ title: 'Vecchio di Herron', author: 'Mick Herron', edYear: 2001 }, { title: 'Recente di Herron', author: 'Mick Herron', edYear: 2025 }], lib, OGGI, 'it', G).proposte;
+  ok('novitaDa: l\'anno arriva anche da edYear (come lo danno le fonti) e un libro vecchio va dopo', EY.length === 2 && EY[0].title === 'Recente di Herron' && EY[1].year === 2001, JSON.stringify(EY.map(x => [x.title, x.year])));
   const PC = R.perche;
   ok('perche: stesso autore con 5 stelle, genere', PC({ title: 'X', author: 'Mick Herron' }, G, OGGI) === 'Dello stesso autore di «Un covo di bastardi», a cui hai dato 5 stelle' && PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI) === 'Hai letto 2 thriller', [PC({ title: 'X', author: 'Mick Herron' }, G, OGGI), PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI)].join(' | '));
   ok('perche: autore senza voti alti', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI) === 'Di Carrisi, come il libro che hai', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI));
