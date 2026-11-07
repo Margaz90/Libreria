@@ -445,7 +445,7 @@ details.edit .inner { display: flex; flex-direction: column; gap: 12px; }
   .dock .tab svg { width: 20px; height: 20px; }
   .dock .tab:hover, .dock .tab[aria-current="page"] { background: var(--bg); color: var(--ink); }
   .dock .tab .n { display: block; margin-left: auto; font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .dock .tab[data-view="libreria"] { order: 1; } .dock .tab[data-view="stats"] { order: 2; }
+  .dock .tab[data-view="libreria"] { order: 1; } .dock .tab[data-view="stats"] { order: 2; } .dock .tab[data-view="novita"] { order: 3; } /* sotto gli scaffali (v84) */
   .dock .tab[data-act="search"] { display: none; }
   .dock .tab.add { order: 0; justify-content: center; gap: 6px; margin-bottom: 16px; padding: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .dock .tab.add:hover { background: var(--accent); color: var(--accent-ink); filter: brightness(1.06); }
@@ -764,3 +764,27 @@ html { scroll-behavior: smooth; }
 .ys-old { display: flex; flex-direction: column; gap: 30px; }
 .ys-old[hidden] { display: none; }
 .ys-more { align-self: flex-start; min-height: 44px; margin: 4px 0 12px; }
+
+/* Novità per te (v84) */
+.nov { display: grid; gap: 14px; padding-block: 8px 24px; }
+.nov-h { font-family: var(--f-title, inherit); color: var(--title); margin: 0; }
+.nov h3 { margin: 10px 0 0; color: var(--title); font-size: 17px; }
+.nov-out { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.nov-out li { display: grid; grid-template-columns: 56px 1fr; gap: 6px 12px; align-items: start; }
+.nov-out li .cover, .nov-out li img { width: 56px; height: 84px; }
+.nov-out li .btn { grid-column: 2; justify-self: start; }
+.nov-t, .nov-card { display: grid; gap: 2px; min-width: 0; }
+.nov-t span, .nov-card > span { color: var(--muted); font-size: 14px; }
+.nov-when { color: var(--accent) !important; font-weight: 600; }
+.nov-voto { color: var(--ink) !important; font-size: 13.5px !important; font-variant-numeric: tabular-nums; }
+.nov-why { color: var(--muted); font-size: 14px; }
+.nov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
+@media (min-width: 700px) { .nov-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+.nov-card .cover, .nov-card img { width: 100%; aspect-ratio: 2 / 3; height: auto; margin-bottom: 6px; }
+.nov-card .btn, .nov-out .btn { min-height: 44px; margin-top: 6px; }
+.nov-foot { font-size: 13px; }
+.nov-pop { display: grid; gap: 10px; } /* pop-up delle uscite (v84) */
+.nov-pop h2 { margin: 0; color: var(--title); }
+.nov-pop .sub { margin: 0; }
+.nov-pop .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nov-pop .actions .btn { min-height: 44px; }

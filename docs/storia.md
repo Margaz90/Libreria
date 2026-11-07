@@ -2,6 +2,7 @@
 
 Estratta verbatim da `CLAUDE.md`. Le voci nuove vanno in cima (le scrive `/pubblica`).
 
+- **Novità per te** (v84): nuova sezione al posto di «Cerca» con le uscite dei propri autori e proposte motivate dai propri voti e generi, voto dei lettori da Google Books, Apple Books o Open Library (con almeno 20 voti), aggiornata da sola una volta a settimana all'apertura; pop-up per le uscite degli autori letti; «Lista dei desideri» con un tocco. Progettata con Superpowers (spec, piano) ed eseguita direttamente in sessione. Richiesta di Diego.
 - **Stelle obbligatorie per i Letti** (v83): menu rapido e «Finito!» chiedono prima «Quante stelle?», Salva si blocca senza voto per i Letti, pallino «da aggiornare» sui Letti senza voto (anche i 18 libri Goodreads non votati). Richiesta di Diego.
 - **Copertina nella lingua del telefono** (v82): come per la trama, «Aggiorna informazioni», il completamento in sottofondo e la ricerca delle copertine mettono prima l'edizione nella lingua del telefono (italiana per Diego), anche quando l'ISBN porta a un'edizione straniera. Richiesta di Diego.
 - **Nuova icona «La M dei dorsi»** (v81): cinque dorsi le cui cime disegnano una M, segnalibro corallo nella valle centrale; stessi colori dell'app, piatta, senza foglie, cuciture, libro inclinato e riflessi. Scelta da Diego tra sette proposte (tre sobrie, poi quattro nate dalla prima, ispirate allo spazio negativo di FedEx, ai fermalibri di Penguin Random House e alle icone con una sola forma e un accento). Icone da 84 a 9 KB.

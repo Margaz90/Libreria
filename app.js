@@ -315,6 +315,103 @@
     return (con.find(h => linguaDi(h) === lingua) || con[0] || {}).synopsis || "";
   }
   // </regole>
+  // <regole>
+  // ---- Novità per te (v84): gusti, scarti, motivazioni, voto. Funzioni pure. ----
+  const nomeAutore = a => String(a || "").split(",")[0].trim();
+  const chiaveAutore = a => norm(nomeAutore(a)).split(" ").pop() || "";
+  const cognomeDi = a => nomeAutore(a).split(/\s+/).pop() || "";
+  // Da dove partono le novità: fino a 15 autori (5★=3, 4★=2, 3★=1, In lettura o Da leggere=1; esclusi quelli con media sotto 3)
+  // e i 5 generi più letti fra i Letti con almeno 3 stelle.
+  function gustiDi(books) {
+    const A = new Map(), G = new Map();
+    for (const b of books || []) {
+      const k = chiaveAutore(b.author), r = Number(b.rating) || 0;
+      if (k) {
+        const a = A.get(k) || { nome: nomeAutore(b.author), chiave: k, punti: 0, letti: 0, libri: 0, somma: 0, votati: 0, migliore: null, ultimo: "" };
+        if (b.status !== "desiderato") a.libri++;
+        if (b.status === "letto") {
+          a.letti++; if (r > 0) { a.somma += r; a.votati++; }
+          a.punti += r >= 5 ? 3 : r === 4 ? 2 : r === 3 ? 1 : 0;
+          if (r > 0 && (!a.migliore || r > a.migliore.rating)) a.migliore = { title: b.title, rating: r };
+          if (String(b.finished || "") > a.ultimo) a.ultimo = String(b.finished);
+        } else if (b.status === "in-lettura" || b.status === "da-leggere") a.punti += 1;
+        A.set(k, a);
+      }
+      const g = String(b.genre || "").trim();
+      if (b.status === "letto" && r >= 3 && g) { const gk = g.toLowerCase(), x = G.get(gk) || { nome: g, n: 0 }; x.n++; G.set(gk, x); }
+    }
+    const autori = [...A.values()].filter(a => a.punti > 0 && !(a.votati && a.somma / a.votati < 3))
+      .sort((x, y) => y.punti - x.punti || y.ultimo.localeCompare(x.ultimo)).slice(0, 15)
+      .map(({ nome, chiave, punti, letti, libri, migliore }) => ({ nome, chiave, punti, letti, libri, migliore }));
+    const generi = [...G.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "it")).slice(0, 5);
+    return { autori, generi };
+  }
+  const idNovita = h => parseIsbn(h.isbn) || norm(h.title) + "|" + chiaveAutore(h.author);
+  // Il voto dei lettori da mostrare: fra le fonti con almeno 20 voti e media tra 0 e 5, quella con più voti.
+  function votoMostrato(fonti) {
+    const ok = (fonti || []).filter(f => f && Number.isFinite(Number(f.media)) && Number(f.media) > 0 && Number(f.media) <= 5 && Number(f.voti) >= 20);
+    if (!ok.length) return null;
+    const f = ok.reduce((a, x) => Number(x.voti) > Number(a.voti) ? x : a);
+    return { media: Number(f.media), voti: Number(f.voti), fonte: f.fonte };
+  }
+  const dataBreve = (iso, oggi) => { const d = new Date(iso + "T12:00"); return `${d.getDate()} ${MONTHS[d.getMonth()]}${iso.slice(0, 4) !== oggi.slice(0, 4) ? " " + iso.slice(0, 4) : ""}`; };
+  // Perché ti proponiamo un libro (o un'uscita).
+  function perche(h, gusti, oggi) {
+    const C = cognomeDi(h.author), a = (gusti.autori || []).find(x => x.chiave === chiaveAutore(h.author));
+    if (h.uscita && a) return `Nuovo di ${C}: ${h.uscita > oggi ? "esce" : "uscito"} il ${dataBreve(h.uscita, oggi)}`;
+    if (a && a.migliore && a.migliore.rating >= 4) return `Dello stesso autore di «${a.migliore.title}», a cui hai dato ${a.migliore.rating} stelle`;
+    if (a) return `Di ${C}, come ${a.libri === 1 ? "il libro" : "gli " + a.libri + " libri"} che hai`;
+    const g = (gusti.generi || []).find(x => x.nome.toLowerCase() === String(h.genere || "").trim().toLowerCase());
+    if (g) return g.n === 1 ? `Hai letto un libro di genere ${g.nome.toLowerCase()}` : `Hai letto ${g.n} ${g.nome.toLowerCase()}`;
+    return "";
+  }
+  // Uscite e proposte dai risultati delle fonti: scarti, doppioni uniti, ordine, limiti (max 12 proposte, 3 per autore, 4 per genere).
+  function novitaDa(risultati, books, oggi, lingua, gusti) {
+    const BOX = /\b(cofanetto|box|collection|antologia|omnibus)\b/i;
+    const isoOk2 = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00")) && new Date(d + "T12:00").toISOString().slice(0, 10) === d;
+    const tuoi = new Map(); (books || []).forEach(b => { const k = chiaveAutore(b.author); if (k && b.status !== "desiderato") tuoi.set(k, (tuoi.get(k) || false) || b.status === "letto"); });
+    const presente = h => (books || []).some(b => (parseIsbn(h.isbn) && parseIsbn(b.isbn) === parseIsbn(h.isbn)) || (sameTitle(b.title, h.title) && chiaveAutore(b.author) === chiaveAutore(h.author)));
+    const uniti = [];
+    for (const r of risultati || []) {
+      if (!r || !String(r.title || "").trim() || !String(r.author || "").trim() || BOX.test(r.title)) continue;
+      const le = linguaEdizione(r); if (le && lingua && le !== lingua) continue;
+      if (presente(r)) continue;
+      const h = { ...r, uscita: isoOk2(String(r.uscita || "")) ? r.uscita : "", voti: (r.voti || []).slice() };
+      const d = uniti.find(x => (parseIsbn(x.isbn) && parseIsbn(x.isbn) === parseIsbn(h.isbn)) || (sameTitle(x.title, h.title) && chiaveAutore(x.author) === chiaveAutore(h.author)));
+      if (!d) { uniti.push(h); continue; }
+      for (const k of ["isbn", "cover", "synopsis", "uscita", "year", "edYear", "pages", "genere"]) if (!d[k] && h[k]) d[k] = h[k];
+      d.voti.push(...h.voti);
+    }
+    const annoDi = h => Number(h.year || h.edYear) || (h.uscita ? Number(h.uscita.slice(0, 4)) : undefined); // le fonti danno edYear
+    const voce = h => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: annoDi(h),
+      pages: h.pages, synopsis: h.synopsis || "", uscita: h.uscita, genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche(h, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true });
+    const da = addDays(oggi, -90), a = addDays(oggi, 365);
+    const isUscita = h => tuoi.has(chiaveAutore(h.author)) && h.uscita && h.uscita >= da && h.uscita <= a;
+    const uscite = uniti.filter(isUscita).map(voce)
+      .sort((x, y) => (x.uscita > oggi) !== (y.uscita > oggi) ? (x.uscita > oggi ? -1 : 1) : x.uscita > oggi ? x.uscita.localeCompare(y.uscita) : y.uscita.localeCompare(x.uscita));
+    const forza = h => { const au = (gusti.autori || []).find(x => x.chiave === chiaveAutore(h.author)); if (au) return au.punti; const g = (gusti.generi || []).find(x => x.nome.toLowerCase() === String(h.genere || "").toLowerCase()); return g ? g.n : 0; };
+    const anno = Number(oggi.slice(0, 4));
+    const cand = uniti.filter(h => !isUscita(h) && !(h.uscita && h.uscita > oggi) && forza(h) > 0).map(h => {
+      const v = votoMostrato(h.voti), y = annoDi(h) || anno;
+      return { h, sc: forza(h) + (linguaEdizione(h) === lingua ? 1 : 0) + (v ? v.media - 3 : 0) - Math.max(0, anno - y) / 5 };
+    }).sort((x, y) => y.sc - x.sc);
+    const perA = new Map(), perG = new Map(), proposte = [];
+    for (const { h } of cand) {
+      if (proposte.length >= 12) break;
+      const ka = chiaveAutore(h.author), kg = String(h.genere || "").toLowerCase();
+      if ((perA.get(ka) || 0) >= 3 || (kg && (perG.get(kg) || 0) >= 4)) continue;
+      perA.set(ka, (perA.get(ka) || 0) + 1); if (kg) perG.set(kg, (perG.get(kg) || 0) + 1);
+      proposte.push(voce(h));
+    }
+    return { uscite, proposte };
+  }
+  // Uscite già mostrate: si dimenticano quelle uscite più di 90 giorni fa.
+  function pulisciViste(viste, oggi) {
+    const da = addDays(oggi, -90), out = {};
+    for (const [k, d] of Object.entries(viste || {})) if (String(d) >= da) out[k] = d;
+    return out;
+  }
+  // </regole>
   async function fetchInfo(b, errors = {}, rounds = 2) { // rounds: giri di Google per l'ISBN (2 in sottofondo, tutti da «Aggiorna informazioni»)
     const isbn = String(b.isbn || "").replace(/[^\dXx]/g, "");
     const byIsbn = isbn ? await settle([
@@ -432,6 +529,126 @@
     toast(down ? `Wikidata non risponde: ricerca interrotta, riprova più tardi. ${msg}` : msg + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
+  // ---- Novità per te (v84): giro settimanale in sottofondo e memoria sul dispositivo (mai nel cloud né nei backup) ----
+  const NOV_KEY = "libreria-novita", NOV_GIORNI = 7;
+  // Lingua dell'edizione da Open Library (codici a tre lettere): quella del telefono se c'è tra le sue lingue, altrimenti la prima.
+  const OL_LINGUE = { ita: "it", eng: "en", fre: "fr", spa: "es", ger: "de", por: "pt", dut: "nl" };
+  const olLingua = l => { const c = (l || []).map(x => OL_LINGUE[x]).filter(Boolean); return c.includes(LINGUA) ? LINGUA : c[0] || ""; };
+  function leggiNovita() {
+    let n = null; try { n = JSON.parse(localStorage.getItem(NOV_KEY) || "null"); } catch {}
+    if (novitaMem && (!n || Number(n.ultimoGiro) < novitaMem.ultimoGiro || (!(n.proposte || []).length && novitaMem.proposte.length))) n = novitaMem; // la versione completa di questa sessione
+    const obj = x => x && typeof x === "object" && !Array.isArray(x) ? x : {};
+    return { ultimoGiro: Number(n && n.ultimoGiro) || 0, proposte: Array.isArray(n && n.proposte) ? n.proposte : [], uscite: Array.isArray(n && n.uscite) ? n.uscite : [],
+      viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0 };
+  }
+  // Memoria piena (le foto dei dorsi occupano spazio): si riprova più leggeri, e almeno si ricorda il giro e cosa è stato mostrato,
+  // altrimenti il giro si ripeterebbe a ogni apertura. La copia in memoria copre la sessione.
+  let novitaMem = null;
+  function scriviNovita(n) {
+    novitaMem = n;
+    const leggera = { ...n, proposte: n.proposte.slice(0, 6).map(({ synopsis, ...x }) => x), uscite: n.uscite.map(({ synopsis, ...x }) => x) };
+    const minima = { ultimoGiro: n.ultimoGiro, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [] };
+    for (const v of [n, leggera, minima]) { try { localStorage.setItem(NOV_KEY, JSON.stringify(v)); return; } catch {} }
+  }
+  const novita = { busy: false };
+  // Un giro: fino a 15 autori (Apple Books Italia e Google Books) e 5 generi (Google Books e Open Library), una richiesta alla volta.
+  // Non parte offline, durante un altro lavoro in sottofondo, prima di 7 giorni (salvo forza) o con meno di 3 Letti con voto.
+  async function giroNovita({ forza = false } = {}) {
+    const n = leggiNovita();
+    if (novita.busy || enrich.busy || state.coverJob || !navigator.onLine) return;
+    if (!forza && Date.now() - n.ultimoGiro < NOV_GIORNI * 864e5) return;
+    if (state.books.filter(b => b.status === "letto" && Number(b.rating) > 0).length < 3) return;
+    const gusti = gustiDi(state.books), gen = dataGen, line = $("#enrich"), pausa = () => sleep(window.libreriaNovitaMs ?? 600);
+    novita.busy = true;
+    if (line) { line.hidden = false; line.textContent = "Cerco novità per te…"; }
+    const ris = []; let risposte = 0;
+    const prova = async (run, extra = {}) => { try { (await run()).forEach(x => ris.push({ ...x, ...extra })); risposte++; } catch {} await pausa(); };
+    try {
+      for (const a of gusti.autori) {
+        if (gen !== dataGen) return;
+        await prova(() => appleSearch(a.nome, 25));
+        await prova(() => googleSearch(`inauthor:"${a.nome}"`, { max: 20, newest: true, italian: LINGUA === "it" }));
+      }
+      for (const g of gusti.generi) {
+        if (gen !== dataGen) return;
+        await prova(() => googleSearch(`subject:"${g.nome}"`, { max: 20, newest: true, italian: LINGUA === "it" }), { genere: g.nome });
+        await prova(() => openLibrarySearch("subject:" + g.nome.toLowerCase(), "", 20).then(l => l.map(x => ({ ...x, lang: x.lang || olLingua(x.lingue) }))), { genere: g.nome });
+      }
+      if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
+      const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
+      const nuove = new Set(out.uscite.map(x => x.id));
+      const uscite = out.uscite.concat(n.uscite.filter(x => x && !nuove.has(x.id) && x.uscita >= da)); // le uscite restano 90 giorni
+      scriviNovita({ ...n, ultimoGiro: Date.now(), proposte: out.proposte, uscite, viste: pulisciViste(n.viste, oggi) });
+    } finally {
+      novita.busy = false;
+      if (line && /Cerco novità/.test(line.textContent)) line.hidden = true;
+      if (state.view === "novita") render();
+    }
+  }
+  window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita, popup: () => mostraPopupNovita() });
+  // Un libro delle novità è già in libreria (anche se arrivato dal cloud o aggiunto a mano dopo il giro)?
+  const giaInLibreria = x => state.books.some(b => (x.isbn && parseIsbn(b.isbn) === parseIsbn(x.isbn)) || (sameTitle(b.title, x.title) && chiaveAutore(b.author) === chiaveAutore(x.author)));
+  const novitaVisibili = n => {
+    const oggi = today(), fut = x => String(x.uscita || "") > oggi; // prima le future (dalla più vicina), poi le recenti (dalla più recente)
+    const uscite = n.uscite.filter(x => x && x.title && !giaInLibreria(x))
+      .sort((a, b) => fut(a) !== fut(b) ? (fut(a) ? -1 : 1) : fut(a) ? String(a.uscita).localeCompare(String(b.uscita)) : String(b.uscita).localeCompare(String(a.uscita)));
+    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)) };
+  };
+  function aggiornaPallinoNovita() {
+    const dot = $("#nov-dot"); if (!dot) return;
+    const n = leggiNovita(), v = novitaVisibili(n);
+    dot.hidden = !(v.uscite.some(x => !n.viste[x.id]) || (v.proposte.length && n.aperta < n.ultimoGiro));
+  }
+  // Aprire la sezione vuol dire aver visto tutto: niente più pallino né pop-up per queste uscite.
+  function segnaNovitaViste() {
+    const n = leggiNovita(); let cambiato = n.aperta < n.ultimoGiro;
+    n.uscite.forEach(x => { if (x && x.id && !n.viste[x.id]) { n.viste[x.id] = x.uscita || today(); cambiato = true; } });
+    if (cambiato) { n.aperta = Date.now(); scriviNovita(n); }
+  }
+  const migliaia = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "."); // «1.350» anche con 4 cifre
+  const votoTxt = v => v ? `★ ${Number(v.media).toFixed(1).replace(".", ",")} · ${migliaia(v.voti)} voti (${esc(v.fonte)})` : "";
+  const wishBtn = x => `<button class="btn" type="button" data-wish="${esc(x.id)}" aria-label="Metti «${esc(x.title)}» nella lista dei desideri">Lista dei desideri</button>`;
+  function renderNovita() {
+    const n = leggiNovita(), v = novitaVisibili(n), oggi = today();
+    const votati = state.books.filter(b => b.status === "letto" && Number(b.rating) > 0).length;
+    const msg = t => `<section class="nov"><h2 class="nov-h">Novità per te</h2><p class="hint">${t}</p></section>`;
+    if (votati < 3) return msg("Dai qualche voto ai libri che hai letto: le proposte partono da lì.");
+    if (!n.ultimoGiro) return msg(novita.busy ? "Sto cercando le novità per te…" : "Le novità arrivano quando sei online: le cerco una volta a settimana.");
+    const giorni = Math.max(0, Math.ceil((n.ultimoGiro + NOV_GIORNI * 864e5 - Date.now()) / 864e5));
+    const quando = x => x.uscita ? (x.uscita > oggi ? "esce il " : "uscito il ") + dataBreve(x.uscita, oggi) : "";
+    const cover = x => coverHTML({ id: x.id, title: x.title, author: x.author, cover: x.cover }, 200);
+    const mini = x => x.cover ? cover(x) : `<div class="cover nov-nocover" style="background:${colorOf(x)}" aria-hidden="true"></div>`; // 56 px: niente scritte
+    const uscite = v.uscite.length ? `<h3>Uscite dei tuoi autori</h3><ul class="nov-out">${v.uscite.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}</div>${wishBtn(x)}</li>`).join("")}</ul>` : "";
+    const proposte = v.proposte.length ? `<h3>Proposte per te</h3><div class="nov-grid">${v.proposte.map(x => `<article class="nov-card">${cover(x)}<b>${esc(x.title)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`).join("")}</div>` : "";
+    const nulla = !uscite && !proposte ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
+    const agg = new Date(n.ultimoGiro), dataAgg = `${agg.getDate()} ${MONTHS[agg.getMonth()]}`;
+    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
+  }
+  // Pop-up all'apertura (v84): uscite non viste di autori che hai letto, una volta per libro; mai sopra un'altra scheda.
+  function mostraPopupNovita() {
+    if (sheetOpen()) return; // aspetta l'apertura successiva
+    const n = leggiNovita(), oggi = today();
+    const nuove = novitaVisibili(n).uscite.filter(x => x.autoreLetto && !n.viste[x.id] && !n.mostrate[x.id]);
+    if (!nuove.length) return;
+    const x = nuove[0], k = nuove.length - 1;
+    nuove.forEach(y => { n.mostrate[y.id] = y.uscita || oggi; n.viste[y.id] = y.uscita || oggi; });
+    scriviNovita(n);
+    const quando = x.uscita ? (x.uscita > oggi ? "esce il " : "uscito il ") + dataBreve(x.uscita, oggi) : "";
+    const sheet = openSheet(`<div class="nov-pop"><h2>Nuovo di ${esc(nomeAutore(x.author))}</h2>
+      <p class="sub">«${esc(x.title)}»${quando ? ", " + quando : ""}${k ? (k === 1 ? " · e un'altra uscita" : ` · e altre ${k} uscite`) : ""}</p>
+      <div class="actions"><button class="btn primary" type="button" data-pop="wish">Lista dei desideri</button><button class="btn" type="button" data-pop="vedi">Vedi le novità</button><button class="btn ghost" type="button" data-pop="chiudi">Chiudi</button></div></div>`);
+    $('[data-pop="wish"]', sheet).onclick = () => { closeSheet(); aggiungiDesiderio(x.id); };
+    $('[data-pop="vedi"]', sheet).onclick = () => { closeSheet(); setView("novita"); };
+    $('[data-pop="chiudi"]', sheet).onclick = () => closeSheet();
+  }
+  // «Lista dei desideri» da una novità: il libro entra completo e sparisce dalla sezione; «Annulla» lo toglie.
+  function aggiungiDesiderio(id) {
+    const n = leggiNovita(), x = n.uscite.concat(n.proposte).find(y => y && y.id === id); if (!x) return;
+    const nb = salvaLibro({ title: x.title, author: x.author, isbn: x.isbn || undefined, cover: x.cover || undefined, year: x.year || undefined, pages: x.pages || undefined, synopsis: x.synopsis || undefined, status: "desiderato", rating: 0 });
+    seriesLater(nb.id);
+    toast("Nella lista dei desideri", { label: "Annulla", run: () => removeBook(nb.id) });
+  }
+
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
@@ -506,17 +723,19 @@
       pages: i.pageCount || undefined,
       genre: GENRES_EN[cat] || (cat && !/fiction|general/i.test(cat) ? cat : ""),
       synopsis: desc.length > 420 ? desc.slice(0, 400).replace(/\s\S*$/, "") + "…" : desc,
-      isbn, cover, lang: i.language || "", ita: i.language === "it"
+      isbn, cover, lang: i.language || "", ita: i.language === "it",
+      uscita: /^\d{4}-\d{2}-\d{2}$/.test(i.publishedDate || "") ? i.publishedDate : "", // per le novità (v84)
+      voti: i.ratingsCount ? [{ media: i.averageRating, voti: i.ratingsCount, fonte: "Google Books" }] : []
     };
   }
   // --- fonte 1: Google Books ---
   // Il messaggio con cui Google spiega l'errore (per capire la causa).
   async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
-  async function googleSearch(q, { italian = true, max = 12, rounds, onTry } = {}) {
+  async function googleSearch(q, { italian = true, max = 12, rounds, onTry, newest = false } = {}) {
     if (/^isbn:/.test(q)) return googleIsbn(q.slice(5), { max, rounds, onTry });
     if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
-      (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
+      (italian ? "&langRestrict=it" : "") + (newest ? "&orderBy=newest" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetchT(url); } catch { throw { code: "google-rete" }; }
     let retried = false;
@@ -596,15 +815,17 @@
       genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
       synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
       isbn: isbn || "", lang: "", ita: true,
-      cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
+      cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : "",
+      uscita: String(r.releaseDate || "").slice(0, 10), // per le novità (v84)
+      voti: r.userRatingCount ? [{ media: r.averageUserRating, voti: r.userRatingCount, fonte: "Apple Books" }] : []
     })).filter(x => x.title);
   }
 
   // --- fonte 3: Open Library ---
   async function openLibrarySearch(title, author, max = 8) {
-    const byIsbn = /^isbn:/.test(title);
-    const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language" +
-      (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
+    const byIsbn = /^isbn:/.test(title), bySubject = /^subject:/.test(title); // subject: per le novità (v84)
+    const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language,ratings_average,ratings_count" +
+      (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : bySubject ? "&sort=new&subject=" + encodeURIComponent(title.slice(8)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
     let r;
     try { r = await fetchT(url); } catch { throw { code: "openlibrary-rete" }; }
     if (!r.ok) throw { code: "openlibrary-" + r.status };
@@ -613,7 +834,9 @@
       title: d.title || "", author: (d.author_name || []).join(", "),
       edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
       isbn: (d.isbn || [])[0] || "", lang: "", ita: (d.language || []).includes("ita"),
-      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : ""
+      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "",
+      voti: d.ratings_count ? [{ media: d.ratings_average, voti: d.ratings_count, fonte: "Open Library" }] : [],
+      lingue: d.language || [] // codici delle lingue, per le novità (v84); lang resta vuoto come prima per non cambiare le altre ricerche
     })).filter(x => x.title);
   }
 
@@ -1556,12 +1779,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const main = $("#main");
     const sk = state.view === "stats" ? statsFocusKey() : null;
     if (state.view === "stats") main.innerHTML = renderStats(statsLast = computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
+    else if (state.view === "novita") { main.innerHTML = renderNovita(); segnaNovitaViste(); }
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
       else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
     }
-    $("#toolbar").hidden = state.view === "stats";
+    $("#toolbar").hidden = state.view === "stats" || state.view === "novita";
+    aggiornaPallinoNovita();
     wireMain(main);
     if (sk) statsFocusRestore(sk);
   }
@@ -1583,6 +1808,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (sheetOpen()) lastFocus = t; else t.focus({ preventScroll: true });
   }
   function wireMain(root) {
+    root.querySelectorAll("[data-wish]").forEach(btn => btn.onclick = () => aggiungiDesiderio(btn.dataset.wish)); // novità (v84)
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     const ym = root.querySelector("#ys-more");
     if (ym) ym.onclick = () => { statsOld = !statsOld; const box = $("#ys-old"); box.hidden = !statsOld; ym.setAttribute("aria-expanded", statsOld); ym.textContent = statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${box.querySelectorAll("section.ys").length})`; };
@@ -2761,7 +2987,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       // Le quattro fonti insieme; ogni riga compare appena la sua fonte risponde, sempre nello stesso ordine.
       const ISBN = "9788804731481", rows = ["Google Books", "Open Library", "Apple Books", "Wikidata"].map(n => n + ": …");
       const show = () => { vs.textContent = rows.join(" · "); };
-      const one = (i, run) => run().then(list => { rows[i] = rows[i].replace(": …", `: OK (${list.length} risultati)`); },
+      const liste = [];
+      const one = (i, run) => run().then(list => { liste[i] = list; rows[i] = rows[i].replace(": …", `: OK (${list.length} risultati)`); },
         e => { rows[i] = rows[i].replace(": …", `: ${(e && e.code) || "errore"}${e && e.msg ? " — " + e.msg : ""}`); }).then(show);
       show();
       await Promise.all([
@@ -2770,6 +2997,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         one(2, () => appleSearch(ISBN, 1)),
         one(3, () => wikidataSearch(ISBN)),
       ]);
+      // Voti dei lettori (per le novità, v84): da quali fonti arrivano, per la prova dal vivo sull'iPhone
+      const ha = i => liste[i] && liste[i].some(x => x.voti && x.voti.length) ? "sì" : "no";
+      rows.push(`Voti: Google ${ha(0)} · Apple ${ha(2)} · Open Library ${ha(1)}`); show();
     };
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
@@ -2946,6 +3176,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
   }
   render();
+  mostraPopupNovita(); // uscite dei tuoi autori trovate nell'ultimo giro (v84)
+  setTimeout(() => giroNovita().catch(() => {}), 1200); // novità della settimana, in sottofondo (v84)
   // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
   try { if (cloudInfo().uid || /oobCode=/.test(location.search) || sessionStorage.getItem("libreria-auth-pending")) loadCloud().catch(() => {}); } catch {}
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

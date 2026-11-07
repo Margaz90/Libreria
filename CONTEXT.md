@@ -20,6 +20,12 @@ I nomi che usiamo per parlare dell'app e del suo codice. Quando un concetto nuov
 - **Fonte**: un servizio esterno che conosce i libri: Google Books, Open Library, Apple Books Italia, Wikidata.
 - **Pausa** (di una fonte): un periodo in cui l'app non la interroga dopo errori ripetuti (Google: `state.googleDown`; Wikidata: `salute.wikidata`, 5 minuti dopo due errori di fila). «Verifica ricerche» la toglie.
 
+## Novità per te (v84)
+- **Giro**: la ricerca settimanale delle novità, all'apertura, in sottofondo.
+- **Uscita**: un libro di un autore che hai, uscito da meno di 90 giorni o in uscita entro un anno.
+- **Proposta**: un libro che non hai, di un autore o genere dei tuoi gusti, con una motivazione.
+- **Gusti**: gli autori e i generi da cui parte il giro (`gustiDi`), pesati con i tuoi voti.
+
 ## Dati e sicurezza
 - **Copia**: un'istantanea dei libri in IndexedDB (`snapshot`), prima delle operazioni su molti libri; si ripristina da Backup → Annulla.
 - **Segnaposto** (tomb): un libro eliminato, ricordato per non farlo tornare dal cloud.

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,7 +23,7 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (10) e caricati senza browser', parts.length === 10, String(parts.length));
+  ok('regole: tratti segnati trovati (11) e caricati senza browser', parts.length === 11, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
@@ -121,6 +121,58 @@ export default async function run() {
   ok('linguaEdizione: dichiarata, Apple/Open Library italiana, dalla trama, sconosciuta', R.linguaEdizione({ lang: 'en-GB', ita: true }) === 'en' && R.linguaEdizione({ ita: true }) === 'it' && R.linguaEdizione({ synopsis: EN }) === 'en' && R.linguaEdizione({}) === '');
   const cv = [{ c: 1, lang: 'en' }, { c: 2 }, { c: 3, ita: true }, { c: 4, lang: 'it' }];
   ok('primaNellaLingua: la prima nella lingua voluta, altrimenti la prima; lista vuota = null', R.primaNellaLingua(cv, 'it').c === 3 && R.primaNellaLingua(cv, 'fr').c === 1 && R.primaNellaLingua([], 'it') === null);
+
+  // ---- Novità per te (v84) ----
+  const L5 = (t, a, r, g, x = {}) => ({ title: t, author: a, status: 'letto', rating: r, genre: g, finished: '2025-01-01', ...x });
+  const lib = [
+    L5('Un covo di bastardi', 'Mick Herron', 5, 'Thriller'), L5('Leoni morti', 'Mick Herron', 4, 'Thriller'),
+    L5('Il nome della rosa', 'Umberto Eco', 3, 'Storico'), L5('Brutto', 'Autore Scarso', 2, 'Thriller'), L5('Pessimo', 'Autore Scarso', 1, 'Thriller'),
+    { title: 'In pila', author: 'Donato Carrisi', status: 'da-leggere', rating: 0 }, { title: 'Desiderato', author: 'Zadie Smith', status: 'desiderato', rating: 0, isbn: '9788806000001' },
+  ];
+  const G = R.gustiDi(lib);
+  const pa = Object.fromEntries(G.autori.map(a => [a.nome, a.punti]));
+  ok('gustiDi: 5★=3, 4★=2, 3★=1, Da leggere=1; autore con media sotto 3 escluso', pa['Mick Herron'] === 5 && pa['Umberto Eco'] === 1 && pa['Donato Carrisi'] === 1 && !('Autore Scarso' in pa), JSON.stringify(G.autori));
+  ok('gustiDi: generi solo dai Letti con 3 o più stelle', JSON.stringify(G.generi) === JSON.stringify([{ nome: 'Thriller', n: 2 }, { nome: 'Storico', n: 1 }]), JSON.stringify(G.generi));
+  ok('gustiDi: il libro con il voto più alto dell\'autore', G.autori[0].nome === 'Mick Herron' && G.autori[0].migliore.title === 'Un covo di bastardi' && G.autori[0].migliore.rating === 5);
+  const tanti = Array.from({ length: 30 }, (_, i) => L5('T' + i, 'Autore Numero' + i, 4, 'Genere' + (i % 8)));
+  const G2 = R.gustiDi(tanti);
+  ok('gustiDi: al massimo 15 autori e 5 generi', G2.autori.length === 15 && G2.generi.length === 5);
+  ok('votoMostrato: la fonte con più voti fra quelle con almeno 20', JSON.stringify(R.votoMostrato([{ media: 4.2, voti: 1350, fonte: 'Google Books' }, { media: 4.5, voti: 12, fonte: 'Apple Books' }, { media: 3.9, voti: 300, fonte: 'Open Library' }])) === JSON.stringify({ media: 4.2, voti: 1350, fonte: 'Google Books' }));
+  ok('votoMostrato: nessuna fonte affidabile → null; media fuori 0–5 scartata', R.votoMostrato([{ media: 4.5, voti: 12, fonte: 'x' }]) === null && R.votoMostrato([{ media: 9, voti: 900, fonte: 'x' }, { media: -1, voti: 50, fonte: 'y' }]) === null && R.votoMostrato([]) === null);
+  ok('idNovita: ISBN, altrimenti titolo e cognome', R.idNovita({ isbn: '978-88-04-00000-2', title: 'X' }) === '9788804000002' && R.idNovita({ title: 'Il Libro!', author: 'Mario Rossi, Altro' }) === 'il libro|rossi');
+  const OGGI = '2026-11-07';
+  const ris = [
+    { title: 'Il nuovo di Herron', author: 'Mick Herron', uscita: '2026-12-12', isbn: '9788804111111', voti: [{ media: 4.6, voti: 40, fonte: 'Google Books' }] },
+    { title: 'Uscito da poco', author: 'Mick Herron', uscita: '2026-10-28' },
+    { title: 'Troppo vecchio', author: 'Mick Herron', uscita: '2020-01-01' },
+    { title: 'Un covo di bastardi', author: 'Mick Herron', uscita: '2019-01-01' },
+    { title: 'Desiderato', author: 'Zadie Smith', isbn: '9788806000001' },
+    { title: 'Cofanetto Slough House', author: 'Mick Herron' },
+    { title: '', author: 'Mick Herron' }, { title: 'Senza autore', author: '' },
+    { title: 'Data storta', author: 'Umberto Eco', uscita: '2026-13-45' },
+    { title: 'Thriller nuovo', author: 'Altra Autrice', genere: 'Thriller', uscita: '2025-05-01', voti: [{ media: 4.1, voti: 900, fonte: 'Google Books' }] },
+    { title: 'Thriller nuovo', author: 'Altra Autrice', genere: 'Thriller', cover: 'https://x/c.jpg', voti: [{ media: 4.4, voti: 2000, fonte: 'Apple Books' }] },
+    { title: 'Edizione inglese', author: 'Altro Ancora', genere: 'Thriller', lang: 'en' },
+    { title: 'Fuori gusti', author: 'Nessuno Noto', genere: 'Cucina' },
+  ];
+  const N = R.novitaDa(ris, lib, OGGI, 'it', G);
+  const ut = N.uscite.map(x => x.title), pt = N.proposte.map(x => x.title);
+  ok('novitaDa: uscite dei tuoi autori da 90 giorni fa a un anno dopo, prima le future', JSON.stringify(ut) === JSON.stringify(['Il nuovo di Herron', 'Uscito da poco']), JSON.stringify(ut));
+  ok('novitaDa: scarta libri già presenti, desiderati, cofanetti, senza titolo o autore, altre lingue, fuori gusti', !pt.some(t => /covo|Desiderato|Cofanetto|Senza autore|inglese|Fuori gusti/.test(t)) && !ut.includes('Troppo vecchio'), JSON.stringify(pt));
+  ok('novitaDa: data non valida ignorata (il libro resta, non è un\'uscita)', pt.includes('Data storta') && !ut.includes('Data storta'), JSON.stringify(pt));
+  const tn = N.proposte.filter(x => x.title === 'Thriller nuovo');
+  ok('novitaDa: doppioni uniti, copertina e voto con più lettori', tn.length === 1 && tn[0].cover === 'https://x/c.jpg' && tn[0].voto && tn[0].voto.fonte === 'Apple Books' && tn[0].voto.voti === 2000, JSON.stringify(tn));
+  ok('novitaDa: uscita con voto, motivazione e autore letto', N.uscite[0].voto.voti === 40 && N.uscite[0].autoreLetto === true && /^Nuovo di Herron: esce il 12 dicembre$/.test(N.uscite[0].perche) && /^Nuovo di Herron: uscito il 28 ottobre$/.test(N.uscite[1].perche), JSON.stringify(N.uscite.map(x => x.perche)));
+  const molti = Array.from({ length: 10 }, (_, i) => ({ title: 'Herron ' + i, author: 'Mick Herron' })).concat(Array.from({ length: 10 }, (_, i) => ({ title: 'Thr ' + i, author: 'Autrice ' + i, genere: 'Thriller' })), Array.from({ length: 10 }, (_, i) => ({ title: 'Sto ' + i, author: 'Storica ' + i, genere: 'Storico' })));
+  const M = R.novitaDa(molti, lib, OGGI, 'it', G).proposte;
+  ok('novitaDa: al massimo 12 proposte, 3 per autore, 4 per genere', M.length <= 12 && M.filter(x => x.author === 'Mick Herron').length <= 3 && M.filter(x => x.genere === 'Thriller').length <= 4 && M.filter(x => x.genere === 'Storico').length <= 4, JSON.stringify(M.map(x => x.title)));
+  const EY = R.novitaDa([{ title: 'Vecchio di Herron', author: 'Mick Herron', edYear: 2001 }, { title: 'Recente di Herron', author: 'Mick Herron', edYear: 2025 }], lib, OGGI, 'it', G).proposte;
+  ok('novitaDa: l\'anno arriva anche da edYear (come lo danno le fonti) e un libro vecchio va dopo', EY.length === 2 && EY[0].title === 'Recente di Herron' && EY[1].year === 2001, JSON.stringify(EY.map(x => [x.title, x.year])));
+  const PC = R.perche;
+  ok('perche: stesso autore con 5 stelle, genere', PC({ title: 'X', author: 'Mick Herron' }, G, OGGI) === 'Dello stesso autore di «Un covo di bastardi», a cui hai dato 5 stelle' && PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI) === 'Hai letto 2 thriller', [PC({ title: 'X', author: 'Mick Herron' }, G, OGGI), PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI)].join(' | '));
+  ok('perche: autore senza voti alti', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI) === 'Di Carrisi, come il libro che hai', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI));
+  const V = R.pulisciViste({ a: '2026-08-08', b: '2026-10-28', c: '2026-12-12' }, OGGI);
+  ok('pulisciViste: via le uscite di più di 90 giorni fa', JSON.stringify(Object.keys(V)) === JSON.stringify(['b', 'c']), JSON.stringify(V));
 
   // ---- Statistiche: misure e file della mensola ----
   const rows = R.ysRows(Array.from({ length: 40 }, (_, i) => ({ pages: (i * 97) % 900 })));
