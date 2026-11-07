@@ -572,7 +572,7 @@
       if (state.view === "novita") render();
     }
   }
-  window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita });
+  window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita, popup: () => mostraPopupNovita() });
   // Un libro delle novità è già in libreria (anche se arrivato dal cloud o aggiunto a mano dopo il giro)?
   const giaInLibreria = x => state.books.some(b => (x.isbn && parseIsbn(b.isbn) === parseIsbn(x.isbn)) || (sameTitle(b.title, x.title) && chiaveAutore(b.author) === chiaveAutore(x.author)));
   const novitaVisibili = n => {
@@ -610,6 +610,23 @@
     const nulla = !uscite && !proposte ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
     const agg = new Date(n.ultimoGiro), dataAgg = `${agg.getDate()} ${MONTHS[agg.getMonth()]}`;
     return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
+  }
+  // Pop-up all'apertura (v84): uscite non viste di autori che hai letto, una volta per libro; mai sopra un'altra scheda.
+  function mostraPopupNovita() {
+    if (sheetOpen()) return; // aspetta l'apertura successiva
+    const n = leggiNovita(), oggi = today();
+    const nuove = novitaVisibili(n).uscite.filter(x => x.autoreLetto && !n.viste[x.id] && !n.mostrate[x.id]);
+    if (!nuove.length) return;
+    const x = nuove[0], k = nuove.length - 1;
+    nuove.forEach(y => { n.mostrate[y.id] = y.uscita || oggi; n.viste[y.id] = y.uscita || oggi; });
+    scriviNovita(n);
+    const quando = x.uscita ? (x.uscita > oggi ? "esce il " : "uscito il ") + dataBreve(x.uscita, oggi) : "";
+    const sheet = openSheet(`<div class="nov-pop"><h2>Nuovo di ${esc(nomeAutore(x.author))}</h2>
+      <p class="sub">«${esc(x.title)}»${quando ? ", " + quando : ""}${k ? (k === 1 ? " · e un'altra uscita" : ` · e altre ${k} uscite`) : ""}</p>
+      <div class="actions"><button class="btn primary" type="button" data-pop="wish">Lista dei desideri</button><button class="btn" type="button" data-pop="vedi">Vedi le novità</button><button class="btn ghost" type="button" data-pop="chiudi">Chiudi</button></div></div>`);
+    $('[data-pop="wish"]', sheet).onclick = () => { closeSheet(); aggiungiDesiderio(x.id); };
+    $('[data-pop="vedi"]', sheet).onclick = () => { closeSheet(); setView("novita"); };
+    $('[data-pop="chiudi"]', sheet).onclick = () => closeSheet();
   }
   // «Lista dei desideri» da una novità: il libro entra completo e sparisce dalla sezione; «Annulla» lo toglie.
   function aggiungiDesiderio(id) {
@@ -3145,6 +3162,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
   }
   render();
+  mostraPopupNovita(); // uscite dei tuoi autori trovate nell'ultimo giro (v84)
   setTimeout(() => giroNovita().catch(() => {}), 1200); // novità della settimana, in sottofondo (v84)
   // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
   try { if (cloudInfo().uid || /oobCode=/.test(location.search) || sessionStorage.getItem("libreria-auth-pending")) loadCloud().catch(() => {}); } catch {}

@@ -102,7 +102,8 @@ async function verifica(browser) {
 }
 
 // Memoria pronta per la sezione: un'uscita futura, una recente, due proposte
-export const MEM = () => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: {},
+// giaMostrate: il pop-up le ha già mostrate (così non copre la sezione nei test che non lo riguardano)
+export const MEM = ({ giaMostrate = false } = {}) => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
   uscite: [
     { id: 'u2', title: 'Uscito da poco', author: 'Mick Herron', uscita: iso(-10), cover: '', perche: 'Nuovo di Herron: uscito il …', autoreLetto: true, voto: null },
     { id: 'u1', title: 'Il nuovo di Herron', author: 'Mick Herron', isbn: '9788804111111', uscita: iso(35), cover: '', perche: 'Nuovo di Herron: esce il …', autoreLetto: true, voto: { media: 4.6, voti: 48, fonte: 'Apple Books' } },
@@ -111,10 +112,10 @@ export const MEM = () => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: 
     { id: 'p1', title: 'La spia nuova', author: 'Anna Nuova', isbn: '9788804222222', cover: '', synopsis: 'Trama.', year: 2025, perche: 'Hai letto 2 thriller', voto: { media: 4.2, voti: 1350, fonte: 'Google Books' }, genere: 'Thriller' },
     { id: 'p2', title: 'Il pendolo di Foucault', author: 'Umberto Eco', cover: '', perche: 'Dello stesso autore di «Il nome della rosa», a cui hai dato 4 stelle', voto: null },
   ] });
-const vai = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov'); };
+const vai = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov'); await p.waitForTimeout(600); }; // fine dell'animazione di apertura
 
 async function sezione(browser) {
-  const p = await apri(browser, { memoria: MEM() });
+  const p = await apri(browser, { memoria: MEM({ giaMostrate: true }) });
   await riapri(p);
   ok('barra in basso: «Novità» al posto di «Cerca»', await p.locator('#dock [data-view="novita"]').count() === 1 && await p.locator('#dock [data-act="search"]').count() === 0 && /Novità/.test(await p.locator('#dock [data-view="novita"]').innerText()));
   ok('pallino con uscite non viste', await p.locator('#nov-dot').isVisible());
@@ -165,7 +166,7 @@ async function computer(browser) {
   for (const dark of [false, true]) {
     const p = await newPage(browser, { width: 1366, height: 860, dark });
     await p.goto(APP + '/');
-    await p.evaluate(([b, m]) => { localStorage.setItem('libreria-diego-v1', JSON.stringify(b)); localStorage.setItem('libreria-novita', JSON.stringify(m)); }, [LIB, MEM()]);
+    await p.evaluate(([b, m]) => { localStorage.setItem('libreria-diego-v1', JSON.stringify(b)); localStorage.setItem('libreria-novita', JSON.stringify(m)); }, [LIB, MEM({ giaMostrate: true })]);
     await p.reload(); await p.waitForSelector('#main');
     await p.locator('#dock [data-view="novita"]').click(); await p.waitForSelector('.nov');
     ok(`computer${dark ? ' (scuro)' : ''}: proposte in più colonne, niente scorrimento laterale`, (await p.evaluate(() => getComputedStyle(document.querySelector('.nov-grid')).gridTemplateColumns.split(' ').length)) >= 3 && (await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)) && !p.errs.length, p.errs.join(' / '));
@@ -173,7 +174,51 @@ async function computer(browser) {
   }
 }
 
+async function popup(browser) {
+  const mem = MEM();
+  mem.uscite.push({ id: 'u3', title: 'Di un autore non letto', author: 'Donato Carrisi', uscita: iso(20), autoreLetto: false });
+  const p = await apri(browser, { memoria: mem });
+  await riapri(p); await p.waitForTimeout(400);
+  const t = await p.locator('.nov-pop').innerText().catch(() => '');
+  ok('pop-up all\'apertura: nuova uscita di un autore letto, con «un\'altra uscita»', /Nuovo di Mick Herron/.test(t) && /«Il nuovo di Herron», esce il/.test(t) && /e un'altra uscita/.test(t) && !/Carrisi/.test(t), t);
+  ok('pop-up: tre pulsanti', JSON.stringify(await p.locator('.nov-pop .actions button').allInnerTexts()) === JSON.stringify(['Lista dei desideri', 'Vedi le novità', 'Chiudi']));
+  await p.locator('.nov-pop [data-pop="vedi"]').click(); await p.waitForTimeout(400);
+  ok('pop-up: «Vedi le novità» apre la sezione', await p.locator('.nov').count() === 1);
+  await riapri(p); await p.waitForTimeout(400);
+  ok('pop-up: alla riapertura non ricompare', await p.locator('.nov-pop').count() === 0);
+  await p.close2();
+  // Solo un autore Da leggere: niente pop-up, solo pallino
+  const m2 = MEM(); m2.uscite = [{ id: 'u3', title: 'Di un autore non letto', author: 'Donato Carrisi', uscita: iso(20), autoreLetto: false }];
+  let q = await apri(browser, { memoria: m2 });
+  await riapri(q); await q.waitForTimeout(400);
+  ok('pop-up: niente per un autore che non hai letto, ma pallino sì', await q.locator('.nov-pop').count() === 0 && await q.locator('#nov-dot').isVisible());
+  await q.close2();
+  // «Lista dei desideri» dal pop-up
+  q = await apri(browser, { memoria: MEM() });
+  await riapri(q); await q.waitForTimeout(400);
+  await q.locator('.nov-pop [data-pop="wish"]').click(); await q.waitForTimeout(800);
+  ok('pop-up: «Lista dei desideri» aggiunge la prima uscita', (await localBooks(q)).some(b => b.title === 'Il nuovo di Herron' && b.status === 'desiderato'));
+  await q.close2();
+  // Uscita trovata durante l'uso: niente pop-up subito
+  q = await apri(browser, { memoria: { ultimoGiro: Date.now() - 8 * DAY, proposte: [], uscite: [], viste: {}, mostrate: {} } });
+  await riapri(q); await finito(q); await q.waitForTimeout(500);
+  ok('pop-up: il giro che trova un\'uscita non apre il pop-up durante l\'uso', await q.locator('.nov-pop').count() === 0 && (await memoria(q)).uscite.length > 0);
+  await riapri(q); await q.waitForTimeout(400);
+  ok('pop-up: compare all\'apertura successiva', await q.locator('.nov-pop').count() === 1);
+  await q.close2();
+  // Con una scheda già aperta il pop-up aspetta (es. ritorno dall'accesso)
+  q = await apri(browser, { memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} } });
+  await riapri(q);
+  await q.locator('.dock .more').click(); await q.waitForSelector('[data-m=backup]');
+  await q.evaluate(([k, m]) => { localStorage.setItem(k, JSON.stringify(m)); window.libreriaNovita.popup(); }, [KN, MEM()]);
+  await q.waitForTimeout(300);
+  ok('pop-up: con un\'altra scheda aperta aspetta', await q.locator('.nov-pop').count() === 0 && !((await memoria(q)).mostrate.u1));
+  ok('pop-up: nessun errore in console', !p.errs.length && !q.errs.length, [...p.errs, ...q.errs].join(' / '));
+  await q.close2();
+}
+
 export default async function run({ browser }) {
+  await popup(browser);
   await giro(browser);
   await verifica(browser);
   await sezione(browser);

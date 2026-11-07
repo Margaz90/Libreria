@@ -783,3 +783,8 @@ html { scroll-behavior: smooth; }
 .nov-card .cover, .nov-card img { width: 100%; aspect-ratio: 2 / 3; height: auto; margin-bottom: 6px; }
 .nov-card .btn, .nov-out .btn { min-height: 44px; margin-top: 6px; }
 .nov-foot { font-size: 13px; }
+.nov-pop { display: grid; gap: 10px; } /* pop-up delle uscite (v84) */
+.nov-pop h2 { margin: 0; color: var(--title); }
+.nov-pop .sub { margin: 0; }
+.nov-pop .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nov-pop .actions .btn { min-height: 44px; }
