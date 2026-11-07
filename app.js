@@ -528,6 +528,52 @@
     toast(down ? `Wikidata non risponde: ricerca interrotta, riprova più tardi. ${msg}` : msg + (bad ? ` Wikidata non risponde ×${bad}.` : ""));
   }
 
+  // ---- Novità per te (v84): giro settimanale in sottofondo e memoria sul dispositivo (mai nel cloud né nei backup) ----
+  const NOV_KEY = "libreria-novita", NOV_GIORNI = 7;
+  function leggiNovita() {
+    let n = null; try { n = JSON.parse(localStorage.getItem(NOV_KEY) || "null"); } catch {}
+    const obj = x => x && typeof x === "object" && !Array.isArray(x) ? x : {};
+    return { ultimoGiro: Number(n && n.ultimoGiro) || 0, proposte: Array.isArray(n && n.proposte) ? n.proposte : [], uscite: Array.isArray(n && n.uscite) ? n.uscite : [],
+      viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0 };
+  }
+  function scriviNovita(n) { try { localStorage.setItem(NOV_KEY, JSON.stringify(n)); } catch {} }
+  const novita = { busy: false };
+  // Un giro: fino a 15 autori (Apple Books Italia e Google Books) e 5 generi (Google Books e Open Library), una richiesta alla volta.
+  // Non parte offline, durante un altro lavoro in sottofondo, prima di 7 giorni (salvo forza) o con meno di 3 Letti con voto.
+  async function giroNovita({ forza = false } = {}) {
+    const n = leggiNovita();
+    if (novita.busy || enrich.busy || state.coverJob || !navigator.onLine) return;
+    if (!forza && Date.now() - n.ultimoGiro < NOV_GIORNI * 864e5) return;
+    if (state.books.filter(b => b.status === "letto" && Number(b.rating) > 0).length < 3) return;
+    const gusti = gustiDi(state.books), gen = dataGen, line = $("#enrich"), pausa = () => sleep(window.libreriaNovitaMs ?? 600);
+    novita.busy = true;
+    if (line) { line.hidden = false; line.textContent = "Cerco novità per te…"; }
+    const ris = []; let risposte = 0;
+    const prova = async (run, extra = {}) => { try { (await run()).forEach(x => ris.push({ ...x, ...extra })); risposte++; } catch {} await pausa(); };
+    try {
+      for (const a of gusti.autori) {
+        if (gen !== dataGen) return;
+        await prova(() => appleSearch(a.nome, 25));
+        await prova(() => googleSearch(`inauthor:"${a.nome}"`, { max: 20, newest: true }));
+      }
+      for (const g of gusti.generi) {
+        if (gen !== dataGen) return;
+        await prova(() => googleSearch(`subject:"${g.nome}"`, { max: 20, newest: true }), { genere: g.nome });
+        await prova(() => openLibrarySearch("subject:" + g.nome.toLowerCase(), "", 20), { genere: g.nome });
+      }
+      if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
+      const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
+      const nuove = new Set(out.uscite.map(x => x.id));
+      const uscite = out.uscite.concat(n.uscite.filter(x => x && !nuove.has(x.id) && x.uscita >= da)); // le uscite restano 90 giorni
+      scriviNovita({ ...n, ultimoGiro: Date.now(), proposte: out.proposte, uscite, viste: pulisciViste(n.viste, oggi) });
+    } finally {
+      novita.busy = false;
+      if (line && /Cerco novità/.test(line.textContent)) line.hidden = true;
+      if (state.view === "novita") render();
+    }
+  }
+  window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita });
+
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
@@ -602,17 +648,19 @@
       pages: i.pageCount || undefined,
       genre: GENRES_EN[cat] || (cat && !/fiction|general/i.test(cat) ? cat : ""),
       synopsis: desc.length > 420 ? desc.slice(0, 400).replace(/\s\S*$/, "") + "…" : desc,
-      isbn, cover, lang: i.language || "", ita: i.language === "it"
+      isbn, cover, lang: i.language || "", ita: i.language === "it",
+      uscita: /^\d{4}-\d{2}-\d{2}$/.test(i.publishedDate || "") ? i.publishedDate : "", // per le novità (v84)
+      voti: i.ratingsCount ? [{ media: i.averageRating, voti: i.ratingsCount, fonte: "Google Books" }] : []
     };
   }
   // --- fonte 1: Google Books ---
   // Il messaggio con cui Google spiega l'errore (per capire la causa).
   async function googleMsg(r) { try { const j = await r.json(); return j && j.error ? j.error.message : ""; } catch { return ""; } }
-  async function googleSearch(q, { italian = true, max = 12, rounds, onTry } = {}) {
+  async function googleSearch(q, { italian = true, max = 12, rounds, onTry, newest = false } = {}) {
     if (/^isbn:/.test(q)) return googleIsbn(q.slice(5), { max, rounds, onTry });
     if (state.googleDown && Date.now() < state.googleDown.until) throw { code: "google-" + state.googleDown.code };
     const url = "https://www.googleapis.com/books/v1/volumes?key=" + GBOOKS_KEY + "&printType=books&maxResults=" + max +
-      (italian ? "&langRestrict=it" : "") + "&q=" + encodeURIComponent(q);
+      (italian ? "&langRestrict=it" : "") + (newest ? "&orderBy=newest" : "") + "&q=" + encodeURIComponent(q);
     let r;
     try { r = await fetchT(url); } catch { throw { code: "google-rete" }; }
     let retried = false;
@@ -692,15 +740,17 @@
       genre: (r.genres || []).find(g => !/^(Libri|Books)$/i.test(g)) || "",
       synopsis: String(r.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
       isbn: isbn || "", lang: "", ita: true,
-      cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : ""
+      cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, "/600x900bb.") : "",
+      uscita: String(r.releaseDate || "").slice(0, 10), // per le novità (v84)
+      voti: r.userRatingCount ? [{ media: r.averageUserRating, voti: r.userRatingCount, fonte: "Apple Books" }] : []
     })).filter(x => x.title);
   }
 
   // --- fonte 3: Open Library ---
   async function openLibrarySearch(title, author, max = 8) {
-    const byIsbn = /^isbn:/.test(title);
-    const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language" +
-      (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
+    const byIsbn = /^isbn:/.test(title), bySubject = /^subject:/.test(title); // subject: per le novità (v84)
+    const url = "https://openlibrary.org/search.json?limit=" + max + "&fields=title,author_name,first_publish_year,number_of_pages_median,cover_i,isbn,language,ratings_average,ratings_count" +
+      (byIsbn ? "&isbn=" + encodeURIComponent(title.slice(5)) : bySubject ? "&sort=new&subject=" + encodeURIComponent(title.slice(8)) : "&title=" + encodeURIComponent(title) + (author ? "&author=" + encodeURIComponent(author) : ""));
     let r;
     try { r = await fetchT(url); } catch { throw { code: "openlibrary-rete" }; }
     if (!r.ok) throw { code: "openlibrary-" + r.status };
@@ -709,7 +759,8 @@
       title: d.title || "", author: (d.author_name || []).join(", "),
       edYear: d.first_publish_year, pages: d.number_of_pages_median, genre: "", synopsis: "",
       isbn: (d.isbn || [])[0] || "", lang: "", ita: (d.language || []).includes("ita"),
-      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : ""
+      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "",
+      voti: d.ratings_count ? [{ media: d.ratings_average, voti: d.ratings_count, fonte: "Open Library" }] : []
     })).filter(x => x.title);
   }
 
@@ -2857,7 +2908,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       // Le quattro fonti insieme; ogni riga compare appena la sua fonte risponde, sempre nello stesso ordine.
       const ISBN = "9788804731481", rows = ["Google Books", "Open Library", "Apple Books", "Wikidata"].map(n => n + ": …");
       const show = () => { vs.textContent = rows.join(" · "); };
-      const one = (i, run) => run().then(list => { rows[i] = rows[i].replace(": …", `: OK (${list.length} risultati)`); },
+      const liste = [];
+      const one = (i, run) => run().then(list => { liste[i] = list; rows[i] = rows[i].replace(": …", `: OK (${list.length} risultati)`); },
         e => { rows[i] = rows[i].replace(": …", `: ${(e && e.code) || "errore"}${e && e.msg ? " — " + e.msg : ""}`); }).then(show);
       show();
       await Promise.all([
@@ -2866,6 +2918,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         one(2, () => appleSearch(ISBN, 1)),
         one(3, () => wikidataSearch(ISBN)),
       ]);
+      // Voti dei lettori (per le novità, v84): da quali fonti arrivano, per la prova dal vivo sull'iPhone
+      const ha = i => liste[i] && liste[i].some(x => x.voti && x.voti.length) ? "sì" : "no";
+      rows.push(`Voti: Google ${ha(0)} · Apple ${ha(2)} · Open Library ${ha(1)}`); show();
     };
     const ia = $("#i-authors", sheet);
     if (ia) ia.onclick = () => {
@@ -3042,6 +3097,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
   }
   render();
+  setTimeout(() => giroNovita().catch(() => {}), 1200); // novità della settimana, in sottofondo (v84)
   // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
   try { if (cloudInfo().uid || /oobCode=/.test(location.search) || sessionStorage.getItem("libreria-auth-pending")) loadCloud().catch(() => {}); } catch {}
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
