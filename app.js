@@ -343,7 +343,7 @@
     const autori = [...A.values()].filter(a => a.punti > 0 && !(a.votati && a.somma / a.votati < 3))
       .sort((x, y) => y.punti - x.punti || y.ultimo.localeCompare(x.ultimo)).slice(0, 15)
       .map(({ nome, chiave, punti, letti, libri, migliore }) => ({ nome, chiave, punti, letti, libri, migliore }));
-    const generi = [...G.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "it")).slice(0, 5);
+    const generi = [...G.values()].sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome, "it")).slice(0, 8); // 3 per «generi», gli altri per «da scoprire» (v85)
     return { autori, generi };
   }
   const idNovita = h => parseIsbn(h.isbn) || norm(h.title) + "|" + chiaveAutore(h.author);
@@ -365,45 +365,71 @@
     if (g) return g.n === 1 ? `Hai letto un libro di genere ${g.nome.toLowerCase()}` : `Hai letto ${g.n} ${g.nome.toLowerCase()}`;
     return "";
   }
-  // Uscite e proposte dai risultati delle fonti: scarti, doppioni uniti, ordine, limiti (max 12 proposte, 3 per autore, 4 per genere).
+  // Stesso libro (v85): stesso ISBN, oppure stesso autore e almeno una parte del titolo in comune
+  // (parti divise da «.», «:», « - », di almeno 8 caratteri, o il titolo intero): «Across the sand. Oltre le dune» = «Oltre le dune».
+  const partiTitolo = t => [titleCore(t), ...String(t || "").split(/[.:]| - /).map(titleCore).filter(x => x.length >= 8)].filter(Boolean);
+  function stessoLibro(a, b) {
+    const ia = parseIsbn(a.isbn), ib = parseIsbn(b.isbn);
+    if (ia && ib && ia === ib) return true;
+    const ka = chiaveAutore(a.author); if (!ka || ka !== chiaveAutore(b.author)) return false;
+    const pb = partiTitolo(b.title);
+    return partiTitolo(a.title).some(x => pb.includes(x)) || sameTitle(a.title, b.title);
+  }
+  const annoNov = h => Number(h.year || h.edYear) || (h.uscita ? Number(String(h.uscita).slice(0, 4)) : 0); // le fonti danno edYear
+  // Riedizione: parola nel titolo, o lo stesso libro dello stesso autore con un anno più vecchio di almeno uno.
+  const RIEDIZIONE = /(nuova edizione|edizione speciale|edizione illustrata|tascabile|anniversario|deluxe|ristampa|new edition|anniversary|reissue|special edition)/i;
+  function riedizione(h, tutti) {
+    if (RIEDIZIONE.test(h.title || "")) return true;
+    const y = annoNov(h); if (!y) return false;
+    return (tutti || []).some(x => x !== h && annoNov(x) && annoNov(x) <= y - 1 && stessoLibro(x, h));
+  }
+  // Lingua di un risultato per le novità: dichiarata, poi dalla trama, poi «italiano» di Apple e Open Library (Apple lo dichiara sempre).
+  const linguaNov = h => String(h.lang || "").slice(0, 2).toLowerCase() || linguaTesto(h.synopsis) || (h.ita ? "it" : "");
+  // Uscite (nella lingua del telefono), originali (uscite dei tuoi autori in un'altra lingua, max 6) e proposte in tre gruppi
+  // 4 + 4 + 4 («autori», «generi», «scoperta»; max 2 per autore e per genere; posti liberi agli altri gruppi; ordine per voto).
   function novitaDa(risultati, books, oggi, lingua, gusti) {
     const BOX = /\b(cofanetto|box|collection|antologia|omnibus)\b/i;
     const isoOk2 = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00")) && new Date(d + "T12:00").toISOString().slice(0, 10) === d;
     const tuoi = new Map(); (books || []).forEach(b => { const k = chiaveAutore(b.author); if (k && b.status !== "desiderato") tuoi.set(k, (tuoi.get(k) || false) || b.status === "letto"); });
-    const presente = h => (books || []).some(b => (parseIsbn(h.isbn) && parseIsbn(b.isbn) === parseIsbn(h.isbn)) || (sameTitle(b.title, h.title) && chiaveAutore(b.author) === chiaveAutore(h.author)));
+    const validi = (risultati || []).filter(r => r && String(r.title || "").trim() && String(r.author || "").trim() && !BOX.test(r.title))
+      .map(r => ({ ...r, uscita: isoOk2(String(r.uscita || "")) ? r.uscita : "", voti: (r.voti || []).slice(), lingua: linguaNov(r) || lingua }));
+    validi.forEach(h => { h.ried = riedizione(h, validi); });
     const uniti = [];
-    for (const r of risultati || []) {
-      if (!r || !String(r.title || "").trim() || !String(r.author || "").trim() || BOX.test(r.title)) continue;
-      const le = linguaEdizione(r); if (le && lingua && le !== lingua) continue;
-      if (presente(r)) continue;
-      const h = { ...r, uscita: isoOk2(String(r.uscita || "")) ? r.uscita : "", voti: (r.voti || []).slice() };
-      const d = uniti.find(x => (parseIsbn(x.isbn) && parseIsbn(x.isbn) === parseIsbn(h.isbn)) || (sameTitle(x.title, h.title) && chiaveAutore(x.author) === chiaveAutore(h.author)));
+    for (const h of validi) {
+      if ((books || []).some(b => stessoLibro(b, h))) continue; // già in libreria o nella lista dei desideri
+      const d = uniti.find(x => x.lingua === h.lingua && stessoLibro(x, h)); // stessa opera in un'altra lingua: libri diversi
       if (!d) { uniti.push(h); continue; }
       for (const k of ["isbn", "cover", "synopsis", "uscita", "year", "edYear", "pages", "genere"]) if (!d[k] && h[k]) d[k] = h[k];
-      d.voti.push(...h.voti);
+      d.voti.push(...h.voti); d.ried = d.ried || h.ried;
     }
-    const annoDi = h => Number(h.year || h.edYear) || (h.uscita ? Number(h.uscita.slice(0, 4)) : undefined); // le fonti danno edYear
-    const voce = h => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: annoDi(h),
-      pages: h.pages, synopsis: h.synopsis || "", uscita: h.uscita, genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche(h, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true });
-    const da = addDays(oggi, -90), a = addDays(oggi, 365);
-    const isUscita = h => tuoi.has(chiaveAutore(h.author)) && h.uscita && h.uscita >= da && h.uscita <= a;
-    const uscite = uniti.filter(isUscita).map(voce)
-      .sort((x, y) => (x.uscita > oggi) !== (y.uscita > oggi) ? (x.uscita > oggi ? -1 : 1) : x.uscita > oggi ? x.uscita.localeCompare(y.uscita) : y.uscita.localeCompare(x.uscita));
-    const forza = h => { const au = (gusti.autori || []).find(x => x.chiave === chiaveAutore(h.author)); if (au) return au.punti; const g = (gusti.generi || []).find(x => x.nome.toLowerCase() === String(h.genere || "").toLowerCase()); return g ? g.n : 0; };
+    const voce = (h, extra = {}) => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: annoNov(h) || undefined,
+      pages: h.pages, synopsis: h.synopsis || "", uscita: h.ried ? "" : h.uscita, genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche(h.ried ? { ...h, uscita: "" } : h, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true, ...extra });
+    const da = addDays(oggi, -90), a = addDays(oggi, 365), fut = x => x.uscita > oggi;
+    const ordUscite = (x, y) => fut(x) !== fut(y) ? (fut(x) ? -1 : 1) : fut(x) ? x.uscita.localeCompare(y.uscita) : y.uscita.localeCompare(x.uscita);
+    const nuova = h => !h.ried && tuoi.has(chiaveAutore(h.author)) && h.uscita && h.uscita >= da && h.uscita <= a;
+    const uscite = uniti.filter(h => nuova(h) && h.lingua === lingua).map(h => voce(h)).sort(ordUscite);
+    const originali = uniti.filter(h => nuova(h) && h.lingua !== lingua).map(h => voce(h)).sort(ordUscite).slice(0, 6);
+    // Proposte: solo nella lingua del telefono, mai libri ancora da uscire, mai uscite.
+    const top = (gusti.generi || []).slice(0, 3).map(g => g.nome.toLowerCase()), altri = (gusti.generi || []).slice(3, 8).map(g => g.nome.toLowerCase());
+    const gruppoDi = h => {
+      const au = (gusti.autori || []).find(x => x.chiave === chiaveAutore(h.author)), g = String(h.genere || "").toLowerCase();
+      if (au) return au.libri === 1 ? "scoperta" : "autori";
+      if (tuoi.has(chiaveAutore(h.author))) return ""; // autore escluso dai gusti (voti bassi)
+      return top.includes(g) ? "generi" : altri.includes(g) ? "scoperta" : "";
+    };
     const anno = Number(oggi.slice(0, 4));
-    const cand = uniti.filter(h => !isUscita(h) && !(h.uscita && h.uscita > oggi) && forza(h) > 0).map(h => {
-      const v = votoMostrato(h.voti), y = annoDi(h) || anno;
-      return { h, sc: forza(h) + (linguaEdizione(h) === lingua ? 1 : 0) + (v ? v.media - 3 : 0) - Math.max(0, anno - y) / 5 };
-    }).sort((x, y) => y.sc - x.sc);
-    const perA = new Map(), perG = new Map(), proposte = [];
-    for (const { h } of cand) {
-      if (proposte.length >= 12) break;
-      const ka = chiaveAutore(h.author), kg = String(h.genere || "").toLowerCase();
-      if ((perA.get(ka) || 0) >= 3 || (kg && (perG.get(kg) || 0) >= 4)) continue;
-      perA.set(ka, (perA.get(ka) || 0) + 1); if (kg) perG.set(kg, (perG.get(kg) || 0) + 1);
-      proposte.push(voce(h));
-    }
-    return { uscite, proposte };
+    const cand = uniti.filter(h => h.lingua === lingua && !nuova(h) && !(h.uscita && h.uscita > oggi)).map(h => ({ h, g: gruppoDi(h), v: votoMostrato(h.voti), y: annoNov(h) || anno })).filter(c => c.g)
+      .sort((p, q) => (q.v ? q.v.media : -1) - (p.v ? p.v.media : -1) || q.y - p.y);
+    const GR = ["autori", "generi", "scoperta"], scelti = [], perA = new Map(), perG = new Map();
+    const prende = c => {
+      const ka = chiaveAutore(c.h.author), kg = String(c.h.genere || "").toLowerCase();
+      if ((perA.get(ka) || 0) >= 2 || (kg && (perG.get(kg) || 0) >= 2)) return false;
+      perA.set(ka, (perA.get(ka) || 0) + 1); if (kg) perG.set(kg, (perG.get(kg) || 0) + 1); scelti.push(c); return true;
+    };
+    for (const g of GR) { let n = 0; for (const c of cand) if (n < 4 && c.g === g && !scelti.includes(c) && prende(c)) n++; }
+    for (const g of GR) for (const c of cand) if (scelti.length < 12 && c.g === g && !scelti.includes(c)) prende(c); // posti liberi
+    const proposte = GR.flatMap(g => scelti.filter(c => c.g === g)).map(c => voce(c.h, { gruppo: c.g }));
+    return { uscite, originali, proposte };
   }
   // Uscite già mostrate: si dimenticano quelle uscite più di 90 giorni fa.
   function pulisciViste(viste, oggi) {
