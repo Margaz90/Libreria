@@ -130,7 +130,7 @@ async function verifica(browser) {
 
 // Memoria pronta per la sezione: un'uscita futura, una recente, due proposte
 // giaMostrate: il pop-up le ha già mostrate (così non copre la sezione nei test che non lo riguardano)
-export const MEM = ({ giaMostrate = false } = {}) => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
+export const MEM = ({ giaMostrate = false } = {}) => ({ motore: 85, ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
   uscite: [
     { id: 'u2', title: 'Uscito da poco', author: 'Mick Herron', uscita: iso(-10), cover: '', perche: 'Nuovo di Herron: uscito il …', autoreLetto: true, voto: null },
     { id: 'u1', title: 'Il nuovo di Herron', author: 'Mick Herron', isbn: '9788804111111', uscita: iso(35), cover: '', perche: 'Nuovo di Herron: esce il …', autoreLetto: true, voto: { media: 4.6, voti: 48, fonte: 'Apple Books' } },
@@ -204,6 +204,22 @@ async function gruppi(browser) {
   ok('originali: niente pallino', await q.locator('#nov-dot').isHidden());
   ok('gruppi: nessun errore in console', !p.errs.length && !q.errs.length, [...p.errs, ...q.errs].join(' / '));
   await q.close2();
+}
+
+// Dopo l'aggiornamento alla v85: la prima apertura della sezione rifà il giro con le regole nuove, una volta sola
+async function primaApertura(browser) {
+  const m = MEM({ giaMostrate: true }); delete m.motore; // giro della v84, senza «motore»
+  const p = await apri(browser, { memoria: m });
+  await riapri(p); await p.waitForTimeout(1500);
+  ok('aggiornamento: all\'avvio nessun giro (sono passati meno di 7 giorni)', p.n.apple + p.n.google + p.n.ol === 0, JSON.stringify(p.n));
+  await vai(p);
+  ok('aggiornamento: aprendo Novità parte il giro, con «Aggiorno le novità…»', /Aggiorno le novità/.test(await p.locator('.nov').innerText()) || p.n.apple > 0, await p.locator('.nov').innerText());
+  await finito(p); await p.waitForTimeout(500);
+  const mm = await memoria(p);
+  ok('aggiornamento: giro fatto con le regole nuove', mm.motore === 85 && mm.ultimoGiro > Date.now() - 60e3 && p.n.apple > 0, JSON.stringify({ motore: mm.motore, n: p.n }));
+  const n0 = p.n.apple; await riapri(p); await vai(p); await p.waitForTimeout(1500);
+  ok('aggiornamento: la seconda apertura non rifà il giro', p.n.apple === n0, `${n0} → ${p.n.apple}`);
+  await p.close2();
 }
 
 async function vuoti(browser) {
@@ -283,6 +299,7 @@ export default async function run({ browser }) {
   await verifica(browser);
   await sezione(browser);
   await gruppi(browser);
+  await primaApertura(browser);
   await vuoti(browser);
   await computer(browser);
 }

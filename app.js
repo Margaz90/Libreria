@@ -568,6 +568,7 @@
 
   // ---- Novità per te (v84): giro settimanale in sottofondo e memoria sul dispositivo (mai nel cloud né nei backup) ----
   const NOV_KEY = "libreria-novita", NOV_GIORNI = 7;
+  const NOV_MOTORE = 85; // versione delle regole delle novità: se l'ultimo giro è di una versione più vecchia, aprendo la sezione si rifà (una volta)
   // Lingua dell'edizione da Open Library (codici a tre lettere): quella del telefono se c'è tra le sue lingue, altrimenti la prima.
   const OL_LINGUE = { ita: "it", eng: "en", fre: "fr", spa: "es", ger: "de", por: "pt", dut: "nl" };
   const olLingua = l => { const c = (l || []).map(x => OL_LINGUE[x]).filter(Boolean); return c.includes(LINGUA) ? LINGUA : c[0] || ""; };
@@ -577,7 +578,7 @@
     const obj = x => x && typeof x === "object" && !Array.isArray(x) ? x : {};
     return { ultimoGiro: Number(n && n.ultimoGiro) || 0, proposte: Array.isArray(n && n.proposte) ? n.proposte : [], uscite: Array.isArray(n && n.uscite) ? n.uscite : [],
       originali: Array.isArray(n && n.originali) ? n.originali : [], // v85 (assente nelle memorie della v84)
-      viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0 };
+      viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0, motore: Number(n && n.motore) || 0 };
   }
   // Memoria piena (le foto dei dorsi occupano spazio): si riprova più leggeri, e almeno si ricorda il giro e cosa è stato mostrato,
   // altrimenti il giro si ripeterebbe a ogni apertura. La copia in memoria copre la sessione.
@@ -585,7 +586,7 @@
   function scriviNovita(n) {
     novitaMem = n;
     const leggera = { ...n, proposte: n.proposte.slice(0, 6).map(({ synopsis, ...x }) => x), uscite: n.uscite.map(({ synopsis, ...x }) => x), originali: (n.originali || []).map(({ synopsis, ...x }) => x) };
-    const minima = { ultimoGiro: n.ultimoGiro, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [], originali: [] };
+    const minima = { ultimoGiro: n.ultimoGiro, motore: n.motore || 0, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [], originali: [] };
     for (const v of [n, leggera, minima]) { try { localStorage.setItem(NOV_KEY, JSON.stringify(v)); return; } catch {} }
   }
   const novita = { busy: false };
@@ -615,7 +616,7 @@
       if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
       const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
       const tieni = (nuovi, vecchi) => { const ids = new Set(nuovi.map(x => x.id)); return nuovi.concat(vecchi.filter(x => x && !ids.has(x.id) && x.uscita >= da)); }; // restano 90 giorni
-      scriviNovita({ ...n, ultimoGiro: Date.now(), proposte: out.proposte, uscite: tieni(out.uscite, n.uscite), originali: tieni(out.originali, n.originali).slice(0, 6), viste: pulisciViste(n.viste, oggi) });
+      scriviNovita({ ...n, motore: NOV_MOTORE, ultimoGiro: Date.now(), proposte: out.proposte, uscite: tieni(out.uscite, n.uscite), originali: tieni(out.originali, n.originali).slice(0, 6), viste: pulisciViste(n.viste, oggi) });
     } finally {
       novita.busy = false;
       if (line && /Cerco novità/.test(line.textContent)) line.hidden = true;
@@ -663,8 +664,9 @@
     const proposte = v.proposte.length ? `<h3>Proposte per te</h3>${grp.map(([t, l]) => `<h4>${t}</h4><div class="nov-grid">${l.map(card).join("")}</div>`).join("")}${senza.length ? `<div class="nov-grid">${senza.map(card).join("")}</div>` : ""}` : "";
     const originali = v.originali.length ? `<section class="nov-orig"><h3>In lingua originale</h3><p class="hint">Non ancora uscite in italiano.</p><ul class="nov-out">${v.originali.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span></div>${wishBtn(x)}</li>`).join("")}</ul></section>` : "";
     const nulla = !uscite && !proposte && !originali ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
-    const agg = new Date(n.ultimoGiro), dataAgg = `${agg.getDate()} ${MONTHS[agg.getMonth()]}`;
-    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${originali}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
+    const dAgg = new Date(n.ultimoGiro), dataAgg = `${dAgg.getDate()} ${MONTHS[dAgg.getMonth()]}`;
+    const agg = novita.busy || (n.motore < NOV_MOTORE && navigator.onLine) ? `<p class="hint nov-agg" role="status">Aggiorno le novità…</p>` : "";
+    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${agg}${uscite}${proposte}${originali}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
   }
   // Pop-up all'apertura (v84): uscite non viste di autori che hai letto, una volta per libro; mai sopra un'altra scheda.
   function mostraPopupNovita() {
@@ -1821,7 +1823,11 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const main = $("#main");
     const sk = state.view === "stats" ? statsFocusKey() : null;
     if (state.view === "stats") main.innerHTML = renderStats(statsLast = computeStats(state.books, new Date())); // la ricerca non vale qui: la sua barra è nascosta
-    else if (state.view === "novita") { main.innerHTML = renderNovita(); segnaNovitaViste(); }
+    else if (state.view === "novita") {
+      const n = leggiNovita();
+      if (n.ultimoGiro && n.motore < NOV_MOTORE && !novita.busy) setTimeout(() => giroNovita({ forza: true }).catch(() => {}), 0); // regole nuove: rifà il giro (una volta)
+      main.innerHTML = renderNovita(); segnaNovitaViste();
+    }
     else {
       const list = visible().filter(b => state.filter === "tutti" || b.status === state.filter);
       if (state.mode === "dorsi") main.innerHTML = renderShelves(visible()); // gli scaffali da mostrare li sceglie renderShelves
