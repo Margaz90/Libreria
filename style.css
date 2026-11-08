@@ -788,7 +788,7 @@ html { scroll-behavior: smooth; }
 .nov-pop .sub { margin: 0; }
 .nov-pop .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .nov-pop .actions .btn { min-height: 44px; }
-.nov h4 { margin: 6px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; } /* gruppi delle proposte (v85) */
+.nov h4 { margin: 6px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; padding-bottom: 5px; border-bottom: 2px solid var(--coral); } /* gruppi delle proposte (v85), riga corallo (v88) */
 .nov-orig { display: grid; gap: 8px; margin-top: 8px; }
 .nov-orig .hint { margin: 0; }
 .nov-open, .nov-tit { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: block; } /* aprono il dettaglio (v87) */

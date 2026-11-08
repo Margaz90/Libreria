@@ -237,6 +237,7 @@ async function memoriaVecchia(browser) {
 // v87: scheda di dettaglio e righe corallo sotto i titoli
 async function dettaglio(browser) {
   const m = MEM({ giaMostrate: true });
+  m.proposte = m.proposte.map((x, i) => ({ ...x, gruppo: ['generi', 'scoperta'][i % 2] }));
   m.proposte[0] = { ...m.proposte[0], pages: 352, synopsis: 'Una spia nuova in una Londra piovosa. ' + 'Molto lunga. '.repeat(30), year: 2025 };
   const p = await apri(browser, { memoria: m });
   await riapri(p); await vai(p);
@@ -244,6 +245,8 @@ async function dettaglio(browser) {
   ok('righe corallo sottili sotto i titoli', righe.length >= 2 && righe.every(([w, st]) => w === '2px' && st === 'solid'), JSON.stringify(righe));
   const col = await p.evaluate(() => [getComputedStyle(document.querySelector('.nov h3')).borderBottomColor, getComputedStyle(document.documentElement).getPropertyValue('--coral').trim()]);
   ok('la riga è color corallo', /240, 106, 92/.test(col[0]), JSON.stringify(col));
+  const sotto = await p.locator('.nov h4').evaluateAll(hs => hs.map(h => { const c = getComputedStyle(h); return [h.textContent, c.borderBottomWidth, c.borderBottomStyle, c.borderBottomColor]; }));
+  ok('righe corallo anche sotto i gruppi delle proposte', sotto.length >= 2 && sotto.every(([, w, st, c]) => w === '2px' && st === 'solid' && /240, 106, 92/.test(c)), JSON.stringify(sotto));
   await p.locator('.nov-card [data-nov="p1"]').first().click(); await p.waitForSelector('.nov-det');
   const t = await p.locator('.nov-det').innerText();
   ok('dettaglio dalla copertina: titolo, autore, pagine, genere, voto, motivo, trama completa, ISBN', /La spia nuova/.test(t) && /Anna Nuova/.test(t) && /352 pagine/.test(t) && /Thriller/.test(t) && /★ 4,2 · 1\.350 voti/.test(t) && /Hai letto 2 thriller/.test(t) && /Londra piovosa/.test(t) && /Molto lunga\. Molto lunga/.test(t) && /9788804222222/.test(t), t);
