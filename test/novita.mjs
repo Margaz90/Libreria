@@ -234,6 +234,31 @@ async function memoriaVecchia(browser) {
   await p.close2();
 }
 
+// v87: scheda di dettaglio e righe corallo sotto i titoli
+async function dettaglio(browser) {
+  const m = MEM({ giaMostrate: true });
+  m.proposte[0] = { ...m.proposte[0], pages: 352, synopsis: 'Una spia nuova in una Londra piovosa. ' + 'Molto lunga. '.repeat(30), year: 2025 };
+  const p = await apri(browser, { memoria: m });
+  await riapri(p); await vai(p);
+  const righe = await p.locator('.nov h3').evaluateAll(hs => hs.map(h => { const c = getComputedStyle(h); return [c.borderBottomWidth, c.borderBottomStyle]; }));
+  ok('righe corallo sottili sotto i titoli', righe.length >= 2 && righe.every(([w, st]) => w === '2px' && st === 'solid'), JSON.stringify(righe));
+  const col = await p.evaluate(() => [getComputedStyle(document.querySelector('.nov h3')).borderBottomColor, getComputedStyle(document.documentElement).getPropertyValue('--coral').trim()]);
+  ok('la riga è color corallo', /240, 106, 92/.test(col[0]), JSON.stringify(col));
+  await p.locator('.nov-card [data-nov="p1"]').first().click(); await p.waitForSelector('.nov-det');
+  const t = await p.locator('.nov-det').innerText();
+  ok('dettaglio dalla copertina: titolo, autore, pagine, genere, voto, motivo, trama completa, ISBN', /La spia nuova/.test(t) && /Anna Nuova/.test(t) && /352 pagine/.test(t) && /Thriller/.test(t) && /★ 4,2 · 1\.350 voti/.test(t) && /Hai letto 2 thriller/.test(t) && /Londra piovosa/.test(t) && /Molto lunga\. Molto lunga/.test(t) && /9788804222222/.test(t), t);
+  const bs = await p.locator('.nov-det .actions button').all();
+  ok('dettaglio: «Lista dei desideri» e «Chiudi», alti almeno 44 px', JSON.stringify(await p.locator('.nov-det .actions button').allInnerTexts()) === JSON.stringify(['Lista dei desideri', 'Chiudi']) && (await Promise.all(bs.map(b => b.boundingBox()))).every(b => b.height >= 44));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+  ok('dettaglio: Esc chiude', await p.locator('.nov-det').count() === 0);
+  await p.locator('.nov-out [data-nov="u1"]').first().click(); await p.waitForSelector('.nov-det');
+  ok('dettaglio di un\'uscita dal titolo/copertina: data di uscita', /esce il/.test(await p.locator('.nov-det').innerText()));
+  await p.locator('.nov-det [data-det="wish"]').click(); await p.waitForTimeout(800);
+  ok('dettaglio: «Lista dei desideri» aggiunge il libro', (await localBooks(p)).some(b => b.title === 'Il nuovo di Herron' && b.status === 'desiderato') && await p.locator('.nov-det').count() === 0);
+  ok('dettaglio: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 async function vuoti(browser) {
   let p = await apri(browser, { memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} }, libri: [L('a', 'Uno', 'Autore Uno', 5, 'Giallo')] });
   await riapri(p); await vai(p);
@@ -313,6 +338,7 @@ export default async function run({ browser }) {
   await gruppi(browser);
   await primaApertura(browser);
   await memoriaVecchia(browser);
+  await dettaglio(browser);
   await vuoti(browser);
   await computer(browser);
 }

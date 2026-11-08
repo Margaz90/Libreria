@@ -664,14 +664,18 @@
     const giorni = Math.max(0, Math.ceil((n.ultimoGiro + NOV_GIORNI * 864e5 - Date.now()) / 864e5));
     const quando = x => x.uscita ? (x.uscita > oggi ? "esce il " : "uscito il ") + dataBreve(x.uscita, oggi) : "";
     const cover = x => coverHTML({ id: x.id, title: x.title, author: x.author, cover: x.cover }, 200);
-    const mini = x => x.cover ? cover(x) : `<div class="cover nov-nocover" style="background:${colorOf(x)}" aria-hidden="true"></div>`; // 56 px: niente scritte
-    const uscite = v.uscite.length ? `<h3>Uscite dei tuoi autori</h3><ul class="nov-out">${v.uscite.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}</div>${wishBtn(x)}</li>`).join("")}</ul>` : "";
-    const card = x => `<article class="nov-card">${cover(x)}<b>${esc(x.title)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`;
+    const mini0 = x => x.cover ? cover(x) : `<div class="cover nov-nocover" style="background:${colorOf(x)}" aria-hidden="true"></div>`; // 56 px: niente scritte
+    // Copertina e titolo aprono la scheda di dettaglio (v87)
+    const apre = (x, inner, cls = "nov-open") => `<button class="${cls}" type="button" data-nov="${esc(x.id)}" aria-label="Dettagli di «${esc(x.title)}»">${inner}</button>`;
+    const mini = x => apre(x, mini0(x));
+    const tit = x => apre(x, esc(x.title), "nov-tit");
+    const uscite = v.uscite.length ? `<h3>Uscite dei tuoi autori</h3><ul class="nov-out">${v.uscite.map(x => `<li>${mini(x)}<div class="nov-t"><b>${tit(x)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}</div>${wishBtn(x)}</li>`).join("")}</ul>` : "";
+    const card = x => `<article class="nov-card">${apre(x, cover(x))}<b>${tit(x)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`;
     const GRUPPI = [["autori", "Dai tuoi autori"], ["generi", "Dai tuoi generi"], ["scoperta", "Da scoprire"]];
     const grp = GRUPPI.map(([g, t]) => [t, v.proposte.filter(x => x.gruppo === g)]).filter(([, l]) => l.length);
     const senza = v.proposte.filter(x => !GRUPPI.some(([g]) => g === x.gruppo)); // memorie della v84, senza gruppo
     const proposte = v.proposte.length ? `<h3>Proposte per te</h3>${grp.map(([t, l]) => `<h4>${t}</h4><div class="nov-grid">${l.map(card).join("")}</div>`).join("")}${senza.length ? `<div class="nov-grid">${senza.map(card).join("")}</div>` : ""}` : "";
-    const originali = v.originali.length ? `<section class="nov-orig"><h3>In lingua originale</h3><p class="hint">Non ancora uscite in italiano.</p><ul class="nov-out">${v.originali.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span></div>${wishBtn(x)}</li>`).join("")}</ul></section>` : "";
+    const originali = v.originali.length ? `<section class="nov-orig"><h3>In lingua originale</h3><p class="hint">Non ancora uscite in italiano.</p><ul class="nov-out">${v.originali.map(x => `<li>${mini(x)}<div class="nov-t"><b>${tit(x)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span></div>${wishBtn(x)}</li>`).join("")}</ul></section>` : "";
     const nulla = !uscite && !proposte && !originali ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
     const dAgg = new Date(n.ultimoGiro), dataAgg = `${dAgg.getDate()} ${MONTHS[dAgg.getMonth()]}`;
     const agg = novita.busy || (n.motore < NOV_MOTORE && navigator.onLine) ? `<p class="hint nov-agg" role="status">Aggiorno le novità…</p>` : "";
@@ -693,6 +697,22 @@
     $('[data-pop="wish"]', sheet).onclick = () => { closeSheet(); aggiungiDesiderio(x.id); };
     $('[data-pop="vedi"]', sheet).onclick = () => { closeSheet(); setView("novita"); };
     $('[data-pop="chiudi"]', sheet).onclick = () => closeSheet();
+  }
+  // Scheda di dettaglio di una novità (v87): solo lettura, dai dati già salvati dal giro (anche offline).
+  function apriDettaglioNovita(id) {
+    const n = leggiNovita(), x = n.uscite.concat(n.proposte, n.originali).find(y => y && y.id === id); if (!x) return;
+    const oggi = today();
+    const quando = x.uscita ? (x.uscita > oggi ? "Esce il " : "Uscito il ") + dataBreve(x.uscita, oggi) : x.year ? "Pubblicato nel " + x.year : "";
+    const dati = [quando, x.pages ? x.pages + " pagine" : "", x.genere || ""].filter(Boolean).map(esc).join(" · ");
+    const sheet = openSheet(`<div class="nov-det">
+      <div class="nov-det-top">${coverHTML({ id: x.id, title: x.title, author: x.author, cover: x.cover }, 300)}<div><h2>${esc(x.title)}</h2><p class="sub">${esc(x.author)}</p>
+      ${dati ? `<p class="nov-det-dati">${dati}</p>` : ""}${x.voto ? `<p class="nov-voto">${votoTxt(x.voto)}</p>` : ""}</div></div>
+      ${x.perche ? `<p class="nov-why">${esc(x.perche)}</p>` : ""}
+      ${x.synopsis ? `<section><h3>Trama</h3><p class="synopsis">${esc(x.synopsis)}</p></section>` : ""}
+      ${x.isbn ? `<p class="hint">ISBN ${esc(x.isbn)}</p>` : ""}
+      <div class="actions"><button class="btn primary" type="button" data-det="wish">Lista dei desideri</button><button class="btn ghost" type="button" data-det="chiudi">Chiudi</button></div></div>`);
+    $('[data-det="wish"]', sheet).onclick = () => { closeSheet(); aggiungiDesiderio(x.id); };
+    $('[data-det="chiudi"]', sheet).onclick = () => closeSheet();
   }
   // «Lista dei desideri» da una novità: il libro entra completo e sparisce dalla sezione; «Annulla» lo toglie.
   function aggiungiDesiderio(id) {
@@ -1866,6 +1886,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function wireMain(root) {
     root.querySelectorAll("[data-wish]").forEach(btn => btn.onclick = () => aggiungiDesiderio(btn.dataset.wish)); // novità (v84)
+    root.querySelectorAll("[data-nov]").forEach(btn => btn.onclick = () => apriDettaglioNovita(btn.dataset.nov)); // dettaglio (v87)
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     const ym = root.querySelector("#ys-more");
     if (ym) ym.onclick = () => { statsOld = !statsOld; const box = $("#ys-old"); box.hidden = !statsOld; ym.setAttribute("aria-expanded", statsOld); ym.textContent = statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${box.querySelectorAll("section.ys").length})`; };
