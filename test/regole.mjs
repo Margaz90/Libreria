@@ -212,6 +212,13 @@ export default async function run() {
   const tanti2 = Array.from({ length: 1000 }, (_, i) => ({ title: 'Titolo numero ' + i + (i % 3 ? '. Sottotitolo comune' : ''), author: 'Autore ' + (i % 40), uscita: '2025-0' + (1 + i % 9) + '-10', genere: 'Thriller', synopsis: IT }));
   const t0 = Date.now(); R.novitaDa(tanti2, SB, OGGI, 'it', R.gustiDi(SB)); const dt = Date.now() - t0;
   ok('novitaDa: 1000 risultati e 108 libri in meno di 400 ms (prima circa 1700)', dt < 400, dt + ' ms');
+  // ---- v86: lingua originale dell'autore ----
+  const OR = R.novitaDa([
+    { title: 'Slow Horses', author: 'Mick Herron', edYear: 2010, lang: 'en' }, { title: 'Dead Lions', author: 'Mick Herron', edYear: 2013, lang: 'en' },
+    { title: 'Caballos lentos', author: 'Mick Herron', uscita: '2026-11-20', lang: 'es' },
+    { title: 'Clown Town', author: 'Mick Herron', uscita: '2026-12-05', lang: 'en' },
+  ], lib, OGGI, 'it', G);
+  ok('originali: solo nella lingua originale dell\'autore (inglese per Herron), non le traduzioni', JSON.stringify(OR.originali.map(x => x.title)) === JSON.stringify(['Clown Town']), JSON.stringify(OR.originali.map(x => x.title)));
   const PC = R.perche;
   ok('perche: stesso autore con 5 stelle, genere', PC({ title: 'X', author: 'Mick Herron' }, G, OGGI) === 'Dello stesso autore di «Un covo di bastardi», a cui hai dato 5 stelle' && PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI) === 'Hai letto 2 thriller', [PC({ title: 'X', author: 'Mick Herron' }, G, OGGI), PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI)].join(' | '));
   ok('perche: autore senza voti alti', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI) === 'Di Carrisi, come il libro che hai', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI));

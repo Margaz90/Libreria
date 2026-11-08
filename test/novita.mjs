@@ -130,7 +130,7 @@ async function verifica(browser) {
 
 // Memoria pronta per la sezione: un'uscita futura, una recente, due proposte
 // giaMostrate: il pop-up le ha già mostrate (così non copre la sezione nei test che non lo riguardano)
-export const MEM = ({ giaMostrate = false } = {}) => ({ motore: 85, ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
+export const MEM = ({ giaMostrate = false } = {}) => ({ motore: 86, ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
   uscite: [
     { id: 'u2', title: 'Uscito da poco', author: 'Mick Herron', uscita: iso(-10), cover: '', perche: 'Nuovo di Herron: uscito il …', autoreLetto: true, voto: null },
     { id: 'u1', title: 'Il nuovo di Herron', author: 'Mick Herron', isbn: '9788804111111', uscita: iso(35), cover: '', perche: 'Nuovo di Herron: esce il …', autoreLetto: true, voto: { media: 4.6, voti: 48, fonte: 'Apple Books' } },
@@ -216,9 +216,21 @@ async function primaApertura(browser) {
   ok('aggiornamento: aprendo Novità parte il giro, con «Aggiorno le novità…»', /Aggiorno le novità/.test(await p.locator('.nov').innerText()) || p.n.apple > 0, await p.locator('.nov').innerText());
   await finito(p); await p.waitForTimeout(500);
   const mm = await memoria(p);
-  ok('aggiornamento: giro fatto con le regole nuove', mm.motore === 85 && mm.ultimoGiro > Date.now() - 60e3 && p.n.apple > 0, JSON.stringify({ motore: mm.motore, n: p.n }));
+  ok('aggiornamento: giro fatto con le regole nuove', mm.motore === 86 && mm.ultimoGiro > Date.now() - 60e3 && p.n.apple > 0, JSON.stringify({ motore: mm.motore, n: p.n }));
   const n0 = p.n.apple; await riapri(p); await vai(p); await p.waitForTimeout(1500);
   ok('aggiornamento: la seconda apertura non rifà il giro', p.n.apple === n0, `${n0} → ${p.n.apple}`);
+  await p.close2();
+}
+
+// v86: con regole nuove il giro non conserva le uscite dei giri vecchi (non ricontrollate)
+async function memoriaVecchia(browser) {
+  const m = MEM({ giaMostrate: true }); m.motore = 85; m.ultimoGiro = Date.now() - DAY;
+  m.uscite.push({ id: 'vecchia', title: 'Slow Horses. Nuova edizione', author: 'Mick Herron', uscita: iso(-5), autoreLetto: true });
+  m.mostrate.vecchia = iso(-5); // già vista nel pop-up
+  const p = await apri(browser, { memoria: m });
+  await riapri(p); await vai(p); await finito(p); await p.waitForTimeout(500);
+  const mm = await memoria(p);
+  ok('regole nuove: le uscite dei giri vecchi non restano', mm.motore >= 86 && !mm.uscite.some(x => x.id === 'vecchia') && !mm.uscite.some(x => x.id === 'u2'), JSON.stringify(mm.uscite.map(x => x.title)));
   await p.close2();
 }
 
@@ -300,6 +312,7 @@ export default async function run({ browser }) {
   await sezione(browser);
   await gruppi(browser);
   await primaApertura(browser);
+  await memoriaVecchia(browser);
   await vuoti(browser);
   await computer(browser);
 }

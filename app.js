@@ -418,7 +418,15 @@
     const nuova = h => tuoi.has(chiaveM(h.author)) && h.nuova && h.nuova >= da && h.nuova <= a;
     const uscite = uniti.filter(h => nuova(h) && h.lingua === lingua).map(h => voce(h)).sort(ordUscite);
     const inLingua = validi.filter(h => h.lingua === lingua);
-    const originali = uniti.filter(h => nuova(h) && h.lingua !== lingua && !inLingua.some(x => stessoLibro(x, h))) // già uscito anche in italiano: non è «originale»
+    // Lingua originale di un autore (v86): quella della sua edizione straniera più vecchia (a parità, la più frequente).
+    const origDi = new Map();
+    for (const [k, l] of perAutore) {
+      const st = l.filter(h => h.lingua && h.lingua !== lingua); if (!st.length) continue;
+      const conta = new Map(); st.forEach(h => conta.set(h.lingua, (conta.get(h.lingua) || 0) + 1));
+      const vecchio = st.filter(h => annoNov(h)).sort((x, y) => annoNov(x) - annoNov(y) || conta.get(y.lingua) - conta.get(x.lingua))[0];
+      origDi.set(k, vecchio ? vecchio.lingua : [...conta].sort((x, y) => y[1] - x[1])[0][0]);
+    }
+    const originali = uniti.filter(h => nuova(h) && h.lingua !== lingua && h.lingua === origDi.get(chiaveM(h.author)) && !inLingua.some(x => stessoLibro(x, h))) // solo la lingua originale; già uscito anche in italiano: no
       .map(h => voce(h, { id: "o:" + idNovita(h) })).sort(ordUscite).slice(0, 6);
     // Proposte: solo nella lingua del telefono, mai libri ancora da uscire, mai uscite.
     const top = (gusti.generi || []).slice(0, 3).map(g => g.nome.toLowerCase()), altri = (gusti.generi || []).slice(3, 8).map(g => g.nome.toLowerCase());
@@ -568,7 +576,7 @@
 
   // ---- Novità per te (v84): giro settimanale in sottofondo e memoria sul dispositivo (mai nel cloud né nei backup) ----
   const NOV_KEY = "libreria-novita", NOV_GIORNI = 7;
-  const NOV_MOTORE = 85; // versione delle regole delle novità: se l'ultimo giro è di una versione più vecchia, aprendo la sezione si rifà (una volta)
+  const NOV_MOTORE = 86; // versione delle regole delle novità: se l'ultimo giro è di una versione più vecchia, aprendo la sezione si rifà (una volta)
   // Lingua dell'edizione da Open Library (codici a tre lettere): quella del telefono se c'è tra le sue lingue, altrimenti la prima.
   const OL_LINGUE = { ita: "it", eng: "en", fre: "fr", spa: "es", ger: "de", por: "pt", dut: "nl" };
   const olLingua = l => { const c = (l || []).map(x => OL_LINGUE[x]).filter(Boolean); return c.includes(LINGUA) ? LINGUA : c[0] || ""; };
@@ -615,7 +623,8 @@
       }
       if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
       const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
-      const tieni = (nuovi, vecchi) => { const ids = new Set(nuovi.map(x => x.id)); return nuovi.concat(vecchi.filter(x => x && !ids.has(x.id) && x.uscita >= da)); }; // restano 90 giorni
+      // Le uscite restano 90 giorni, ma solo se trovate con le stesse regole: quelle di regole vecchie non sono state ricontrollate (v86).
+      const tieni = (nuovi, vecchi) => { const ids = new Set(nuovi.map(x => x.id)); return nuovi.concat((n.motore === NOV_MOTORE ? vecchi : []).filter(x => x && !ids.has(x.id) && x.uscita >= da)); };
       scriviNovita({ ...n, motore: NOV_MOTORE, ultimoGiro: Date.now(), proposte: out.proposte, uscite: tieni(out.uscite, n.uscite), originali: tieni(out.originali, n.originali).slice(0, 6), viste: pulisciViste(n.viste, oggi) });
     } finally {
       novita.busy = false;
