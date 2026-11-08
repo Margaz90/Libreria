@@ -177,6 +177,35 @@ async function sezione(browser) {
   await p.close2();
 }
 
+// v85: gruppi, «In lingua originale», libro con titolo in due lingue
+async function gruppi(browser) {
+  const m = MEM({ giaMostrate: true });
+  m.proposte = [
+    { id: 'g1', title: 'Il re dei fantasmi', author: 'Mick Herron', gruppo: 'autori', perche: 'x', voto: null },
+    { id: 'g2', title: 'La spia nuova', author: 'Anna Nuova', gruppo: 'generi', perche: 'Hai letto 2 thriller', voto: null },
+    { id: 'g3', title: 'Un fantasy', author: 'Fa Uno', gruppo: 'scoperta', perche: 'y', voto: null },
+    { id: 'g4', title: 'Oltre le dune', author: 'Hugh Howey', gruppo: 'scoperta', perche: 'z', voto: null },
+  ];
+  m.originali = [{ id: 'o1', title: 'The New Herron', author: 'Mick Herron', uscita: iso(40), autoreLetto: true }];
+  const p = await apri(browser, { memoria: m, libri: LIB.concat([{ id: 'h1', title: 'Across the sand. Oltre le dune', author: 'Hugh Howey', status: 'letto', rating: 4, added: 1 }]) });
+  await riapri(p); await p.waitForTimeout(400);
+  ok('originali: nessun pop-up', await p.locator('.nov-pop').count() === 0);
+  await vai(p);
+  ok('proposte: sottotitoli «Dai tuoi autori», «Dai tuoi generi», «Da scoprire» nell\'ordine', JSON.stringify(await p.locator('.nov h4').allInnerTexts()) === JSON.stringify(['Dai tuoi autori', 'Dai tuoi generi', 'Da scoprire']));
+  ok('libro già tuo con il titolo in due lingue: non proposto', !(await p.locator('.nov-card').allInnerTexts()).some(t => /Oltre le dune/.test(t)));
+  const or = await p.locator('.nov-orig').innerText().catch(() => '');
+  ok('«In lingua originale» in fondo, con la nota e il libro', /In lingua originale/.test(or) && /Non ancora uscite in italiano/.test(or) && /The New Herron/.test(or), or);
+  ok('originali: dopo le proposte', await p.evaluate(() => { const o = document.querySelector('.nov-orig'), g = document.querySelector('.nov-grid'); return !!(o && g && (g.compareDocumentPosition(o) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
+  await p.close2();
+  // Solo originali nuovi: niente pallino
+  const m2 = { ultimoGiro: Date.now() - DAY, aperta: Date.now(), viste: {}, mostrate: {}, uscite: [], proposte: [], originali: [{ id: 'o1', title: 'The New Herron', author: 'Mick Herron', uscita: iso(40), autoreLetto: true }] };
+  const q = await apri(browser, { memoria: m2 });
+  await riapri(q); await q.waitForTimeout(300);
+  ok('originali: niente pallino', await q.locator('#nov-dot').isHidden());
+  ok('gruppi: nessun errore in console', !p.errs.length && !q.errs.length, [...p.errs, ...q.errs].join(' / '));
+  await q.close2();
+}
+
 async function vuoti(browser) {
   let p = await apri(browser, { memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} }, libri: [L('a', 'Uno', 'Autore Uno', 5, 'Giallo')] });
   await riapri(p); await vai(p);
@@ -253,6 +282,7 @@ export default async function run({ browser }) {
   await lingue(browser);
   await verifica(browser);
   await sezione(browser);
+  await gruppi(browser);
   await vuoti(browser);
   await computer(browser);
 }

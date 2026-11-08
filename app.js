@@ -565,6 +565,7 @@
     if (novitaMem && (!n || Number(n.ultimoGiro) < novitaMem.ultimoGiro || (!(n.proposte || []).length && novitaMem.proposte.length))) n = novitaMem; // la versione completa di questa sessione
     const obj = x => x && typeof x === "object" && !Array.isArray(x) ? x : {};
     return { ultimoGiro: Number(n && n.ultimoGiro) || 0, proposte: Array.isArray(n && n.proposte) ? n.proposte : [], uscite: Array.isArray(n && n.uscite) ? n.uscite : [],
+      originali: Array.isArray(n && n.originali) ? n.originali : [], // v85 (assente nelle memorie della v84)
       viste: obj(n && n.viste), mostrate: obj(n && n.mostrate), aperta: Number(n && n.aperta) || 0 };
   }
   // Memoria piena (le foto dei dorsi occupano spazio): si riprova più leggeri, e almeno si ricorda il giro e cosa è stato mostrato,
@@ -572,8 +573,8 @@
   let novitaMem = null;
   function scriviNovita(n) {
     novitaMem = n;
-    const leggera = { ...n, proposte: n.proposte.slice(0, 6).map(({ synopsis, ...x }) => x), uscite: n.uscite.map(({ synopsis, ...x }) => x) };
-    const minima = { ultimoGiro: n.ultimoGiro, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [] };
+    const leggera = { ...n, proposte: n.proposte.slice(0, 6).map(({ synopsis, ...x }) => x), uscite: n.uscite.map(({ synopsis, ...x }) => x), originali: (n.originali || []).map(({ synopsis, ...x }) => x) };
+    const minima = { ultimoGiro: n.ultimoGiro, aperta: n.aperta || 0, viste: n.viste, mostrate: n.mostrate, proposte: [], uscite: [], originali: [] };
     for (const v of [n, leggera, minima]) { try { localStorage.setItem(NOV_KEY, JSON.stringify(v)); return; } catch {} }
   }
   const novita = { busy: false };
@@ -602,9 +603,8 @@
       }
       if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
       const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
-      const nuove = new Set(out.uscite.map(x => x.id));
-      const uscite = out.uscite.concat(n.uscite.filter(x => x && !nuove.has(x.id) && x.uscita >= da)); // le uscite restano 90 giorni
-      scriviNovita({ ...n, ultimoGiro: Date.now(), proposte: out.proposte, uscite, viste: pulisciViste(n.viste, oggi) });
+      const tieni = (nuovi, vecchi) => { const ids = new Set(nuovi.map(x => x.id)); return nuovi.concat(vecchi.filter(x => x && !ids.has(x.id) && x.uscita >= da)); }; // restano 90 giorni
+      scriviNovita({ ...n, ultimoGiro: Date.now(), proposte: out.proposte, uscite: tieni(out.uscite, n.uscite), originali: tieni(out.originali, n.originali).slice(0, 6), viste: pulisciViste(n.viste, oggi) });
     } finally {
       novita.busy = false;
       if (line && /Cerco novità/.test(line.textContent)) line.hidden = true;
@@ -613,12 +613,12 @@
   }
   window.libreriaNovita = Object.freeze({ giro: giroNovita, leggi: leggiNovita, popup: () => mostraPopupNovita() });
   // Un libro delle novità è già in libreria (anche se arrivato dal cloud o aggiunto a mano dopo il giro)?
-  const giaInLibreria = x => state.books.some(b => (x.isbn && parseIsbn(b.isbn) === parseIsbn(x.isbn)) || (sameTitle(b.title, x.title) && chiaveAutore(b.author) === chiaveAutore(x.author)));
+  const giaInLibreria = x => state.books.some(b => stessoLibro(b, x)); // anche con il titolo in due lingue (v85)
   const novitaVisibili = n => {
     const oggi = today(), fut = x => String(x.uscita || "") > oggi; // prima le future (dalla più vicina), poi le recenti (dalla più recente)
     const uscite = n.uscite.filter(x => x && x.title && !giaInLibreria(x))
       .sort((a, b) => fut(a) !== fut(b) ? (fut(a) ? -1 : 1) : fut(a) ? String(a.uscita).localeCompare(String(b.uscita)) : String(b.uscita).localeCompare(String(a.uscita)));
-    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)) };
+    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)), originali: n.originali.filter(x => x && x.title && !giaInLibreria(x)).sort((a, b) => String(a.uscita).localeCompare(String(b.uscita))) };
   };
   function aggiornaPallinoNovita() {
     const dot = $("#nov-dot"); if (!dot) return;
@@ -645,10 +645,15 @@
     const cover = x => coverHTML({ id: x.id, title: x.title, author: x.author, cover: x.cover }, 200);
     const mini = x => x.cover ? cover(x) : `<div class="cover nov-nocover" style="background:${colorOf(x)}" aria-hidden="true"></div>`; // 56 px: niente scritte
     const uscite = v.uscite.length ? `<h3>Uscite dei tuoi autori</h3><ul class="nov-out">${v.uscite.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}</div>${wishBtn(x)}</li>`).join("")}</ul>` : "";
-    const proposte = v.proposte.length ? `<h3>Proposte per te</h3><div class="nov-grid">${v.proposte.map(x => `<article class="nov-card">${cover(x)}<b>${esc(x.title)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`).join("")}</div>` : "";
-    const nulla = !uscite && !proposte ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
+    const card = x => `<article class="nov-card">${cover(x)}<b>${esc(x.title)}</b><span>${esc(x.author)}</span>${x.voto ? `<span class="nov-voto">${votoTxt(x.voto)}</span>` : ""}${x.perche ? `<i class="nov-why">${esc(x.perche)}</i>` : ""}${wishBtn(x)}</article>`;
+    const GRUPPI = [["autori", "Dai tuoi autori"], ["generi", "Dai tuoi generi"], ["scoperta", "Da scoprire"]];
+    const grp = GRUPPI.map(([g, t]) => [t, v.proposte.filter(x => x.gruppo === g)]).filter(([, l]) => l.length);
+    const senza = v.proposte.filter(x => !GRUPPI.some(([g]) => g === x.gruppo)); // memorie della v84, senza gruppo
+    const proposte = v.proposte.length ? `<h3>Proposte per te</h3>${grp.map(([t, l]) => `<h4>${t}</h4><div class="nov-grid">${l.map(card).join("")}</div>`).join("")}${senza.length ? `<div class="nov-grid">${senza.map(card).join("")}</div>` : ""}` : "";
+    const originali = v.originali.length ? `<section class="nov-orig"><h3>In lingua originale</h3><p class="hint">Non ancora uscite in italiano.</p><ul class="nov-out">${v.originali.map(x => `<li>${mini(x)}<div class="nov-t"><b>${esc(x.title)}</b><span>${esc(x.author)}</span><span class="nov-when">${quando(x)}</span></div>${wishBtn(x)}</li>`).join("")}</ul></section>` : "";
+    const nulla = !uscite && !proposte && !originali ? `<p class="hint">Per questa settimana niente di nuovo: riprovo tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}.</p>` : "";
     const agg = new Date(n.ultimoGiro), dataAgg = `${agg.getDate()} ${MONTHS[agg.getMonth()]}`;
-    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
+    return `<section class="nov"><h2 class="nov-h">Novità per te</h2>${uscite}${proposte}${originali}${nulla}<p class="hint nov-foot">Aggiornate il ${dataAgg} · ${giorni ? `le prossime tra ${giorni} ${giorni === 1 ? "giorno" : "giorni"}` : "le prossime alla prossima apertura"}</p></section>`;
   }
   // Pop-up all'apertura (v84): uscite non viste di autori che hai letto, una volta per libro; mai sopra un'altra scheda.
   function mostraPopupNovita() {
@@ -669,7 +674,7 @@
   }
   // «Lista dei desideri» da una novità: il libro entra completo e sparisce dalla sezione; «Annulla» lo toglie.
   function aggiungiDesiderio(id) {
-    const n = leggiNovita(), x = n.uscite.concat(n.proposte).find(y => y && y.id === id); if (!x) return;
+    const n = leggiNovita(), x = n.uscite.concat(n.proposte, n.originali).find(y => y && y.id === id); if (!x) return;
     const nb = salvaLibro({ title: x.title, author: x.author, isbn: x.isbn || undefined, cover: x.cover || undefined, year: x.year || undefined, pages: x.pages || undefined, synopsis: x.synopsis || undefined, status: "desiderato", rating: 0 });
     seriesLater(nb.id);
     toast("Nella lista dei desideri", { label: "Annulla", run: () => removeBook(nb.id) });

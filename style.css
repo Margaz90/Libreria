@@ -788,3 +788,6 @@ html { scroll-behavior: smooth; }
 .nov-pop .sub { margin: 0; }
 .nov-pop .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .nov-pop .actions .btn { min-height: 44px; }
+.nov h4 { margin: 6px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; } /* gruppi delle proposte (v85) */
+.nov-orig { display: grid; gap: 8px; margin-top: 8px; }
+.nov-orig .hint { margin: 0; }
