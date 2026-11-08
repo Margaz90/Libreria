@@ -130,7 +130,7 @@ async function verifica(browser) {
 
 // Memoria pronta per la sezione: un'uscita futura, una recente, due proposte
 // giaMostrate: il pop-up le ha già mostrate (così non copre la sezione nei test che non lo riguardano)
-export const MEM = ({ giaMostrate = false } = {}) => ({ ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
+export const MEM = ({ giaMostrate = false } = {}) => ({ motore: 85, ultimoGiro: Date.now() - 1 * DAY, aperta: 0, viste: {}, mostrate: giaMostrate ? { u1: iso(35), u2: iso(-10) } : {},
   uscite: [
     { id: 'u2', title: 'Uscito da poco', author: 'Mick Herron', uscita: iso(-10), cover: '', perche: 'Nuovo di Herron: uscito il …', autoreLetto: true, voto: null },
     { id: 'u1', title: 'Il nuovo di Herron', author: 'Mick Herron', isbn: '9788804111111', uscita: iso(35), cover: '', perche: 'Nuovo di Herron: esce il …', autoreLetto: true, voto: { media: 4.6, voti: 48, fonte: 'Apple Books' } },
@@ -174,6 +174,51 @@ async function sezione(browser) {
   await p.keyboard.press('/'); await p.waitForTimeout(300);
   ok('«/» porta alla ricerca', await p.evaluate(() => document.activeElement && document.activeElement.id === 'q'));
   ok('sezione: niente scorrimento laterale, nessun errore', (await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)) && !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
+// v85: gruppi, «In lingua originale», libro con titolo in due lingue
+async function gruppi(browser) {
+  const m = MEM({ giaMostrate: true });
+  m.proposte = [
+    { id: 'g1', title: 'Il re dei fantasmi', author: 'Mick Herron', gruppo: 'autori', perche: 'x', voto: null },
+    { id: 'g2', title: 'La spia nuova', author: 'Anna Nuova', gruppo: 'generi', perche: 'Hai letto 2 thriller', voto: null },
+    { id: 'g3', title: 'Un fantasy', author: 'Fa Uno', gruppo: 'scoperta', perche: 'y', voto: null },
+    { id: 'g4', title: 'Oltre le dune', author: 'Hugh Howey', gruppo: 'scoperta', perche: 'z', voto: null },
+  ];
+  m.originali = [{ id: 'o1', title: 'The New Herron', author: 'Mick Herron', uscita: iso(40), autoreLetto: true }];
+  const p = await apri(browser, { memoria: m, libri: LIB.concat([{ id: 'h1', title: 'Across the sand. Oltre le dune', author: 'Hugh Howey', status: 'letto', rating: 4, added: 1 }]) });
+  await riapri(p); await p.waitForTimeout(400);
+  ok('originali: nessun pop-up', await p.locator('.nov-pop').count() === 0);
+  await vai(p);
+  ok('proposte: sottotitoli «Dai tuoi autori», «Dai tuoi generi», «Da scoprire» nell\'ordine', JSON.stringify(await p.locator('.nov h4').allInnerTexts()) === JSON.stringify(['Dai tuoi autori', 'Dai tuoi generi', 'Da scoprire']));
+  ok('libro già tuo con il titolo in due lingue: non proposto', !(await p.locator('.nov-card').allInnerTexts()).some(t => /Oltre le dune/.test(t)));
+  const or = await p.locator('.nov-orig').innerText().catch(() => '');
+  ok('«In lingua originale» in fondo, con la nota e il libro', /In lingua originale/.test(or) && /Non ancora uscite in italiano/.test(or) && /The New Herron/.test(or), or);
+  ok('originali: dopo le proposte', await p.evaluate(() => { const o = document.querySelector('.nov-orig'), g = document.querySelector('.nov-grid'); return !!(o && g && (g.compareDocumentPosition(o) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
+  await p.close2();
+  // Solo originali nuovi: niente pallino
+  const m2 = { ultimoGiro: Date.now() - DAY, aperta: Date.now(), viste: {}, mostrate: {}, uscite: [], proposte: [], originali: [{ id: 'o1', title: 'The New Herron', author: 'Mick Herron', uscita: iso(40), autoreLetto: true }] };
+  const q = await apri(browser, { memoria: m2 });
+  await riapri(q); await q.waitForTimeout(300);
+  ok('originali: niente pallino', await q.locator('#nov-dot').isHidden());
+  ok('gruppi: nessun errore in console', !p.errs.length && !q.errs.length, [...p.errs, ...q.errs].join(' / '));
+  await q.close2();
+}
+
+// Dopo l'aggiornamento alla v85: la prima apertura della sezione rifà il giro con le regole nuove, una volta sola
+async function primaApertura(browser) {
+  const m = MEM({ giaMostrate: true }); delete m.motore; // giro della v84, senza «motore»
+  const p = await apri(browser, { memoria: m });
+  await riapri(p); await p.waitForTimeout(1500);
+  ok('aggiornamento: all\'avvio nessun giro (sono passati meno di 7 giorni)', p.n.apple + p.n.google + p.n.ol === 0, JSON.stringify(p.n));
+  await vai(p);
+  ok('aggiornamento: aprendo Novità parte il giro, con «Aggiorno le novità…»', /Aggiorno le novità/.test(await p.locator('.nov').innerText()) || p.n.apple > 0, await p.locator('.nov').innerText());
+  await finito(p); await p.waitForTimeout(500);
+  const mm = await memoria(p);
+  ok('aggiornamento: giro fatto con le regole nuove', mm.motore === 85 && mm.ultimoGiro > Date.now() - 60e3 && p.n.apple > 0, JSON.stringify({ motore: mm.motore, n: p.n }));
+  const n0 = p.n.apple; await riapri(p); await vai(p); await p.waitForTimeout(1500);
+  ok('aggiornamento: la seconda apertura non rifà il giro', p.n.apple === n0, `${n0} → ${p.n.apple}`);
   await p.close2();
 }
 
@@ -253,6 +298,8 @@ export default async function run({ browser }) {
   await lingue(browser);
   await verifica(browser);
   await sezione(browser);
+  await gruppi(browser);
+  await primaApertura(browser);
   await vuoti(browser);
   await computer(browser);
 }

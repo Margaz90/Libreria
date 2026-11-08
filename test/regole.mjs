@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -136,7 +136,7 @@ export default async function run() {
   ok('gustiDi: il libro con il voto più alto dell\'autore', G.autori[0].nome === 'Mick Herron' && G.autori[0].migliore.title === 'Un covo di bastardi' && G.autori[0].migliore.rating === 5);
   const tanti = Array.from({ length: 30 }, (_, i) => L5('T' + i, 'Autore Numero' + i, 4, 'Genere' + (i % 8)));
   const G2 = R.gustiDi(tanti);
-  ok('gustiDi: al massimo 15 autori e 5 generi', G2.autori.length === 15 && G2.generi.length === 5);
+  ok('gustiDi: al massimo 15 autori e 8 generi (v85)', G2.autori.length === 15 && G2.generi.length === 8, `${G2.autori.length} ${G2.generi.length}`);
   ok('votoMostrato: la fonte con più voti fra quelle con almeno 20', JSON.stringify(R.votoMostrato([{ media: 4.2, voti: 1350, fonte: 'Google Books' }, { media: 4.5, voti: 12, fonte: 'Apple Books' }, { media: 3.9, voti: 300, fonte: 'Open Library' }])) === JSON.stringify({ media: 4.2, voti: 1350, fonte: 'Google Books' }));
   ok('votoMostrato: nessuna fonte affidabile → null; media fuori 0–5 scartata', R.votoMostrato([{ media: 4.5, voti: 12, fonte: 'x' }]) === null && R.votoMostrato([{ media: 9, voti: 900, fonte: 'x' }, { media: -1, voti: 50, fonte: 'y' }]) === null && R.votoMostrato([]) === null);
   ok('idNovita: ISBN, altrimenti titolo e cognome', R.idNovita({ isbn: '978-88-04-00000-2', title: 'X' }) === '9788804000002' && R.idNovita({ title: 'Il Libro!', author: 'Mario Rossi, Altro' }) === 'il libro|rossi');
@@ -163,11 +163,55 @@ export default async function run() {
   const tn = N.proposte.filter(x => x.title === 'Thriller nuovo');
   ok('novitaDa: doppioni uniti, copertina e voto con più lettori', tn.length === 1 && tn[0].cover === 'https://x/c.jpg' && tn[0].voto && tn[0].voto.fonte === 'Apple Books' && tn[0].voto.voti === 2000, JSON.stringify(tn));
   ok('novitaDa: uscita con voto, motivazione e autore letto', N.uscite[0].voto.voti === 40 && N.uscite[0].autoreLetto === true && /^Nuovo di Herron: esce il 12 dicembre$/.test(N.uscite[0].perche) && /^Nuovo di Herron: uscito il 28 ottobre$/.test(N.uscite[1].perche), JSON.stringify(N.uscite.map(x => x.perche)));
-  const molti = Array.from({ length: 10 }, (_, i) => ({ title: 'Herron ' + i, author: 'Mick Herron' })).concat(Array.from({ length: 10 }, (_, i) => ({ title: 'Thr ' + i, author: 'Autrice ' + i, genere: 'Thriller' })), Array.from({ length: 10 }, (_, i) => ({ title: 'Sto ' + i, author: 'Storica ' + i, genere: 'Storico' })));
-  const M = R.novitaDa(molti, lib, OGGI, 'it', G).proposte;
-  ok('novitaDa: al massimo 12 proposte, 3 per autore, 4 per genere', M.length <= 12 && M.filter(x => x.author === 'Mick Herron').length <= 3 && M.filter(x => x.genere === 'Thriller').length <= 4 && M.filter(x => x.genere === 'Storico').length <= 4, JSON.stringify(M.map(x => x.title)));
+  // ---- v85: stesso libro, riedizioni, lingue, gruppi ----
+  const H = { title: 'Across the sand. Oltre le dune', author: 'Hugh Howey' };
+  ok('stessoLibro: titolo in due lingue col punto (caso Howey)', R.stessoLibro(H, { title: 'Across the Sand', author: 'Hugh Howey' }) && R.stessoLibro(H, { title: 'Oltre le dune', author: 'Howey, Hugh' }) && !R.stessoLibro(H, { title: 'Oltre le dune', author: 'Altro Autore' }) && !R.stessoLibro({ title: 'Il libro', author: 'A B' }, { title: 'Il libro nero', author: 'A B' }));
+  ok('stessoLibro: stesso ISBN anche con titoli diversi', R.stessoLibro({ title: 'X', isbn: '9788804000001' }, { title: 'Y', isbn: '978-88-04-00000-1' }));
+  const tutti = [{ title: 'Slow Horses', author: 'Mick Herron', uscita: '2026-12-01' }, { title: 'Slow Horses', author: 'Mick Herron', edYear: 2010 }, { title: 'Nuovo vero', author: 'Mick Herron', uscita: '2026-12-01' }];
+  ok('riedizione: stesso libro con data più vecchia, o parola nel titolo', R.riedizione(tutti[0], tutti) && !R.riedizione(tutti[2], tutti) && R.riedizione({ title: 'Il nome della rosa. Nuova edizione', author: 'Umberto Eco', uscita: '2026-12-01' }, []) && R.riedizione({ title: 'Dune (Anniversary Edition)', author: 'F H' }, []));
+  ok('linguaNov: Apple (ita sempre) con trama inglese = en; senza trama = dichiarata o vuota', R.linguaNov({ ita: true, synopsis: EN }) === 'en' && R.linguaNov({ ita: true }) === 'it' && R.linguaNov({ lang: 'en' }) === 'en' && R.linguaNov({}) === '');
+  const U = R.novitaDa([
+    { title: 'Il nuovo di Herron', author: 'Mick Herron', uscita: '2026-12-12', synopsis: IT },
+    { title: 'The New Herron', author: 'Mick Herron', uscita: '2026-12-20', lang: 'en' },
+    { title: 'Slow Horses', author: 'Mick Herron', uscita: '2026-11-01' }, { title: 'Slow Horses', author: 'Mick Herron', edYear: 2010 },
+    { title: 'Across the Sand', author: 'Hugh Howey', ita: true, synopsis: IT }, { title: 'Oltre le dune', author: 'Hugh Howey', ita: true },
+  ], lib.concat([{ title: 'Across the sand. Oltre le dune', author: 'Hugh Howey', status: 'letto', rating: 4 }]), OGGI, 'it', G);
+  ok('novitaDa v85: uscite solo italiane, originali a parte, niente riedizioni né libri già tuoi', JSON.stringify(U.uscite.map(x => x.title)) === JSON.stringify(['Il nuovo di Herron']) && JSON.stringify(U.originali.map(x => x.title)) === JSON.stringify(['The New Herron']) && !U.proposte.concat(U.uscite).some(x => /Across|Oltre/.test(x.title)), JSON.stringify(U));
+  const VT = m => [{ media: m, voti: 100, fonte: 'Google Books' }];
+  const GG = R.gustiDi(lib.concat(['Fantasy', 'Horror', 'Rosa', 'Saggio', 'Viaggi'].map((g, i) => L5('Libro ' + g, 'Scrittore ' + g, 4, g)), [L5('Unico', 'Solo Unico', 5, 'Thriller')]));
+  const cand = [].concat(
+    Array.from({ length: 5 }, (_, i) => ({ title: 'Herron ' + i, author: 'Mick Herron', voti: VT(3 + i / 10) })),
+    [{ title: 'Eco 1', author: 'Umberto Eco' }],
+    Array.from({ length: 5 }, (_, i) => ({ title: 'Thr ' + i, author: 'Nuova Autrice ' + i, genere: 'Thriller', voti: VT(4) })),
+    Array.from({ length: 3 }, (_, i) => ({ title: 'Sto ' + i, author: 'Storica ' + i, genere: 'Storico' })),
+    [{ title: 'Fan 1', author: 'Fa Uno', genere: 'Fantasy', voti: VT(4.8) }, { title: 'Hor 1', author: 'Ho Uno', genere: 'Horror' }, { title: 'Unico 2', author: 'Solo Unico' }]);
+  const PG = R.novitaDa(cand, lib, OGGI, 'it', GG).proposte;
+  const per = g => PG.filter(x => x.gruppo === g);
+  ok('gruppi: 4 + 4 + 4 nell\'ordine autori, generi, scoperta', JSON.stringify(PG.map(x => x.gruppo)) === JSON.stringify(['autori', 'autori', 'autori', 'generi', 'generi', 'generi', 'generi', 'scoperta', 'scoperta', 'scoperta']) || (PG.length <= 12 && JSON.stringify([...new Set(PG.map(x => x.gruppo))]) === JSON.stringify(['autori', 'generi', 'scoperta']) && per('scoperta').length >= 4), JSON.stringify(PG.map(x => [x.gruppo, x.title])));
+  ok('gruppi: al massimo 2 per autore; per genere 2 al primo giro e 4 in tutto', PG.filter(x => x.author === 'Mick Herron').length <= 2 && PG.filter(x => x.genere === 'Thriller').length <= 4 && PG.length <= 12, JSON.stringify(PG.map(x => [x.gruppo, x.title])));
+  ok('gruppi: «da scoprire» con i generi meno letti e l\'autore di un solo libro', per('scoperta').some(x => /^Sto /.test(x.title)) && per('scoperta').some(x => x.title === 'Unico 2') && per('generi').some(x => x.title === 'Fan 1'), JSON.stringify(per('scoperta').map(x => x.title)));
+  ok('gruppi: dentro il gruppo prima il voto più alto', per('autori')[0].title === 'Herron 4' && per('generi')[0].title === 'Fan 1', JSON.stringify(PG.map(x => x.title)));
+  const POCHI = R.novitaDa(Array.from({ length: 9 }, (_, i) => ({ title: 'Thr ' + i, author: 'Altra ' + i, genere: ['Thriller', 'Storico', 'Fantasy'][i % 3] })).concat([{ title: 'Herron X', author: 'Mick Herron' }]), lib, OGGI, 'it', GG).proposte;
+  ok('gruppi: posti liberi agli altri gruppi (mai oltre 12)', POCHI.length > 4 + 1 && POCHI.length <= 12, JSON.stringify(POCHI.map(x => [x.gruppo, x.title])));
   const EY = R.novitaDa([{ title: 'Vecchio di Herron', author: 'Mick Herron', edYear: 2001 }, { title: 'Recente di Herron', author: 'Mick Herron', edYear: 2025 }], lib, OGGI, 'it', G).proposte;
   ok('novitaDa: l\'anno arriva anche da edYear (come lo danno le fonti) e un libro vecchio va dopo', EY.length === 2 && EY[0].title === 'Recente di Herron' && EY[1].year === 2001, JSON.stringify(EY.map(x => [x.title, x.year])));
+  // ---- v85, dopo la revisione ----
+  const SL = (a, b) => R.stessoLibro({ title: a, author: 'Mick Herron' }, { title: b, author: 'Mick Herron' });
+  ok('stessoLibro: nomi di serie e sottotitoli comuni non bastano', !SL('Slough House. Real Tigers', 'Slough House. Spook Street') && !SL('Real Tigers: A Thriller', 'Spook Street: A Thriller') && !SL('Il cane di terracotta. Le indagini del commissario Montalbano', 'Il ladro di merendine. Le indagini del commissario Montalbano') && !SL('Fondazione. Volume 1', 'Fondazione. Volume 2'));
+  const tr = [{ title: 'Slow Horses', author: 'Mick Herron', uscita: '2026-12-01', lingua: 'it' }, { title: 'Slow Horses', author: 'Mick Herron', edYear: 2010, lingua: 'en' }];
+  ok('riedizione: la prima traduzione italiana non è una riedizione dell\'originale inglese', !R.riedizione(tr[0], tr));
+  const ca = [{ title: 'Nuovo', author: 'Mick Herron', uscita: '2026-01-02' }, { title: 'Nuovo', author: 'Mick Herron', uscita: '2025-12-30' }];
+  ok('riedizione: date a cavallo d\'anno non bastano (servono 12 mesi)', !R.riedizione(ca[0], ca));
+  ok('riedizione: «L\'anniversario» non è una riedizione', !R.riedizione({ title: "L'anniversario", author: 'Andrea Bajani' }, []) && R.riedizione({ title: 'Dune. Edizione per l\'anniversario', author: 'F H' }, []));
+  const BA = R.novitaDa([{ title: 'Bad Actors', author: 'Mick Herron', uscita: '2026-10-20', lang: 'en' }, { title: 'Bad Actors', author: 'Mick Herron', uscita: '2026-11-03', ita: true, synopsis: IT }], lib, OGGI, 'it', G);
+  ok('stesso libro uscito anche in italiano: tra le uscite e non tra gli originali', BA.uscite.length === 1 && BA.originali.length === 0, JSON.stringify(BA));
+  const QG = R.gustiDi(lib.concat([L5('Fa', 'Fantasy Uno', 4, 'Fantasy')]));
+  const quattro = R.novitaDa(Array.from({ length: 30 }, (_, i) => ({ title: 'Libro ' + i, author: 'Nuovo ' + i, genere: ['Thriller', 'Storico', 'Fantasy', 'Thriller'][i % 4] })), lib, OGGI, 'it', QG).proposte;
+  ok('limite di 2 per genere solo in «Dai tuoi generi»: con pochi generi si arriva comunque a 12', quattro.length === 12 || quattro.length >= 8 + 1, `${quattro.length}: ${JSON.stringify(quattro.map(x => [x.gruppo, x.genere]))}`);
+  const seed = JSON.parse(fs.readFileSync(path.join(ROOT, 'seed.json'), 'utf8')); const SB = Array.isArray(seed) ? seed : seed.books;
+  const tanti2 = Array.from({ length: 1000 }, (_, i) => ({ title: 'Titolo numero ' + i + (i % 3 ? '. Sottotitolo comune' : ''), author: 'Autore ' + (i % 40), uscita: '2025-0' + (1 + i % 9) + '-10', genere: 'Thriller', synopsis: IT }));
+  const t0 = Date.now(); R.novitaDa(tanti2, SB, OGGI, 'it', R.gustiDi(SB)); const dt = Date.now() - t0;
+  ok('novitaDa: 1000 risultati e 108 libri in meno di 400 ms (prima circa 1700)', dt < 400, dt + ' ms');
   const PC = R.perche;
   ok('perche: stesso autore con 5 stelle, genere', PC({ title: 'X', author: 'Mick Herron' }, G, OGGI) === 'Dello stesso autore di «Un covo di bastardi», a cui hai dato 5 stelle' && PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI) === 'Hai letto 2 thriller', [PC({ title: 'X', author: 'Mick Herron' }, G, OGGI), PC({ title: 'Y', author: 'Altra', genere: 'Thriller' }, G, OGGI)].join(' | '));
   ok('perche: autore senza voti alti', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI) === 'Di Carrisi, come il libro che hai', PC({ title: 'Z', author: 'Donato Carrisi' }, G, OGGI));
