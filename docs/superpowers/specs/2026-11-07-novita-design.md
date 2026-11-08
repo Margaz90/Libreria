@@ -102,3 +102,43 @@ Chiave `libreria-novita` in `localStorage`: `{ ultimoGiro, proposte[], uscite[],
 - Campi dei voti di Apple (non documentati per gli ebook) e di Open Library da confermare dal vivo: se mancano, si usa solo Google Books.
 - Per molti libri italiani recenti i voti non arrivano a 20: la proposta compare senza voto.
 - La sessione cloud non raggiunge Open Library né Wikidata: le prove sono simulate; la prova vera è sull'iPhone.
+
+## Revisione v85 (8 novembre 2026)
+
+Dopo la prova dal vivo Diego ha segnalato: libri già in libreria riproposti («Across the sand. Oltre le dune»), proposte senza ordine e quasi tutte gialli/thriller, uscite che sono riedizioni o edizioni in inglese. Decisioni prese con lui:
+
+| Domanda | Scelta |
+|---|---|
+| Ordine delle proposte | Raggruppate: «Dai tuoi autori», «Dai tuoi generi», «Da scoprire»; in ogni gruppo prima il voto dei lettori più alto, senza voto in fondo |
+| Varietà | 4 + 4 + 4; posti liberi di un gruppo agli altri |
+| Uscite in lingua originale | Sezione a parte «In lingua originale», senza pallino né pop-up |
+| Riedizioni | Mai tra le uscite; un libro che non hai può restare tra le proposte, mai come «nuovo» |
+
+### Stesso libro
+
+`stessoLibro(a, b)` (pura): stesso ISBN, oppure stessa chiave dell'autore e almeno una parte del titolo in comune. Parti: il titolo diviso da «.», «:», « - »; contano le parti di almeno 8 caratteri (dopo `titleCore`) e il titolo intero. Sostituisce i confronti titolo+autore in `novitaDa` (libri presenti e doppioni) e in `giaInLibreria`. Caso di prova: «Across the sand. Oltre le dune» (Hugh Howey) contro «Across the Sand» e «Oltre le dune».
+
+### Proposte: gruppi
+
+- **autori**: candidati di autori in `gusti.autori`, massimo 2 per autore.
+- **generi**: autori che non hai, dai primi 3 generi di `gusti.generi`, massimo 2 per genere.
+- **scoperta**: autori che non hai dai generi dal 4° all'8° (`gustiDi` restituisce fino a 8 generi), e libri di autori di cui hai un solo libro (`libri === 1`).
+- 4 per gruppo; se un gruppo ne ha meno, i posti liberi si riempiono con i migliori rimasti degli altri gruppi (nell'ordine autori, generi, scoperta). Totale massimo 12.
+- Ordine dentro il gruppo: voto mostrato più alto prima, senza voto in fondo, a parità più recente.
+- Ogni proposta ha `gruppo: "autori" | "generi" | "scoperta"`. Il giro cerca 8 generi (Google e Open Library): circa 46 richieste.
+
+### Uscite: lingua e riedizioni
+
+- Lingua dell'edizione (`linguaEdizione`): Google dichiara `lang`; Open Library dai codici `lingue` (`olLingua`); Apple dalla trama (`linguaTesto`). Sconosciuta = lingua del telefono.
+- `novitaDa` restituisce `{ uscite, originali, proposte }`: `uscite` nella lingua del telefono; `originali` le uscite dei tuoi autori in un'altra lingua (massimo 6, stesso ordine delle uscite). Gli altri risultati in un'altra lingua restano scartati.
+- **Riedizione** (`riedizione(h, tutti)`, pura): titolo con «nuova edizione», «edizione speciale», «edizione illustrata», «tascabile», «anniversario», «deluxe», «ristampa», «new edition», «anniversary», «reissue», «special edition»; oppure lo stesso libro (`stessoLibro`) di un altro risultato dello stesso autore con data o anno più vecchio di almeno un anno. Mai tra le uscite né tra gli originali; se non è in libreria può essere una proposta.
+- Memoria: `originali` in `libreria-novita`, tenuti come le uscite (90 giorni).
+
+### Interfaccia
+
+- «Proposte per te» con tre sottotitoli («Dai tuoi autori», «Dai tuoi generi», «Da scoprire»); un gruppo vuoto non compare.
+- In fondo, prima della nota «Aggiornate il…»: «In lingua originale» con la nota «Non ancora uscite in italiano», righe come le uscite, pulsante «Lista dei desideri». Niente pallino né pop-up per questi libri.
+
+### Verifiche
+
+Node: `stessoLibro` (caso Howey), `riedizione`, divisione in lingue, gruppi 4 + 4 + 4 con redistribuzione e limiti. Browser (gruppo `novita`): tre gruppi nell'ordine, «In lingua originale» senza pop-up né pallino, libro già in libreria con titolo in due lingue non proposto. Suite completa e revisione indipendente; **prima di pubblicare (v85) si chiede conferma a Diego**.
