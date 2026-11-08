@@ -37,7 +37,7 @@ Il dettaglio completo (id, classi, casi limite, versioni, spec) è in [docs/funz
 - **Altro**: menu rapido con pressione prolungata (Elimina in due tocchi), anteprima al passaggio del mouse, scorciatoie `/`, `N`, `1`/`2`, `refreshChanged` per le modifiche dal cloud, `prefers-reduced-motion`.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v85), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v86), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
@@ -56,7 +56,7 @@ Testo completo (cosa controlla ogni gruppo di test e ogni hook): [docs/strumenti
 `cloud.js`, caricata solo al bisogno; progetto `mylibrary-2ea05` (Google + link email, Firestore `users/{uid}/books|spines|meta`). Vince la modifica più recente (`updated`); in `app.js` il ponte è `libreriaHost`, ogni modifica chiama `cloudHook("changed"|"removed", id)`, le eliminazioni da disconnesso stanno in `libreria-tombs`. Nell'app installata su iPhone solo link via email. Il dettaglio è in [.claude/rules/sincronizzazione.md](.claude/rules/sincronizzazione.md) (si carica da solo lavorando su `cloud.js`; leggilo se tocchi la sincronizzazione da `app.js`).
 
 ## Storia del lavoro
-Tutte le versioni, dalla più recente, in [docs/storia.md](docs/storia.md) (`/pubblica` aggiunge lì la riga nuova). Ultime: v85 Novità più precise (gruppi, lingue, riedizioni); v84 «Novità per te»; v83 stelle obbligatorie per i Letti. Consultala per capire perché una scelta è stata fatta (es. i molti tentativi su Google per gli ISBN, v66–v72).
+Tutte le versioni, dalla più recente, in [docs/storia.md](docs/storia.md) (`/pubblica` aggiunge lì la riga nuova). Ultime: v86 Novità ripulite (memoria vecchia, lingua originale dell'autore); v85 Novità più precise (gruppi, lingue, riedizioni); v84 «Novità per te». Consultala per capire perché una scelta è stata fatta (es. i molti tentativi su Google per gli ISBN, v66–v72).
 
 ## Altre idee in sospeso
 - Voti dal vivo (8 novembre 2026): Open Library sì, Apple sì (nelle Novità), Google no per l'ISBN di prova.
