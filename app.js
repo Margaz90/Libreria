@@ -367,21 +367,29 @@
   }
   // Stesso libro (v85): stesso ISBN, oppure stesso autore e almeno una parte del titolo in comune
   // (parti divise da «.», «:», « - », di almeno 8 caratteri, o il titolo intero): «Across the sand. Oltre le dune» = «Oltre le dune».
-  const partiTitolo = t => [titleCore(t), ...String(t || "").split(/[.:]| - /).map(titleCore).filter(x => x.length >= 8)].filter(Boolean);
+  // Calcoli ripetuti su migliaia di coppie: si fanno una volta per titolo o autore (v85).
+  const ricorda = f => { const m = new Map(); return x => { const k = String(x ?? ""); if (!m.has(k)) { if (m.size > 5000) m.clear(); m.set(k, f(k)); } return m.get(k); }; };
+  const chiaveM = ricorda(a => chiaveAutore(a)), interoM = ricorda(t => titleCore(t)); // titleCore è definita più avanti nel file
+  const partiM = ricorda(t => String(t).split(/[.:]| - /).map(titleCore).filter(x => x.length >= 8));
+  // Basta che il titolo intero di uno sia una parte dell'altro: le parti in comune da sole (nome della serie, «A Thriller»,
+  // «Le indagini del commissario…») non bastano.
   function stessoLibro(a, b) {
     const ia = parseIsbn(a.isbn), ib = parseIsbn(b.isbn);
     if (ia && ib && ia === ib) return true;
-    const ka = chiaveAutore(a.author); if (!ka || ka !== chiaveAutore(b.author)) return false;
-    const pb = partiTitolo(b.title);
-    return partiTitolo(a.title).some(x => pb.includes(x)) || sameTitle(a.title, b.title);
+    const ka = chiaveM(a.author); if (!ka || ka !== chiaveM(b.author)) return false;
+    const fa = interoM(a.title), fb = interoM(b.title);
+    return !!fa && !!fb && (fa === fb || partiM(b.title).includes(fa) || partiM(a.title).includes(fb) || sameTitle(a.title, b.title));
   }
   const annoNov = h => Number(h.year || h.edYear) || (h.uscita ? Number(String(h.uscita).slice(0, 4)) : 0); // le fonti danno edYear
   // Riedizione: parola nel titolo, o lo stesso libro dello stesso autore con un anno più vecchio di almeno uno.
-  const RIEDIZIONE = /(nuova edizione|edizione speciale|edizione illustrata|tascabile|anniversario|deluxe|ristampa|new edition|anniversary|reissue|special edition)/i;
+  const RIEDIZIONE = /\b(nuova edizione|edizione speciale|edizione illustrata|edizione (per l'|dell')anniversario|tascabile|deluxe|ristampa|new edition|anniversary edition|reissue|special edition)\b/i;
+  // Più vecchio di almeno un anno: con due date vere almeno 365 giorni, altrimenti un anno di differenza.
+  const piuVecchio = (x, h) => /^\d{4}-\d{2}-\d{2}$/.test(x.uscita || "") && /^\d{4}-\d{2}-\d{2}$/.test(h.uscita || "")
+    ? (new Date(h.uscita) - new Date(x.uscita)) / 864e5 >= 365 : !!annoNov(x) && !!annoNov(h) && annoNov(x) <= annoNov(h) - 1;
+  // Solo fra edizioni nella stessa lingua: la prima traduzione italiana di un libro straniero è una novità in Italia.
   function riedizione(h, tutti) {
     if (RIEDIZIONE.test(h.title || "")) return true;
-    const y = annoNov(h); if (!y) return false;
-    return (tutti || []).some(x => x !== h && annoNov(x) && annoNov(x) <= y - 1 && stessoLibro(x, h));
+    return (tutti || []).some(x => x !== h && (!x.lingua || !h.lingua || x.lingua === h.lingua) && piuVecchio(x, h) && stessoLibro(x, h));
   }
   // Lingua di un risultato per le novità: dichiarata, poi dalla trama, poi «italiano» di Apple e Open Library (Apple lo dichiara sempre).
   const linguaNov = h => String(h.lang || "").slice(0, 2).toLowerCase() || linguaTesto(h.synopsis) || (h.ita ? "it" : "");
@@ -393,22 +401,25 @@
     const tuoi = new Map(); (books || []).forEach(b => { const k = chiaveAutore(b.author); if (k && b.status !== "desiderato") tuoi.set(k, (tuoi.get(k) || false) || b.status === "letto"); });
     const validi = (risultati || []).filter(r => r && String(r.title || "").trim() && String(r.author || "").trim() && !BOX.test(r.title))
       .map(r => ({ ...r, uscita: isoOk2(String(r.uscita || "")) ? r.uscita : "", voti: (r.voti || []).slice(), lingua: linguaNov(r) || lingua }));
-    validi.forEach(h => { h.ried = riedizione(h, validi); });
+    const perAutore = new Map(); validi.forEach(h => { const k = chiaveM(h.author); if (!perAutore.has(k)) perAutore.set(k, []); perAutore.get(k).push(h); });
+    validi.forEach(h => { h.ried = riedizione(h, perAutore.get(chiaveM(h.author))); h.nuova = h.ried ? "" : h.uscita; }); // solo fra libri dello stesso autore
     const uniti = [];
     for (const h of validi) {
       if ((books || []).some(b => stessoLibro(b, h))) continue; // già in libreria o nella lista dei desideri
       const d = uniti.find(x => x.lingua === h.lingua && stessoLibro(x, h)); // stessa opera in un'altra lingua: libri diversi
       if (!d) { uniti.push(h); continue; }
       for (const k of ["isbn", "cover", "synopsis", "uscita", "year", "edYear", "pages", "genere"]) if (!d[k] && h[k]) d[k] = h[k];
-      d.voti.push(...h.voti); d.ried = d.ried || h.ried;
+      d.voti.push(...h.voti); if (h.nuova > (d.nuova || "")) d.nuova = h.nuova; // la data che conta è quella di un'edizione che non è una riedizione
     }
     const voce = (h, extra = {}) => ({ id: idNovita(h), title: h.title, author: h.author, isbn: parseIsbn(h.isbn), cover: h.cover || "", year: annoNov(h) || undefined,
-      pages: h.pages, synopsis: h.synopsis || "", uscita: h.ried ? "" : h.uscita, genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche(h.ried ? { ...h, uscita: "" } : h, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true, ...extra });
+      pages: h.pages, synopsis: h.synopsis || "", uscita: h.nuova || "", genere: h.genere || "", voto: votoMostrato(h.voti), perche: perche({ ...h, uscita: h.nuova || "" }, gusti, oggi), autoreLetto: tuoi.get(chiaveAutore(h.author)) === true, ...extra });
     const da = addDays(oggi, -90), a = addDays(oggi, 365), fut = x => x.uscita > oggi;
     const ordUscite = (x, y) => fut(x) !== fut(y) ? (fut(x) ? -1 : 1) : fut(x) ? x.uscita.localeCompare(y.uscita) : y.uscita.localeCompare(x.uscita);
-    const nuova = h => !h.ried && tuoi.has(chiaveAutore(h.author)) && h.uscita && h.uscita >= da && h.uscita <= a;
+    const nuova = h => tuoi.has(chiaveM(h.author)) && h.nuova && h.nuova >= da && h.nuova <= a;
     const uscite = uniti.filter(h => nuova(h) && h.lingua === lingua).map(h => voce(h)).sort(ordUscite);
-    const originali = uniti.filter(h => nuova(h) && h.lingua !== lingua).map(h => voce(h)).sort(ordUscite).slice(0, 6);
+    const inLingua = validi.filter(h => h.lingua === lingua);
+    const originali = uniti.filter(h => nuova(h) && h.lingua !== lingua && !inLingua.some(x => stessoLibro(x, h))) // già uscito anche in italiano: non è «originale»
+      .map(h => voce(h, { id: "o:" + idNovita(h) })).sort(ordUscite).slice(0, 6);
     // Proposte: solo nella lingua del telefono, mai libri ancora da uscire, mai uscite.
     const top = (gusti.generi || []).slice(0, 3).map(g => g.nome.toLowerCase()), altri = (gusti.generi || []).slice(3, 8).map(g => g.nome.toLowerCase());
     const gruppoDi = h => {
@@ -418,16 +429,16 @@
       return top.includes(g) ? "generi" : altri.includes(g) ? "scoperta" : "";
     };
     const anno = Number(oggi.slice(0, 4));
-    const cand = uniti.filter(h => h.lingua === lingua && !nuova(h) && !(h.uscita && h.uscita > oggi)).map(h => ({ h, g: gruppoDi(h), v: votoMostrato(h.voti), y: annoNov(h) || anno })).filter(c => c.g)
+    const cand = uniti.filter(h => h.lingua === lingua && !nuova(h) && !(h.nuova && h.nuova > oggi)).map(h => ({ h, g: gruppoDi(h), v: votoMostrato(h.voti), y: annoNov(h) || anno })).filter(c => c.g)
       .sort((p, q) => (q.v ? q.v.media : -1) - (p.v ? p.v.media : -1) || q.y - p.y);
     const GR = ["autori", "generi", "scoperta"], scelti = [], perA = new Map(), perG = new Map();
-    const prende = c => {
-      const ka = chiaveAutore(c.h.author), kg = String(c.h.genere || "").toLowerCase();
-      if ((perA.get(ka) || 0) >= 2 || (kg && (perG.get(kg) || 0) >= 2)) return false;
+    const prende = (c, riempi = false) => { // max 2 per autore; per genere max 2 al primo giro, 4 in tutto riempiendo i posti liberi
+      const ka = chiaveM(c.h.author), kg = String(c.h.genere || "").toLowerCase();
+      if ((perA.get(ka) || 0) >= 2 || (kg && (perG.get(kg) || 0) >= (riempi ? 4 : 2))) return false;
       perA.set(ka, (perA.get(ka) || 0) + 1); if (kg) perG.set(kg, (perG.get(kg) || 0) + 1); scelti.push(c); return true;
     };
     for (const g of GR) { let n = 0; for (const c of cand) if (n < 4 && c.g === g && !scelti.includes(c) && prende(c)) n++; }
-    for (const g of GR) for (const c of cand) if (scelti.length < 12 && c.g === g && !scelti.includes(c)) prende(c); // posti liberi
+    for (const g of GR) for (const c of cand) if (scelti.length < 12 && c.g === g && !scelti.includes(c)) prende(c, true); // posti liberi
     const proposte = GR.flatMap(g => scelti.filter(c => c.g === g)).map(c => voce(c.h, { gruppo: c.g }));
     return { uscite, originali, proposte };
   }
@@ -618,7 +629,7 @@
     const oggi = today(), fut = x => String(x.uscita || "") > oggi; // prima le future (dalla più vicina), poi le recenti (dalla più recente)
     const uscite = n.uscite.filter(x => x && x.title && !giaInLibreria(x))
       .sort((a, b) => fut(a) !== fut(b) ? (fut(a) ? -1 : 1) : fut(a) ? String(a.uscita).localeCompare(String(b.uscita)) : String(b.uscita).localeCompare(String(a.uscita)));
-    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)), originali: n.originali.filter(x => x && x.title && !giaInLibreria(x)).sort((a, b) => String(a.uscita).localeCompare(String(b.uscita))) };
+    return { uscite, proposte: n.proposte.filter(x => x && x.title && !giaInLibreria(x)), originali: n.originali.filter(x => x && x.title && !giaInLibreria(x) && !uscite.some(u => stessoLibro(u, x))).sort((a, b) => String(a.uscita).localeCompare(String(b.uscita))) };
   };
   function aggiornaPallinoNovita() {
     const dot = $("#nov-dot"); if (!dot) return;
