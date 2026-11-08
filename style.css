@@ -768,7 +768,7 @@ html { scroll-behavior: smooth; }
 /* Novità per te (v84) */
 .nov { display: grid; gap: 14px; padding-block: 8px 24px; }
 .nov-h { font-family: var(--f-title, inherit); color: var(--title); margin: 0; }
-.nov h3 { margin: 10px 0 0; color: var(--title); font-size: 17px; }
+.nov h3 { margin: 10px 0 0; color: var(--title); font-size: 17px; padding-bottom: 6px; border-bottom: 2px solid var(--coral); } /* riga corallo sottile (v87) */
 .nov-out { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .nov-out li { display: grid; grid-template-columns: 56px 1fr; gap: 6px 12px; align-items: start; }
 .nov-out li .cover, .nov-out li img { width: 56px; height: 84px; }
@@ -791,3 +791,17 @@ html { scroll-behavior: smooth; }
 .nov h4 { margin: 6px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; } /* gruppi delle proposte (v85) */
 .nov-orig { display: grid; gap: 8px; margin-top: 8px; }
 .nov-orig .hint { margin: 0; }
+.nov-open, .nov-tit { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: block; } /* aprono il dettaglio (v87) */
+.nov-tit { display: inline; font-weight: inherit; }
+.nov-card .nov-open { width: 100%; }
+.nov-open:focus-visible, .nov-tit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nov-det { display: grid; gap: 12px; }
+.nov-det-top { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: start; }
+.nov-det-top .cover, .nov-det-top img { width: 120px; height: 180px; }
+.nov-det h2 { margin: 0; color: var(--title); }
+.nov-det .sub { margin: 2px 0 6px; color: var(--muted); }
+.nov-det-dati { margin: 0 0 4px; font-size: 14px; color: var(--ink); }
+.nov-det h3 { margin: 4px 0; font-size: 15px; color: var(--title); }
+.nov-det .synopsis { margin: 0; line-height: 1.55; }
+.nov-det .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nov-det .actions .btn { min-height: 44px; }
