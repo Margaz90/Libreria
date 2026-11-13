@@ -1320,9 +1320,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#archive-dot").hidden = !backupDue();
     n.hidden = state.books.length > 0;
     if (state.books.length) { n.innerHTML = ""; return; }
-    n.innerHTML = `<div class="notice"><span><strong>La libreria è vuota.</strong> Carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
-      <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button></span></div>`;
+    // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud; prima l'accesso, poi Goodreads o un backup.
+    const email = cloudInfo().email;
+    n.innerHTML = email
+      ? `<div class="notice"><span><strong>La libreria è vuota.</strong> Sei collegato come ${esc(email)}: i libri del cloud arrivano da soli. Se l'account è vuoto, carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
+      <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button></span></div>`
+      : `<div class="notice"><span><strong>La libreria è vuota.</strong> Hai già usato MyLibrary? Accedi con la stessa email e i tuoi libri tornano dal cloud. Altrimenti carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
+      <span class="actions"><button class="btn primary" id="vuota-sync">Accedi e riprendi i libri</button><button class="btn" id="seed-go">Carica i libri Goodreads</button></span></div>`;
     $("#seed-go").onclick = loadSeed;
+    const sy = $("#vuota-sync"); if (sy) sy.onclick = openSync;
   }
   function backupDue() {
     const last = getSet().lastBackup;

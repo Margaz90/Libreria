@@ -6,6 +6,19 @@ export default async function ({ browser }) {
     const tag = `${width}px ${dark ? 'scuro' : 'chiaro'}`;
     const p = await newPage(browser, { width, height, dark });
     await p.goto(APP + '/');
+    // v89: a libreria vuota l'accesso viene prima di Goodreads (dopo aver tolto l'app dalla Home i libri tornano dal cloud)
+    const vuota = await p.locator('#notice').innerText();
+    ok(`${tag}: libreria vuota, prima l'accesso`, /Hai già usato MyLibrary\?/.test(vuota) && await p.locator('#notice #vuota-sync.primary').count() === 1 && !(await p.locator('#seed-go').getAttribute('class')).includes('primary'), vuota);
+    if (width < 1024 && !dark) {
+      await p.click('#vuota-sync'); await p.waitForTimeout(300);
+      ok(`${tag}: «Accedi» apre la scheda dell'accesso`, /Accedi e sincronizza/.test(await p.locator('.sheet h2').first().innerText()));
+      await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+      await p.evaluate(() => localStorage.setItem('libreria-cloud', JSON.stringify({ email: 'diego@example.com' })));
+      await p.reload(); await p.waitForSelector('#notice');
+      const coll = await p.locator('#notice').innerText();
+      ok(`${tag}: già collegato, niente invito all'accesso`, !(await p.locator('#vuota-sync').count()) && /diego@example\.com/.test(coll), coll);
+      await p.evaluate(() => localStorage.removeItem('libreria-cloud')); await p.reload(); await p.waitForSelector('#seed-go');
+    }
     await p.click('#seed-go');
     await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').length === 108);
     await p.waitForTimeout(400);
