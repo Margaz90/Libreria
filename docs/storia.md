@@ -2,6 +2,7 @@
 
 Estratta verbatim da `CLAUDE.md`. Le voci nuove vanno in cima (le scrive `/pubblica`).
 
+- **Libreria vuota: prima l'accesso** (v89): con la libreria vuota (per esempio dopo aver tolto l'app dalla Home e averla rimessa) l'avviso propone per primo «Accedi e riprendi i libri», perché i libri tornano dal cloud; «Carica i libri Goodreads» diventa la seconda scelta. Nata dalla revisione dell'accesso con Diego.
 - **Righe corallo nei gruppi** (v88): la riga sottile corallo della v87 anche sotto «Dai tuoi autori», «Dai tuoi generi» e «Da scoprire» nelle proposte. Richiesta di Diego.
 - **Dettaglio delle Novità** (v87): nelle Novità un tocco sulla copertina o sul titolo apre una scheda con copertina grande, data di uscita o anno, pagine, genere, voto dei lettori, motivazione, trama intera e ISBN, con «Lista dei desideri» e «Chiudi»; sotto i titoli delle sezioni («Uscite dei tuoi autori», «Proposte per te», «In lingua originale») una riga sottile corallo. Richiesta di Diego.
 - **Novità ripulite** (v86): dopo la v85 le uscite trovate dai giri della v84 (riedizioni, edizioni straniere) restavano in memoria per 90 giorni senza essere ricontrollate; ora con regole nuove si riparte da zero. «In lingua originale» mostra solo la lingua originale dell'autore (una traduzione spagnola di Slow Horses non è l'originale). Segnalazione di Diego.
