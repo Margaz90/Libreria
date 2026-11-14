@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,11 +23,16 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (11) e caricati senza browser', parts.length === 11, String(parts.length));
+  ok('regole: tratti segnati trovati (12) e caricati senza browser', parts.length === 12, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
   const j = JSON.stringify;
+
+  // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
+  const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
+    ['margaz90.github.io', 'vecchio'], ['localhost', 'altro'], ['evil-mylibrary-2ea05.web.app', 'altro'], ['constructor', 'altro'], ['mylibrary-2ea05.web.app.evil.com', 'altro'], ['', 'altro'], [undefined, 'altro']];
+  ok('sitoDi: dove gira l\'app (somiglianze non contano)', casiSito.every(([h, s]) => R.sitoDi(h) === s), j(casiSito.map(([h]) => R.sitoDi && R.sitoDi(h))));
 
   // ---- Regole della lettura: invarianti su 2000 libri e passaggi generati a caso ----
   const r = rng(42), ST = ['da-leggere', 'in-lettura', 'letto', 'desiderato'];

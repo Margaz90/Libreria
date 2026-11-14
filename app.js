@@ -80,6 +80,12 @@
   // <regole>
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   // </regole>
+  // Dove gira l'app (v90): sul sito Firebase l'accesso con Google funziona anche nell'app installata su iPhone.
+  // <regole>
+  const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "margaz90.github.io": "vecchio" };
+  const sitoDi = h => { const k = String(h || "").toLowerCase(); return Object.hasOwn(SITI, k) ? SITI[k] : "altro"; };
+  // </regole>
+  const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
   const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
