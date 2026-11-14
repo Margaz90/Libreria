@@ -13,7 +13,7 @@ Indirizzo: https://mylibrary-2ea05.web.app/ (dalla v90; il vecchio https://marga
 | `sw.js` | Service worker: funzionamento offline, aggiornamenti, copertine salvate sul telefono |
 | `manifest.webmanifest` | Nome, icona e aspetto quando è installata sulla Home |
 | `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png` | Icone (la sorgente modificabile è `design/icona.html`) |
-| `seed.json` | I 108 libri importati da Goodreads, con i titoli italiani |
+| `modello-libri.xlsx` | Il modello Excel da compilare per «Carica i libri» (si rigenera con `design/modello-libri.py`) |
 | `zxing.min.js` | Lettore dei codici a barre ISBN |
 | `test/` | Test automatici (non fanno parte dell'app) |
 
@@ -21,7 +21,7 @@ Indirizzo: https://mylibrary-2ea05.web.app/ (dalla v90; il vecchio https://marga
 
 1. Apri l'indirizzo in **Safari**.
 2. Tocca **Condividi → Aggiungi alla schermata Home**.
-3. Apri l'app dall'icona. Se hai già usato la sincronizzazione vai su **Altro → Accedi e sincronizza** e accedi con il link via email: i libri arrivano dal cloud. Altrimenti tocca **Carica i libri Goodreads**.
+3. Apri l'app dall'icona. Se hai già usato la sincronizzazione vai su **Altro → Accedi e sincronizza** e accedi con il link via email: i libri arrivano dal cloud. Altrimenti tocca **Carica i libri**: puoi scaricare il modello Excel, compilarlo e caricarlo, oppure caricare un CSV di Goodreads o un backup.
 
 ## Da sapere
 

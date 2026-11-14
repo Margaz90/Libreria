@@ -339,6 +339,8 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .rate button.on { color: var(--accent); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn { border: 1px solid var(--rule); background: var(--bg); padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+a.btn { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; } /* link a forma di pulsante (v92: «Scarica il modello Excel») */
+#i-avvisi { color: var(--accent); font-weight: 600; font-size: 13.5px; } /* valori scartati dall'import (v92) */
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.danger { color: var(--accent); }
 .btn.ghost { border-color: transparent; background: none; }
