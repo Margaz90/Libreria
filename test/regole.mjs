@@ -2,11 +2,11 @@
 // (le funzioni restano dove sono: l'app non cambia) e li prova con molti casi, anche generati a caso.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, ROOT } from './lib.mjs';
+import { ok, ROOT, libri108 } from './lib.mjs';
 import { creaXlsx, creaZip } from './xlsx.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'fromGoodreads', 'leggiZip', 'righeXlsx'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'leggiZip', 'righeXlsx'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -53,7 +53,7 @@ export default async function run() {
     && vari.libri[1].status === 'desiderato' && vari.libri[1].finished === '2023-08-07' && !vari.avvisi.length, j(vari));
   const gr = R.libriDaTabella(R.parseCSV('Title,Author,My Rating,Number of Pages,Original Publication Year,Year Published,Date Read,Exclusive Shelf,My Review,ISBN\n"Dead Lions (Slough House, #2)",Mick  Herron,0,352,,2013,2024/05/06,read,Bello<br/>davvero,"=""123"""\nUbik,Philip K. Dick,4,,1969,,,scaffale-strano,,'));
   ok('libriDaTabella: CSV di Goodreads come prima', gr.avvisi.length === 0 && j(gr.libri) === j([{ title: 'Dead Lions', author: 'Mick Herron', pages: 352, year: 2013, finished: '2024-05-06', status: 'letto', notes: 'Bello\ndavvero' }, { title: 'Ubik', author: 'Philip K. Dick', rating: 4, year: 1969 }])
-    && j(R.fromGoodreads('Title,Author\nUbik,Dick')) === j([{ title: 'Ubik', author: 'Dick' }]), j(gr));
+    && j(R.libriDaTabella(R.parseCSV('Title,Author\nUbik,Dick')).libri) === j([{ title: 'Ubik', author: 'Dick' }]), j(gr));
   ok('libriDaTabella: senza le colonne Titolo e Autore', TB(['Nome', 'Cosa'], ['a', 'b']).colonne === false && TB(['Nome', 'Cosa'], ['a', 'b']).libri.length === 0);
   const es = TB(HM, riga({ Titolo: R.ESEMPI_MODELLO[0], Autore: 'Qualcuno' }), riga({ Titolo: '', Autore: 'Senza titolo' }), riga({ Titolo: 'Vero', Autore: 'Io' }));
   ok('libriDaTabella: righe d\'esempio e senza titolo saltate', R.ESEMPI_MODELLO.length === 2 && es.libri.length === 1 && es.libri[0].title === 'Vero', j(es));
@@ -268,7 +268,7 @@ export default async function run() {
   const QG = R.gustiDi(lib.concat([L5('Fa', 'Fantasy Uno', 4, 'Fantasy')]));
   const quattro = R.novitaDa(Array.from({ length: 30 }, (_, i) => ({ title: 'Libro ' + i, author: 'Nuovo ' + i, genere: ['Thriller', 'Storico', 'Fantasy', 'Thriller'][i % 4] })), lib, OGGI, 'it', QG).proposte;
   ok('limite di 2 per genere solo in «Dai tuoi generi»: con pochi generi si arriva comunque a 12', quattro.length === 12 || quattro.length >= 8 + 1, `${quattro.length}: ${JSON.stringify(quattro.map(x => [x.gruppo, x.genere]))}`);
-  const seed = JSON.parse(fs.readFileSync(path.join(ROOT, 'seed.json'), 'utf8')); const SB = Array.isArray(seed) ? seed : seed.books;
+  const SB = libri108(); // 108 libri di prova (v92: i 108 libri Goodreads non sono più nell'app)
   const tanti2 = Array.from({ length: 1000 }, (_, i) => ({ title: 'Titolo numero ' + i + (i % 3 ? '. Sottotitolo comune' : ''), author: 'Autore ' + (i % 40), uscita: '2025-0' + (1 + i % 9) + '-10', genere: 'Thriller', synopsis: IT }));
   const t0 = Date.now(); R.novitaDa(tanti2, SB, OGGI, 'it', R.gustiDi(SB)); const dt = Date.now() - t0;
   ok('novitaDa: 1000 risultati e 108 libri in meno di 400 ms (prima circa 1700)', dt < 400, dt + ' ms');

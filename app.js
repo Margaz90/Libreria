@@ -1327,14 +1327,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#archive-dot").hidden = !backupDue();
     n.hidden = state.books.length > 0;
     if (state.books.length) { n.innerHTML = ""; return; }
-    // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud; prima l'accesso, poi Goodreads o un backup.
+    // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud; prima l'accesso, poi «Carica i libri» (v92: modello Excel, CSV o backup).
     const email = cloudInfo().email;
     n.innerHTML = email
-      ? `<div class="notice"><span><strong>La libreria è vuota.</strong> Sei collegato come ${esc(email)}: i libri del cloud arrivano da soli. Se l'account è vuoto, carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
-      <span class="actions"><button class="btn primary" id="seed-go">Carica i libri Goodreads</button></span></div>`
-      : `<div class="notice"><span><strong>La libreria è vuota.</strong> Hai già usato MyLibrary? Accedi con la stessa email e i tuoi libri tornano dal cloud. Altrimenti carica i 108 libri importati da Goodreads, oppure un backup da Altro → Backup.</span>
-      <span class="actions"><button class="btn primary" id="vuota-sync">Accedi e riprendi i libri</button><button class="btn" id="seed-go">Carica i libri Goodreads</button></span></div>`;
-    $("#seed-go").onclick = loadSeed;
+      ? `<div class="notice"><span><strong>La libreria è vuota.</strong> Sei collegato come ${esc(email)}: i libri del cloud arrivano da soli. Se l'account è vuoto, carica i tuoi libri: da un foglio Excel, dal CSV di Goodreads o da un backup.</span>
+      <span class="actions"><button class="btn primary" id="carica-go">Carica i libri</button></span></div>`
+      : `<div class="notice"><span><strong>La libreria è vuota.</strong> Hai già usato MyLibrary? Accedi con la stessa email e i tuoi libri tornano dal cloud. Altrimenti carica i tuoi libri: da un foglio Excel, dal CSV di Goodreads o da un backup.</span>
+      <span class="actions"><button class="btn primary" id="vuota-sync">Accedi e riprendi i libri</button><button class="btn" id="carica-go">Carica i libri</button></span></div>`;
+    $("#carica-go").onclick = openCarica;
     const sy = $("#vuota-sync"); if (sy) sy.onclick = openSync;
   }
   function backupDue() {
@@ -3025,7 +3025,6 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     });
     return { libri, avvisi, colonne: true };
   }
-  const fromGoodreads = text => libriDaTabella(parseCSV(text)).libri;
   // File Excel (.xlsx): è uno ZIP di file XML. Lo leggo senza librerie: directory centrale dello ZIP, poi «deflate-raw» del browser.
   async function leggiZip(bytes) {
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), err = () => Object.assign(new Error("zip"), { code: "zip" });
@@ -3080,14 +3079,100 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return { righe, data1904 };
   }
   // </regole>
-  async function loadSeed() {
-    try {
-      const r = await fetch("seed.json", { cache: "no-store" });
-      if (!r.ok) throw 0;
-      const j = await r.json();
-      const { added, skipped } = addMany(j.books || []);
-      toast(`Caricati ${added} libri${skipped ? `, ${skipped} già presenti` : ""}.`, added && navigator.onLine ? { label: "Cerca copertine", run: () => runCoverJob() } : null);
-    } catch { toast("Non trovo il file dei libri Goodreads (seed.json)."); }
+  // «Carica i libri» (v92): un file scelto dalla persona → libri. Modello Excel (.xlsx), CSV (modello o Goodreads), backup JSON o acquisti.
+  async function leggiFileLibri(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (/\.xlsx$/i.test(file.name) || (bytes[0] === 0x50 && bytes[1] === 0x4B)) {
+      if (typeof DecompressionStream === "undefined") throw { code: "browser" };
+      const { righe, data1904 } = righeXlsx(await leggiZip(bytes));
+      return { ...libriDaTabella(righe, { data1904 }), acquisti: false, tipo: "xlsx" };
+    }
+    const txt = decodificaTesto(bytes), t = txt.trim();
+    if (/\.json$/i.test(file.name) || t.startsWith("{") || t.startsWith("[")) {
+      const j = JSON.parse(t);
+      return { libri: Array.isArray(j) ? j : (j.books || []), acquisti: !!(j && j.acquisti), avvisi: [], colonne: true, tipo: "json" };
+    }
+    return { ...libriDaTabella(parseCSV(txt)), acquisti: false, tipo: "csv" };
+  }
+  const importHTML = () => `
+        <div class="field"><input id="i-file" type="file" accept=".xlsx,.csv,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="File da caricare: Excel, CSV o JSON"></div>
+        <label class="check"><input type="checkbox" id="i-upd"> Aggiorna i libri già presenti con i dati del file (per ripristinare un backup)</label>
+        <p class="warn" id="i-avvisi" hidden></p>
+        <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button></div>`;
+  // Flusso unico di import (scheda «Carica i libri» e Backup): lettura del file, conteggi, avvisi, copia di sicurezza, import.
+  function collegaImport(sheet, { dopo = () => {} } = {}) {
+    let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, tipo = "";
+    const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet), av = $("#i-avvisi", sheet);
+    const showCounts = () => {
+      if (purchases) { // file di acquisti: nuovi in Da leggere, desideri spostati, il resto invariato
+        const valid = pending.filter(b => b && b.title), found = b => state.books.find(x => samePurchase(x, b));
+        const fresh = valid.filter(b => !found(b)).length, wish = valid.filter(b => found(b) && found(b).status === "desiderato").length;
+        st.textContent = !valid.length ? "" : `Acquisti: ${fresh} nuovi in Da leggere, ${wish} spostati dalla lista dei desideri, ${valid.length - fresh - wish} già presenti (invariati).`;
+        go.disabled = !(fresh || wish);
+        return;
+      }
+      const { fresh, dup } = counts, u = upd.checked;
+      st.textContent = !pending.length ? "Nessun libro in questo file." : (fresh || (u && dup))
+        ? `Pronti: ${fresh} libri nuovi` + (dup ? (u ? `, ${dup} da aggiornare` : ` (${dup} già presenti, saltati)`) : "") + "."
+        : "Nessun libro nuovo in questo file.";
+      go.disabled = !(fresh || (u && dup));
+    };
+    upd.onchange = showCounts;
+    $("#i-file", sheet).onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      pending = []; purchases = false; go.disabled = true; av.hidden = true; st.textContent = "Leggo il file…";
+      try {
+        const r = await leggiFileLibri(f);
+        if (!r.colonne) { st.textContent = "Non trovo le colonne Titolo e Autore: usa il modello."; return; }
+        pending = r.libri; purchases = r.acquisti; tipo = r.tipo;
+        if (r.avvisi.length) { // valori scartati: il libro si importa senza quel dato
+          const n = r.avvisi.length;
+          av.textContent = `${n} ${n === 1 ? "valore non valido lasciato vuoto" : "valori non validi lasciati vuoti"}: `
+            + r.avvisi.slice(0, 5).map(a => `riga ${a.riga}, ${a.colonna}: «${a.valore}»`).join(" · ") + (n > 5 ? " …" : "");
+          av.hidden = false;
+        }
+        if (purchases) { showCounts(); return; }
+        const known = new Set(state.books.map(keyOf)), valid = pending.filter(b => b && b.title);
+        counts = { fresh: valid.filter(b => !known.has(keyOf(b))).length, dup: valid.filter(b => known.has(keyOf(b))).length };
+        showCounts();
+      } catch (err) {
+        pending = []; go.disabled = true;
+        st.textContent = err && err.code === "browser" ? "Questo browser non legge i file Excel: salva il foglio come CSV e caricalo."
+          : err && (err.code === "zip" || err.code === "xlsx") ? "File Excel non leggibile."
+          : "File non leggibile. Usa il modello Excel, un CSV o un backup JSON.";
+      }
+    };
+    let busy = false;
+    go.onclick = async () => {
+      if (busy) return; busy = go.disabled = true;
+      await snapshot(purchases ? "Prima dell'import degli acquisti" : tipo === "xlsx" ? "Prima dell'import del foglio Excel" : tipo === "csv" ? "Prima dell'import del CSV" : "Prima dell'import del backup");
+      busy = false; // da qui in poi è tutto sincrono
+      if (purchases) {
+        const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
+        closeSheet();
+        toast(`Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`);
+        if (r.newIds.length && navigator.onLine) enrichBooks(r.newIds);
+        else if (r.newIds.length) toast("Connettiti per completare autori e copertine: lo trovi in Backup.");
+        return;
+      }
+      const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true; av.hidden = true;
+      st.textContent = `Importati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".";
+      dopo({ added, updated });
+    };
+  }
+  function openCarica() {
+    const sheet = openSheet(`<h2>Carica i libri</h2>
+      <p class="hint">Scegli un file: il modello Excel compilato, il CSV esportato da Goodreads o un backup di MyLibrary.</p>
+      <p class="hint">Non hai ancora il modello? Scaricalo, scrivi un libro per riga (bastano titolo e autore) e poi caricalo qui.</p>
+      <div class="actions"><a class="btn" href="modello-libri.xlsx" download="modello-libri.xlsx">Scarica il modello Excel</a></div>
+      ${importHTML()}
+      <div class="status-line" id="i-status" aria-live="polite"></div>
+      <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    $("#i-close", sheet).onclick = closeSheet;
+    collegaImport(sheet, { dopo: ({ added }) => {
+      closeSheet();
+      toast(`Caricati ${added} libri.`, added && navigator.onLine ? { label: "Cerca copertine", run: () => runCoverJob() } : null);
+    } });
   }
   async function exportBackup(status) {
     const data = JSON.stringify({ app: "libreria-diego", version: 1, exported: new Date().toISOString(), books: state.books.map(clean) }, null, 2);
@@ -3136,10 +3221,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </section>
       <section class="arch">
         <span class="label">Importa</span>
-        <p class="hint">Un backup JSON oppure il CSV esportato da Goodreads.</p>
-        <div class="field"><input id="i-file" type="file" accept=".csv,.json,text/csv,application/json" aria-label="File CSV o JSON"></div>
-        <label class="check"><input type="checkbox" id="i-upd"> Aggiorna i libri già presenti con i dati del file (per ripristinare un backup)</label>
-        <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button><button class="btn" id="i-seed">Carica i libri Goodreads</button></div>
+        <p class="hint">Un foglio Excel (il modello è in «Carica i libri»), un CSV o un backup JSON.</p>${importHTML()}
       </section>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <p class="hint" id="i-ver"></p>
@@ -3164,25 +3246,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const n = c ? state.books.filter(x => !keep.has(x.id)).length : 0;
       b.classList.add("danger"); b.textContent = n ? `Conferma: toglie ${plural(n, "libro", "libri")}` : "Conferma ripristino";
     };
-    let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, csv = false;
-    const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet);
-    const showCounts = () => {
-      if (purchases) { // file di acquisti: nuovi in Da leggere, desideri spostati, il resto invariato
-        const valid = pending.filter(b => b && b.title), found = b => state.books.find(x => samePurchase(x, b));
-        const fresh = valid.filter(b => !found(b)).length, wish = valid.filter(b => found(b) && found(b).status === "desiderato").length;
-        st.textContent = !valid.length ? "" : `Acquisti: ${fresh} nuovi in Da leggere, ${wish} spostati dalla lista dei desideri, ${valid.length - fresh - wish} già presenti (invariati).`;
-        go.disabled = !(fresh || wish);
-        return;
-      }
-      const { fresh, dup } = counts, u = upd.checked;
-      st.textContent = !pending.length ? "" : (fresh || (u && dup))
-        ? `Pronti: ${fresh} libri nuovi` + (dup ? (u ? `, ${dup} da aggiornare` : ` (${dup} già presenti, saltati)`) : "") + "."
-        : "Nessun libro nuovo in questo file.";
-      go.disabled = !(fresh || (u && dup));
-    };
-    upd.onchange = showCounts;
+    const st = $("#i-status", sheet);
     $("#i-close", sheet).onclick = closeSheet;
-    $("#i-seed", sheet).onclick = () => { closeSheet(); loadSeed(); };
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
     $("#i-redo", sheet).onclick = () => { closeSheet(); toast("Rifaccio la ricerca delle copertine…"); runCoverJob(null, { redo: true }); };
     const iv = $("#i-verify", sheet), vs = $("#v-status", sheet);
@@ -3217,41 +3282,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       closeSheet(); seriesJob(); // in sottofondo: la scheda si chiude
     };
     $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
-    $("#i-file", sheet).onchange = e => {
-      const f = e.target.files[0]; if (!f) return;
-      const rd = new FileReader();
-      rd.onload = () => {
-        try {
-          const txt = String(rd.result);
-          purchases = false; csv = false;
-          if (/\.json$/i.test(f.name) || txt.trim().startsWith("{") || txt.trim().startsWith("[")) { const j = JSON.parse(txt); pending = Array.isArray(j) ? j : (j.books || []); purchases = !!(j && j.acquisti); }
-          else { pending = fromGoodreads(txt); csv = true; }
-          if (purchases) { showCounts(); return; }
-          const known = new Set(state.books.map(keyOf));
-          const valid = pending.filter(b => b && b.title);
-          counts = { fresh: valid.filter(b => !known.has(keyOf(b))).length, dup: valid.filter(b => known.has(keyOf(b))).length };
-          showCounts();
-        } catch { pending = []; go.disabled = true; st.textContent = "File non leggibile. Usa un backup JSON o il CSV di Goodreads."; }
-      };
-      rd.readAsText(f);
-    };
-    let busy = false;
-    go.onclick = async () => {
-      if (busy) return; busy = go.disabled = true;
-      await snapshot(purchases ? "Prima dell'import degli acquisti" : csv ? "Prima dell'import del CSV" : "Prima dell'import del backup");
-      busy = false; // da qui in poi è tutto sincrono
-      if (purchases) {
-        const r = addPurchases(pending); pending = []; purchases = false; go.disabled = true;
-        closeSheet();
-        toast(`Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`);
-        if (r.newIds.length && navigator.onLine) enrichBooks(r.newIds);
-        else if (r.newIds.length) toast("Connettiti per completare autori e copertine: lo trovi in Backup.");
-        return;
-      }
-      const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true;
-      st.textContent = `Importati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".";
-      fillCopies(); // la copia appena fatta compare in Annulla
-    };
+    collegaImport(sheet, { dopo: fillCopies }); // la copia appena fatta compare in Annulla
   }
 
   /* ---------- avvio ---------- */
