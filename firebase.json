@@ -1,0 +1,21 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "test/**",
+      "docs/**",
+      "design/**",
+      ".claude/**",
+      ".superpowers/**",
+      ".github/**",
+      "**/*.md",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "**/*.png", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }
+    ]
+  }
+}

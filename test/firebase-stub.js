@@ -68,12 +68,12 @@
       if (m === 'closed') return Promise.reject({ code: 'auth/popup-closed-by-user' });
       setUser({ uid: localStorage.getItem('fake-uid') || 'u1', email: 'diego@test.it' }); return Promise.resolve({});
     },
-    signInWithRedirect: () => { localStorage.setItem('fake-redirect-called', '1'); setTimeout(() => location.reload(), 50); return new Promise(() => {}); },
+    signInWithRedirect: () => { const err = localStorage.getItem('fake-redirect-error'); if (err) return Promise.reject({ code: err }); localStorage.setItem('fake-redirect-called', '1'); setTimeout(() => location.reload(), 50); return new Promise(() => {}); },
     signOut: () => { setUser(null); return Promise.resolve(); },
     getRedirectResult: () => Promise.resolve(null),
     sendSignInLinkToEmail: () => Promise.resolve(),
     signInWithEmailLink: (e, l) => { setUser({ uid: 'u1', email: e }); return Promise.resolve({}); }
   });
   auth.GoogleAuthProvider = function () {}; auth.GoogleAuthProvider.prototype.setCustomParameters = function () {};
-  window.firebase = { initializeApp() {}, auth, firestore: () => db };
+  window.firebase = { initializeApp(c) { window.__fbConfig = c; }, auth, firestore: () => db };
 })();

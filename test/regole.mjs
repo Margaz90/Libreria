@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,11 +23,16 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (11) e caricati senza browser', parts.length === 11, String(parts.length));
+  ok('regole: tratti segnati trovati (12) e caricati senza browser', parts.length === 12, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
   const j = JSON.stringify;
+
+  // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
+  const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
+    ['margaz90.github.io', 'vecchio'], ['localhost', 'altro'], ['evil-mylibrary-2ea05.web.app', 'altro'], ['constructor', 'altro'], ['mylibrary-2ea05.web.app.evil.com', 'altro'], ['', 'altro'], [undefined, 'altro']];
+  ok('sitoDi: dove gira l\'app (somiglianze non contano)', casiSito.every(([h, s]) => R.sitoDi(h) === s), j(casiSito.map(([h]) => R.sitoDi && R.sitoDi(h))));
 
   // ---- Regole della lettura: invarianti su 2000 libri e passaggi generati a caso ----
   const r = rng(42), ST = ['da-leggere', 'in-lettura', 'letto', 'desiderato'];
@@ -228,4 +233,20 @@ export default async function run() {
   // ---- Statistiche: misure e file della mensola ----
   const rows = R.ysRows(Array.from({ length: 40 }, (_, i) => ({ pages: (i * 97) % 900 })));
   ok('ysRows: file mai vuote e mai oltre 300 unità (salvo un solo libro)', rows.every(rw => rw.length && (rw.length === 1 || rw.reduce((t, b) => t + R.statDim(b).u, 0) <= 300)) && rows.flat().length === 40);
+
+  // ---- v90: pubblicazione su Firebase Hosting da GitHub ----
+  const leggi = f => { try { return fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { return ''; } };
+  let fb = null; try { fb = JSON.parse(leggi('firebase.json')).hosting; } catch {}
+  ok('firebase.json valido, pubblica la cartella dell\'app', !!fb && fb.public === '.');
+  const ign = (fb && fb.ignore) || [];
+  const servono = ['test/**', 'docs/**', 'design/**', '.claude/**', '.superpowers/**', '.github/**', '**/*.md', '**/.*'];
+  ok('firebase.json: niente test, documenti, design, impostazioni di Claude, GitHub', servono.every(x => ign.includes(x)), servono.filter(x => !ign.includes(x)).join(', '));
+  const hs = (fb && fb.headers) || [], hv = h => (h.headers || []).find(x => x.key === 'Cache-Control')?.value || '';
+  const iTutto = hs.findIndex(h => h.source === '**' && hv(h) === 'no-cache'), iPng = hs.findIndex(h => h.source === '**/*.png' && /max-age=86400/.test(hv(h)));
+  ok('firebase.json: no-cache su tutto (anche su /), icone in cache un giorno', iTutto >= 0 && iPng > iTutto, j(hs));
+  let rc = null; try { rc = JSON.parse(leggi('.firebaserc')); } catch {}
+  ok('.firebaserc: progetto mylibrary-2ea05', !!rc && rc.projects && rc.projects.default === 'mylibrary-2ea05');
+  const wf = leggi('.github/workflows/firebase.yml');
+  ok('azione GitHub: su push a main, canale live, chiave dai Secrets', /branches:\s*\[\s*main\s*\]|branches:\s*\n\s*-\s*main/.test(wf) && /channelId:\s*live/.test(wf) && /projectId:\s*mylibrary-2ea05/.test(wf)
+    && /\$\{\{\s*secrets\.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05\s*\}\}/.test(wf) && /FirebaseExtended\/action-hosting-deploy@v0/.test(wf) && !/private_key/.test(wf + leggi('firebase.json') + leggi('.firebaserc')));
 }

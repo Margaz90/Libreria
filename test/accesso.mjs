@@ -30,6 +30,29 @@ export default async function ({ browser }) {
   ok('app su iPhone: con il link arrivano i libri del cloud', (await count(A)) === 3, 'libri: ' + await count(A));
   ok('il messaggio dice quanti libri sono arrivati', /3 libri/.test(await toastText(A)), await toastText(A));
 
+  // v90: app installata sul sito Firebase → «Accedi con Google» a pagina intera
+  const sito = (nome, extra = {}) => ({ fn: ([nome, extra]) => { window.libreriaSito = nome; for (const [k, v] of Object.entries(extra)) if (!localStorage.getItem(k)) localStorage.setItem(k, v);
+    if (sessionStorage.getItem('libreria-auth-pending')) localStorage.setItem('pending-visto', '1'); }, arg: [nome, extra] });
+  const F = await newPage(browser, { standalone: true, init: sito('firebase') });
+  await F.goto(APP + '/'); await openSync(F);
+  ok('app su iPhone, sito Firebase: c\'è «Accedi con Google»', (await F.locator('#sy-google').count()) === 1 && !(await F.locator('#sy-google').isDisabled()));
+  ok('app su iPhone, sito Firebase: la pagina di accesso è dello stesso sito', await F.evaluate(() => window.__fbConfig && window.__fbConfig.authDomain === location.hostname), JSON.stringify(await F.evaluate(() => window.__fbConfig)));
+  await F.click('#sy-google');
+  await F.waitForFunction(() => localStorage.getItem('fake-redirect-called') && localStorage.getItem('pending-visto'), null, { timeout: 10000 }).catch(() => {});
+  ok('app su iPhone, sito Firebase: il clic va a pagina intera e segna l\'accesso in corso', !!(await F.evaluate(() => localStorage.getItem('fake-redirect-called') && localStorage.getItem('pending-visto'))));
+  await F.waitForFunction(() => !!window.libreriaCloud, null, { timeout: 5000 }).catch(() => {});
+  ok('app su iPhone, sito Firebase: al ritorno, da installazione vuota, il servizio si carica', await F.evaluate(() => !!window.libreriaCloud && !JSON.parse(localStorage.getItem('libreria-cloud') || '{}').uid));
+  ok('app su iPhone, sito Firebase: popup mai usato', !(await F.evaluate(() => localStorage.getItem('fake-popup-called'))));
+  const E = await newPage(browser, { standalone: true, init: sito('firebase', { 'fake-redirect-error': 'auth/account-exists-with-different-credential' }) });
+  await E.goto(APP + '/'); await openSync(E);
+  await E.click('#sy-google'); await E.waitForTimeout(600);
+  ok('stesso indirizzo già usato col link: messaggio chiaro', /già collegato con il link via email/.test(await E.textContent('#sy-status')), await E.textContent('#sy-status'));
+  const V = await newPage(browser, { standalone: true, init: sito('vecchio') });
+  await V.goto(APP + '/'); await openSync(V);
+  ok('app su iPhone, vecchio sito: niente Google (come prima)', (await V.locator('#sy-google').count()) === 0);
+  ok('vecchio sito: pagina di accesso su firebaseapp.com', await V.evaluate(() => window.__fbConfig && window.__fbConfig.authDomain === 'mylibrary-2ea05.firebaseapp.com'));
+  for (const x of [F, E, V]) await x.close2();
+
   // Computer: accesso con Google (popup)
   const C = await newPage(browser, { width: 1366, height: 860, init: fake() });
   await C.goto(APP + '/'); await openSync(C);

@@ -2,7 +2,7 @@
 
 App web installabile sulla schermata Home dell'iPhone, per i libri letti, in lettura, da leggere e desiderati. Funziona anche offline e, se accedi, sincronizza la libreria tra iPhone, iPad e computer.
 
-Indirizzo: https://margaz90.github.io/Libreria/
+Indirizzo: https://mylibrary-2ea05.web.app/ (dalla v90; il vecchio https://margaz90.github.io/Libreria/ funziona ancora durante il passaggio)
 
 ## Cosa contiene
 
