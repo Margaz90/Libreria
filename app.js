@@ -2855,18 +2855,22 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
     setGoals(goals, updated) { try { localStorage.setItem(SET_KEY, JSON.stringify({ ...getSet(), goals, goalsAt: updated })); } catch {} },
     info(text) { const el = $("#sy-info"); if (el) el.textContent = text; },
-    askMerge
+    askMerge,
+    sito: SITO, // v90: sul sito Firebase la pagina di accesso è dello stesso sito
+    accountLink: () => ACCOUNT_LINK
   };
+  const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";
   function openSync() {
     if (cloud.email) return openSyncDone();
-    // Nell'app installata su iPhone l'accesso con Google non torna all'app (né con popup né con redirect): lì si usa il link via email.
-    const iosApp = navigator.standalone === true;
+    // Nell'app installata su iPhone l'accesso con Google non torna all'app quando app e pagina di accesso stanno su siti diversi
+    // (github.io e firebaseapp.com): lì si usa il link via email. Sul sito Firebase (v90) sono lo stesso sito: Google a pagina intera.
+    const iosApp = navigator.standalone === true, aPagina = iosApp && SITO === "firebase", googleQui = !iosApp || aPagina;
     const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
       <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
-      ${iosApp
+      ${!googleQui
         ? `<p class="hint">Nell'app installata su iPhone, iOS non lascia completare l'accesso con Google: usa il link via email, con lo stesso indirizzo del tuo account Google. Se l'account non ha libri, l'app te lo dice.</p>`
         : `<div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>`}
-      <div class="field"><label for="sy-email">${iosApp ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
+      <div class="field"><label for="sy-email">${!googleQui ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
       <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
       <div class="field"><label for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
       <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
@@ -2879,11 +2883,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       st("");
     }).catch(() => st("Non riesco a caricare il servizio. Controlla la connessione e riprova."));
     // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
-    if (!iosApp) $("#sy-google", sheet).onclick = () => {
+    if (googleQui) $("#sy-google", sheet).onclick = () => {
       st("Apro l'accesso con Google…");
-      window.libreriaCloud.signInGoogle().catch(e => {
+      const lc = window.libreriaCloud;
+      (aPagina ? lc.signInGoogleRedirect() : lc.signInGoogle()).catch(e => {
         const c = (e && e.code) || "errore";
-        st(/popup-closed-by-user|cancelled-popup-request/.test(c) ? "Accesso annullato."
+        st(/account-exists-with-different-credential/.test(c) ? ACCOUNT_LINK
+          : /popup-closed-by-user|cancelled-popup-request/.test(c) ? "Accesso annullato."
           : /network-request-failed/.test(c) ? "Nessuna connessione: riprova quando sei online."
           : "Accesso non riuscito (" + c + "). Puoi usare il link via email qui sotto.");
       });

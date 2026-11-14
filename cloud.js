@@ -7,7 +7,8 @@
   const H = window.libreriaHost;
   const CONFIG = {
     apiKey: "AIzaSyA5x9Jd6qw-IVgrefBjeQwkvNdrxPZqDXM",
-    authDomain: "mylibrary-2ea05.firebaseapp.com",
+    // Sul sito Firebase (v90) la pagina di accesso è dello stesso sito: così Google funziona anche nell'app installata su iPhone.
+    authDomain: H.sito === "firebase" ? location.hostname : "mylibrary-2ea05.firebaseapp.com",
     projectId: "mylibrary-2ea05",
     storageBucket: "mylibrary-2ea05.firebasestorage.app",
     messagingSenderId: "411901102706",
@@ -223,6 +224,14 @@
         return auth.signInWithRedirect(p);
       });
     },
+    // App installata sul sito Firebase (v90): accesso a pagina intera. Il segnale va scritto prima, perché al ritorno è quello
+    // che fa caricare cloud.js su un'installazione nuova (app.js) e mostra l'avviso se l'accesso non si è completato.
+    signInGoogleRedirect() {
+      const p = new firebase.auth.GoogleAuthProvider();
+      p.setCustomParameters({ prompt: "select_account" });
+      try { sessionStorage.setItem("libreria-auth-pending", "1"); } catch {}
+      return auth.signInWithRedirect(p).catch(e => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} throw e; });
+    },
     sendLink(email) {
       return auth.sendSignInLinkToEmail(email, { url: location.origin + location.pathname, handleCodeInApp: true });
     },
@@ -261,6 +270,6 @@
   const fromRedirect = (() => { try { return !!sessionStorage.getItem("libreria-auth-pending"); } catch { return false; } })();
   auth.getRedirectResult()
     .then(r => { if (fromRedirect && !(r && r.user) && !auth.currentUser) H.notice("L'accesso con Google non si è completato. Riprova da Altro → Accedi e sincronizza, oppure usa il link via email."); })
-    .catch(e => { if (fromRedirect) H.notice("Accesso con Google non riuscito (" + why(e) + "). Riprova, oppure usa il link via email."); })
+    .catch(e => { if (fromRedirect) H.notice(/account-exists-with-different-credential/.test(why(e)) && H.accountLink ? H.accountLink() : "Accesso con Google non riuscito (" + why(e) + "). Riprova, oppure usa il link via email."); })
     .finally(() => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} });
 })();
