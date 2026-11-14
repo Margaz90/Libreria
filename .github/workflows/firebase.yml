@@ -1,0 +1,21 @@
+# Pubblica MyLibrary su Firebase Hosting (https://mylibrary-2ea05.web.app) a ogni push su main (v90).
+# La chiave sta nei Secrets del repository (FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05), mai nei file.
+# GitHub Pages continua a pubblicare il vecchio indirizzo come prima.
+name: Pubblica su Firebase Hosting
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pubblica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05 }}
+          channelId: live
+          projectId: mylibrary-2ea05

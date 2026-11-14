@@ -233,4 +233,20 @@ export default async function run() {
   // ---- Statistiche: misure e file della mensola ----
   const rows = R.ysRows(Array.from({ length: 40 }, (_, i) => ({ pages: (i * 97) % 900 })));
   ok('ysRows: file mai vuote e mai oltre 300 unità (salvo un solo libro)', rows.every(rw => rw.length && (rw.length === 1 || rw.reduce((t, b) => t + R.statDim(b).u, 0) <= 300)) && rows.flat().length === 40);
+
+  // ---- v90: pubblicazione su Firebase Hosting da GitHub ----
+  const leggi = f => { try { return fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { return ''; } };
+  let fb = null; try { fb = JSON.parse(leggi('firebase.json')).hosting; } catch {}
+  ok('firebase.json valido, pubblica la cartella dell\'app', !!fb && fb.public === '.');
+  const ign = (fb && fb.ignore) || [];
+  const servono = ['test/**', 'docs/**', 'design/**', '.claude/**', '.superpowers/**', '.github/**', '**/*.md', '**/.*'];
+  ok('firebase.json: niente test, documenti, design, impostazioni di Claude, GitHub', servono.every(x => ign.includes(x)), servono.filter(x => !ign.includes(x)).join(', '));
+  const hs = (fb && fb.headers) || [], hv = h => (h.headers || []).find(x => x.key === 'Cache-Control')?.value || '';
+  const iTutto = hs.findIndex(h => h.source === '**' && hv(h) === 'no-cache'), iPng = hs.findIndex(h => h.source === '**/*.png' && /max-age=86400/.test(hv(h)));
+  ok('firebase.json: no-cache su tutto (anche su /), icone in cache un giorno', iTutto >= 0 && iPng > iTutto, j(hs));
+  let rc = null; try { rc = JSON.parse(leggi('.firebaserc')); } catch {}
+  ok('.firebaserc: progetto mylibrary-2ea05', !!rc && rc.projects && rc.projects.default === 'mylibrary-2ea05');
+  const wf = leggi('.github/workflows/firebase.yml');
+  ok('azione GitHub: su push a main, canale live, chiave dai Secrets', /branches:\s*\[\s*main\s*\]|branches:\s*\n\s*-\s*main/.test(wf) && /channelId:\s*live/.test(wf) && /projectId:\s*mylibrary-2ea05/.test(wf)
+    && /\$\{\{\s*secrets\.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05\s*\}\}/.test(wf) && /FirebaseExtended\/action-hosting-deploy@v0/.test(wf) && !/private_key/.test(wf + leggi('firebase.json') + leggi('.firebaserc')));
 }
