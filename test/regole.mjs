@@ -76,6 +76,14 @@ export default async function run() {
     ok('leggiZip: un file che non è ZIP o non è Excel dà un errore riconoscibile', errZip === 'zip' && errX === 'xlsx', j([errZip, errX]));
   }
 
+  { // ---- v92: il modello Excel da scaricare ----
+    let mb = null; try { mb = new Uint8Array(fs.readFileSync(path.join(ROOT, 'modello-libri.xlsx'))); } catch {}
+    let mx = null, ml = null; try { mx = R.righeXlsx(await R.leggiZip(mb)); ml = R.libriDaTabella(mx.righe, mx); } catch {}
+    const COL = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di inizio', 'Data di fine', 'Anno di lettura', 'Pagine', 'Anno di pubblicazione', 'Genere', 'ISBN', 'Serie', 'Numero nella serie', 'Note', 'Citazione'];
+    ok('modello-libri.xlsx: colonne nell\'ordine del modello, esempi saltati, meno di 20 KB', !!mx && j(mx.righe[0]) === j(COL) && mx.righe.slice(1).filter(r => r.length).length === 2
+      && ml.colonne && ml.libri.length === 0 && ml.avvisi.length === 0 && mb.length < 20000, j(mx && mx.righe.slice(0, 3)) + ' ' + (mb && mb.length));
+  }
+
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
   const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
     ['margaz90.github.io', 'vecchio'], ['localhost', 'altro'], ['evil-mylibrary-2ea05.web.app', 'altro'], ['constructor', 'altro'], ['mylibrary-2ea05.web.app.evil.com', 'altro'], ['', 'altro'], [undefined, 'altro']];
