@@ -79,3 +79,24 @@ export async function newPage(browser, { width = 390, height = 844, dark = false
 
 export const localBooks = p => p.evaluate(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]'));
 export const toastText = p => p.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
+
+// 108 libri inventati (v92, al posto dei 108 libri Goodreads di Diego, tolti dall'app): stessa forma e stesse proporzioni
+// (83 Letti di cui 18 senza voto, 25 Da leggere, 46 autori, 16 generi, qualche data di fine, un libro senza pagine), sempre uguali.
+export function libri108() {
+  const nomi = ['Anna', 'Bruno', 'Carla', 'Dario', 'Elena', 'Fabio', 'Giulia', 'Luca', 'Marta', 'Nicola', 'Olga', 'Paolo', 'Rita', 'Sergio', 'Tina', 'Ugo'];
+  const cognomi = ['Bianchi', 'Rossi', 'Verdi', 'Neri', 'Gallo', 'Costa', 'Fontana', 'Moretti', 'Greco', 'Conti', 'Marino', 'Rizzo', 'Lombardi', 'Barbieri', 'Ferri', 'Galli'];
+  const generi = ['Giallo', 'Thriller', 'Spionaggio', 'Fantascienza', 'Fantasy', 'Storico', 'Romanzo', 'Biografia', 'Saggio', 'Classico', 'Horror', 'Umorismo', 'Viaggi', 'Poesia', 'Avventura', 'Distopia'];
+  const parole = ['giardino', 'inverno', 'mare', 'notte', 'città', 'silenzio', 'treno', 'confine', 'ombra', 'faro', 'lettera', 'specchio', 'isola', 'vento', 'casa', 'fiume'];
+  const autori = Array.from({ length: 46 }, (_, i) => `${nomi[i % 16]} ${cognomi[(i * 7 + Math.floor(i / 16)) % 16]}`);
+  const t0 = 1767225600000; // 1 gennaio 2026
+  return Array.from({ length: 108 }, (_, i) => {
+    const letto = i < 83, b = {
+      id: 'p' + String(i + 1).padStart(3, '0'), title: `${['Il', 'La', 'Un', 'Una'][i % 4]} ${parole[i % 16]} ${parole[(i * 5 + 3) % 16]}${i % 9 === 0 ? ': una storia lunga quanto un sottotitolo' : ''} ${i + 1}`,
+      author: autori[i % 46], status: letto ? 'letto' : 'da-leggere', year: 1950 + (i * 7) % 75, genre: generi[(i * 3) % 16], added: t0 + i * 6e4, updated: t0 + i * 6e4
+    };
+    if (i !== 40) b.pages = 120 + (i * 37) % 600;
+    if (letto && i < 65) b.rating = 1 + (i * 3) % 5;
+    if (letto && i % 12 === 0) b.finished = `2025-${String(1 + (i / 12) % 12).padStart(2, '0')}-1${i % 10}`;
+    return b;
+  });
+}

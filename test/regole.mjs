@@ -2,10 +2,11 @@
 // (le funzioni restano dove sono: l'app non cambia) e li prova con molti casi, anche generati a caso.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, ROOT } from './lib.mjs';
+import { ok, ROOT, libri108 } from './lib.mjs';
+import { creaXlsx, creaZip } from './xlsx.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'leggiZip', 'righeXlsx'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,11 +24,78 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (12) e caricati senza browser', parts.length === 12, String(parts.length));
+  ok('regole: tratti segnati trovati (13) e caricati senza browser', parts.length === 13, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
   const j = JSON.stringify;
+
+  // ---- v92: «Carica i libri»: testo, CSV, tabella del modello ----
+  ok('decodificaTesto: UTF-8 con BOM e Windows-1252', R.decodificaTesto(Uint8Array.of(0xEF, 0xBB, 0xBF, 0x63, 0x69, 0x61, 0x6F)) === 'ciao' && R.decodificaTesto(Uint8Array.of(0x50, 0x65, 0x72, 0xF2)) === 'Però'
+    && R.decodificaTesto(new TextEncoder().encode('Però')) === 'Però');
+  ok('parseCSV: punto e virgola e virgolette', j(R.parseCSV('Titolo;Autore\n"Uno; due";Eco\n')) === j([['Titolo', 'Autore'], ['Uno; due', 'Eco']]) && j(R.parseCSV('a,b\n"x, y",z')) === j([['a', 'b'], ['x, y', 'z']]));
+  const TB = (h, ...rows) => R.libriDaTabella([h, ...rows]);
+  const m1 = TB([' titolo', 'AUTORE', 'Stato', 'Voto', 'Data di fine', 'ISBN', 'Colonna mia'], ['Il nome della rosa', 'Umberto Eco', 'Letto', '5', '03/02/2025', '978-88-452-1234-5', 'x']);
+  ok('libriDaTabella: modello (intestazioni libere, colonne in più ignorate)', m1.colonne && m1.avvisi.length === 0 && j(m1.libri) === j([{ title: 'Il nome della rosa', author: 'Umberto Eco', status: 'letto', rating: 5, finished: '2025-02-03', isbn: '9788845212345' }]), j(m1));
+  const HM = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di inizio', 'Data di fine', 'Anno di lettura', 'Pagine', 'Anno di pubblicazione', 'Genere', 'ISBN', 'Serie', 'Numero nella serie', 'Note', 'Citazione'];
+  const riga = o => HM.map(k => o[k] ?? '');
+  const d1 = TB(HM, riga({ Titolo: 'A', Autore: 'X', 'Anno di lettura': '2019' }), riga({ Titolo: 'B', Autore: 'X', 'Data di inizio': '2026-01-10' }), riga({ Titolo: 'C', Autore: 'X', Stato: 'boh' }), riga({ Titolo: 'D', Autore: 'X' }));
+  ok('libriDaTabella: stato dedotto dai dati, sconosciuto con avviso', d1.libri[0].status === 'letto' && d1.libri[0].finishedYear === 2019 && d1.libri[1].status === 'in-lettura' && d1.libri[1].started === '2026-01-10'
+    && d1.libri[2].status === undefined && d1.libri[3].status === undefined && d1.avvisi.length === 1 && d1.avvisi[0].colonna === 'Stato' && d1.avvisi[0].valore === 'boh' && d1.avvisi[0].riga === 4, j(d1));
+  const v1 = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'letto', Voto: '6', 'Data di fine': '31/02/2025', Pagine: 'tante' }));
+  ok('libriDaTabella: valori non validi lasciati vuoti, con riga e colonna', v1.libri[0].rating === undefined && v1.libri[0].finished === undefined && v1.libri[0].pages === undefined
+    && j(v1.avvisi.map(a => [a.riga, a.colonna, a.valore])) === j([[2, 'Voto', '6'], [2, 'Data di fine', '31/02/2025'], [2, 'Pagine', 'tante']]), j(v1));
+  const sr = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { seriali: true }), sr4 = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { data1904: true, seriali: true });
+  ok('libriDaTabella: data come numero di Excel (1900 e 1904)', sr.libri[0].finished === '2025-01-01' && sr4.libri[0].finished === '2029-01-02', j([sr.libri, sr4.libri]));
+  const vari = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'In lettura', 'Data di inizio': '5.3.2024', 'Data di fine': '2024/06/01', Pagine: '320.0', 'Anno di pubblicazione': '1980', Voto: '4,0', 'Numero nella serie': '0,5', Serie: 'Slough House', Note: 'n', Citazione: 'c', Genere: 'Giallo' }),
+    riga({ Titolo: 'B', Autore: 'X', Stato: 'DESIDERATI', 'Data di fine': '7-8-2023' }));
+  ok('libriDaTabella: formati di data e numeri', j(vari.libri[0]) === j({ title: 'A', author: 'X', status: 'in-lettura', rating: 4, started: '2024-03-05', finished: '2024-06-01', pages: 320, year: 1980, genre: 'Giallo', series: 'Slough House', seriesNo: '0.5', notes: 'n', quote: 'c' })
+    && vari.libri[1].status === 'desiderato' && vari.libri[1].finished === '2023-08-07' && !vari.avvisi.length, j(vari));
+  const gr = R.libriDaTabella(R.parseCSV('Title,Author,My Rating,Number of Pages,Original Publication Year,Year Published,Date Read,Exclusive Shelf,My Review,ISBN\n"Dead Lions (Slough House, #2)",Mick  Herron,0,352,,2013,2024/05/06,read,Bello<br/>davvero,"=""123"""\nUbik,Philip K. Dick,4,,1969,,,scaffale-strano,,'));
+  ok('libriDaTabella: CSV di Goodreads come prima', gr.avvisi.length === 0 && j(gr.libri) === j([{ title: 'Dead Lions', author: 'Mick Herron', pages: 352, year: 2013, finished: '2024-05-06', status: 'letto', notes: 'Bello\ndavvero' }, { title: 'Ubik', author: 'Philip K. Dick', rating: 4, year: 1969 }])
+    && j(R.libriDaTabella(R.parseCSV('Title,Author\nUbik,Dick')).libri) === j([{ title: 'Ubik', author: 'Dick' }]), j(gr));
+  ok('libriDaTabella: senza le colonne Titolo e Autore', TB(['Nome', 'Cosa'], ['a', 'b']).colonne === false && TB(['Nome', 'Cosa'], ['a', 'b']).libri.length === 0);
+  const es = TB(HM, riga({ Titolo: R.ESEMPI_MODELLO[0], Autore: 'Qualcuno' }), riga({ Titolo: '', Autore: 'Senza titolo' }), riga({ Titolo: 'Vero', Autore: 'Io' }));
+  ok('libriDaTabella: righe d\'esempio e senza titolo saltate', R.ESEMPI_MODELLO.length === 2 && es.libri.length === 1 && es.libri[0].title === 'Vero', j(es));
+
+  { // ---- v92: lettore dei file Excel (.xlsx) ----
+    const C = (r, t, v) => t === 'is' ? `<c r="${r}" t="inlineStr"><is><t>${v}</t></is></c>` : `<c r="${r}"${t ? ` t="${t}"` : ''} s="1"><v>${v}</v></c>`;
+    const righe1 = `<row r="1">${C('A1', 's', 0)}${C('B1', 's', 1)}${C('C1', 's', 2)}</row><row r="2" spans="1:3">${C('A2', 's', 3)}${C('C2', 'is', 'Letto')}</row>`
+      + `<row r="4">${C('A4', 'is', 'Tom &amp; Jerry')}${C('B4', 'str', 'Autore_x000D_')}${C('C4', '', '9.7888046682370005E+12')}${C('D4', '', '9788804668237')}${C('E4', 'd', '2025-02-03T00:00:00')}${C('F4', 'b', '1')}<c r="G4" s="2"/>${C('H4', '', '45658')}</row>`;
+    const base = { fogli: [{ nome: 'Altro', celle: '<row r="1"><c r="A1" t="inlineStr"><is><t>no</t></is></c></row>' }, { nome: 'Libri', celle: righe1 }], condivise: ['Titolo', 'Autore', ['St', 'ato'], 'Primo'] };
+    const leggi = async opz => R.righeXlsx(await R.leggiZip(creaXlsx({ ...base, ...opz })));
+    const x1 = await leggi({});
+    ok('xlsx: foglio «Libri», testi condivisi (anche a pezzi) e in linea, celle e righe saltate', j(x1.righe[0]) === j(['Titolo', 'Autore', 'Stato']) && j(x1.righe[1]) === j(['Primo', '', 'Letto']) && j(x1.righe[2]) === j([]) && x1.data1904 === false, j(x1));
+    ok('xlsx: entità, a capo di Excel, ISBN in notazione scientifica e intero, data t="d", vero/falso, cella vuota, numero', j(x1.righe[3]) === j(['Tom & Jerry', 'Autore\r', '9788804668237', '9788804668237', '2025-02-03', 'TRUE', '', '45658']), j(x1.righe[3]));
+    const x2 = await leggi({ data1904: true, stored: true, relAssoluti: true });
+    ok('xlsx: date1904, voci senza compressione, percorsi assoluti', x2.data1904 === true && j(x2.righe[0]) === j(['Titolo', 'Autore', 'Stato']), j(x2));
+    const x3 = R.righeXlsx(await R.leggiZip(creaXlsx({ fogli: [{ nome: 'Foglio1', celle: righe1 }], condivise: base.condivise })));
+    ok('xlsx: senza foglio «Libri» si legge il primo', j(x3.righe[0]) === j(['Titolo', 'Autore', 'Stato']));
+    let errZip = null; try { await R.leggiZip(new TextEncoder().encode('Titolo,Autore\nUbik,Dick')); } catch (e) { errZip = e && e.code; }
+    let errX = null; try { R.righeXlsx(await R.leggiZip(creaZip({ 'a.txt': 'ciao' }))); } catch (e) { errX = e && e.code; }
+    ok('leggiZip: un file che non è ZIP o non è Excel dà un errore riconoscibile', errZip === 'zip' && errX === 'xlsx', j([errZip, errX]));
+  }
+
+  { // ---- v92: il modello Excel da scaricare ----
+    let mb = null; try { mb = new Uint8Array(fs.readFileSync(path.join(ROOT, 'modello-libri.xlsx'))); } catch {}
+    let mx = null, ml = null; try { mx = R.righeXlsx(await R.leggiZip(mb)); ml = R.libriDaTabella(mx.righe, mx); } catch {}
+    const COL = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di inizio', 'Data di fine', 'Anno di lettura', 'Pagine', 'Anno di pubblicazione', 'Genere', 'ISBN', 'Serie', 'Numero nella serie', 'Note', 'Citazione'];
+    ok('modello-libri.xlsx: colonne nell\'ordine del modello, esempi saltati, meno di 20 KB', !!mx && j(mx.righe[0]) === j(COL) && mx.righe.slice(1).filter(r => r.length).length === 2
+      && ml.colonne && ml.libri.length === 0 && ml.avvisi.length === 0 && mb.length < 20000, j(mx && mx.righe.slice(0, 3)) + ' ' + (mb && mb.length));
+  }
+
+  { // ---- v92, dopo la revisione: un numero in una colonna di date non diventa una data a caso ----
+    const HD = ['Titolo', 'Autore', 'Data di inizio', 'Data di fine'];
+    const a = R.libriDaTabella([HD, ['A', 'X', '', '2019']]), b = R.libriDaTabella([HD, ['B', 'X', '', '5']]), c = R.libriDaTabella([HD, ['C', 'X', '2019', '']]);
+    ok('un anno da solo in «Data di fine» è l\'anno di lettura (non il 1905)', j(a.libri[0]) === j({ title: 'A', author: 'X', status: 'letto', finishedYear: 2019 }) && !a.avvisi.length, j(a));
+    ok('un numero piccolo in una colonna di date: avviso, niente data', !b.libri[0].finished && b.libri[0].status === undefined && j(b.avvisi.map(x => [x.colonna, x.valore])) === j([['Data di fine', '5']])
+      && !c.libri[0].started && j(c.avvisi.map(x => [x.colonna, x.valore])) === j([['Data di inizio', '2019']]), j([b, c]));
+    const s1 = R.libriDaTabella([HD, ['D', 'X', '', '45658'], ['E', 'X', '', '2019'], ['F', 'X', '', '5']], { seriali: true }), s2 = R.libriDaTabella([HD, ['G', 'X', '', '45658']]);
+    ok('numeri di data di Excel solo dai file Excel, e solo dal 1910 in poi', s1.libri[0].finished === '2025-01-01' && s1.libri[1].finishedYear === 2019 && !s1.libri[2].finished && s1.avvisi.length === 1
+      && !s2.libri[0].finished && s2.avvisi.length === 1, j([s1, s2]));
+    const vuoto = R.righeXlsx(await R.leggiZip(creaXlsx({ fogli: [{ nome: 'Libri', celle: '<row r="1"><c r="A1" t="s"><v>0</v></c></row>' }], condivise: [{ xml: '<r><t/></r><r><t>Ciao</t></r>' }] })));
+    ok('xlsx: un pezzo di testo vuoto (<t/>) non si mangia il resto', vuoto.righe[0][0] === 'Ciao', j(vuoto.righe));
+  }
 
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
   const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
@@ -213,7 +281,7 @@ export default async function run() {
   const QG = R.gustiDi(lib.concat([L5('Fa', 'Fantasy Uno', 4, 'Fantasy')]));
   const quattro = R.novitaDa(Array.from({ length: 30 }, (_, i) => ({ title: 'Libro ' + i, author: 'Nuovo ' + i, genere: ['Thriller', 'Storico', 'Fantasy', 'Thriller'][i % 4] })), lib, OGGI, 'it', QG).proposte;
   ok('limite di 2 per genere solo in «Dai tuoi generi»: con pochi generi si arriva comunque a 12', quattro.length === 12 || quattro.length >= 8 + 1, `${quattro.length}: ${JSON.stringify(quattro.map(x => [x.gruppo, x.genere]))}`);
-  const seed = JSON.parse(fs.readFileSync(path.join(ROOT, 'seed.json'), 'utf8')); const SB = Array.isArray(seed) ? seed : seed.books;
+  const SB = libri108(); // 108 libri di prova (v92: i 108 libri Goodreads non sono più nell'app)
   const tanti2 = Array.from({ length: 1000 }, (_, i) => ({ title: 'Titolo numero ' + i + (i % 3 ? '. Sottotitolo comune' : ''), author: 'Autore ' + (i % 40), uscita: '2025-0' + (1 + i % 9) + '-10', genere: 'Thriller', synopsis: IT }));
   const t0 = Date.now(); R.novitaDa(tanti2, SB, OGGI, 'it', R.gustiDi(SB)); const dt = Date.now() - t0;
   ok('novitaDa: 1000 risultati e 108 libri in meno di 400 ms (prima circa 1700)', dt < 400, dt + ' ms');

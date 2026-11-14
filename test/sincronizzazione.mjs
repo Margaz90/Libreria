@@ -1,5 +1,5 @@
 // Sincronizzazione tra tre dispositivi con il finto Firebase: accesso, modifiche, eliminazioni, foto, unione, obiettivo.
-import { APP, API, ok, wait, newPage, localBooks, resetCloud } from './lib.mjs';
+import { APP, API, ok, wait, newPage, localBooks, resetCloud, libri108 } from './lib.mjs';
 import { importa, ripristina } from './funzioni.mjs';
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
@@ -32,7 +32,7 @@ export default async function ({ browser }) {
 
   // 1. Uso normale senza accesso: nessun SDK scaricato
   const A = await device();
-  await A.click('#seed-go');
+  await A.evaluate(b => localStorage.setItem('libreria-diego-v1', JSON.stringify(b)), libri108()); await A.reload(); await A.waitForSelector('#main [data-id]');
   await A.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').length === 108);
   await A.waitForTimeout(500);
   ok('senza accesso non si scarica nulla da Firebase', cdn === 0, 'richieste: ' + cdn);
