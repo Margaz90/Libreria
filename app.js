@@ -3026,6 +3026,59 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return { libri, avvisi, colonne: true };
   }
   const fromGoodreads = text => libriDaTabella(parseCSV(text)).libri;
+  // File Excel (.xlsx): è uno ZIP di file XML. Lo leggo senza librerie: directory centrale dello ZIP, poi «deflate-raw» del browser.
+  async function leggiZip(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), err = () => Object.assign(new Error("zip"), { code: "zip" });
+    let fine = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { fine = i; break; }
+    if (fine < 0) throw err();
+    const n = dv.getUint16(fine + 10, true); let p = dv.getUint32(fine + 16, true);
+    const out = new Map(), testo = (a, b) => new TextDecoder().decode(bytes.subarray(a, b));
+    for (let k = 0; k < n; k++) {
+      if (p + 46 > bytes.length || dv.getUint32(p, true) !== 0x02014b50) throw err();
+      const met = dv.getUint16(p + 10, true), dim = dv.getUint32(p + 20, true), ln = dv.getUint16(p + 28, true), le = dv.getUint16(p + 30, true), lc = dv.getUint16(p + 32, true), loc = dv.getUint32(p + 42, true);
+      const nome = testo(p + 46, p + 46 + ln); p += 46 + ln + le + lc;
+      if (loc + 30 > bytes.length || dv.getUint32(loc, true) !== 0x04034b50) throw err();
+      const ini = loc + 30 + dv.getUint16(loc + 26, true) + dv.getUint16(loc + 28, true), dati = bytes.subarray(ini, ini + dim);
+      if (met === 0) out.set(nome, dati);
+      else if (met === 8) out.set(nome, new Uint8Array(await new Response(new Blob([dati]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()));
+    }
+    return out;
+  }
+  // Righe del foglio «Libri» (o del primo foglio) come testi; le celle vuote, che Excel non scrive, restano "".
+  function righeXlsx(files) {
+    const err = () => Object.assign(new Error("xlsx"), { code: "xlsx" });
+    const xml = n => { const b = files.get(n); return b ? new TextDecoder().decode(b) : ""; };
+    const ent = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1)))
+      : { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[e.toLowerCase()]).replace(/_x([0-9A-F]{4})_/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+    const attr = (tag, a) => { const m = tag.match(new RegExp(`\\s${a}="([^"]*)"`)); return m ? ent(m[1]) : ""; };
+    const wb = xml("xl/workbook.xml"); if (!wb) throw err();
+    const data1904 = /<(?:\w+:)?workbookPr\b[^>]*\bdate1904="(?:1|true)"/.test(wb);
+    const fogli = [...wb.matchAll(/<(?:\w+:)?sheet\b[^>]*>/g)].map(m => ({ nome: attr(m[0], "name"), id: attr(m[0], "r:id") }));
+    const rels = new Map([...xml("xl/_rels/workbook.xml.rels").matchAll(/<Relationship\b[^>]*>/g)].map(m => [attr(m[0], "Id"), attr(m[0], "Target")]));
+    const f = fogli.find(x => norm(x.nome) === "libri") || fogli[0]; if (!f) throw err();
+    const t = rels.get(f.id) || ""; const foglio = xml(t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, "")); if (!foglio) throw err();
+    const testiSi = s => ent([...s.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, "").matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map(m => m[1]).join(""));
+    const condivise = [...xml("xl/sharedStrings.xml").matchAll(/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/g)].map(m => testiSi(m[1]));
+    const col = r => { let n = 0; for (const c of (r.match(/^[A-Z]+/) || [""])[0]) n = n * 26 + c.charCodeAt(0) - 64; return n - 1; };
+    const righe = []; let rAuto = 0;
+    for (const m of foglio.matchAll(/<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g)) {
+      const rn = Number(attr(m[0], "r")) || rAuto + 1; rAuto = rn;
+      const riga = []; let cAuto = -1;
+      for (const c of (m[2] || "").matchAll(/<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)) {
+        const tag = c[0].slice(0, c[0].indexOf(">") + 1), ref = attr(tag, "r"), ci = ref ? col(ref) : cAuto + 1; cAuto = ci;
+        const tipo = attr(tag, "t"), corpo = c[2] || "", v = (corpo.match(/<(?:\w+:)?v\b[^>]*>([\s\S]*?)<\/(?:\w+:)?v>/) || [, ""])[1];
+        let val = tipo === "s" ? condivise[Number(v)] ?? "" : tipo === "inlineStr" ? testiSi(corpo) : tipo === "b" ? (v === "1" ? "TRUE" : "FALSE")
+          : tipo === "e" ? "" : tipo === "d" ? ent(v).slice(0, 10) : ent(v);
+        if (!tipo && /e/i.test(val) && isFinite(Number(val)) && Math.abs(Number(val)) >= 1e6) val = String(Math.round(Number(val))); // ISBN scritto come 9.788…E+12
+        while (riga.length < ci) riga.push("");
+        riga[ci] = val;
+      }
+      while (righe.length < rn - 1) righe.push([]);
+      righe[rn - 1] = riga;
+    }
+    return { righe, data1904 };
+  }
   // </regole>
   async function loadSeed() {
     try {

@@ -3,9 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
+import { creaXlsx, creaZip } from './xlsx.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'fromGoodreads'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'fromGoodreads', 'leggiZip', 'righeXlsx'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -56,6 +57,24 @@ export default async function run() {
   ok('libriDaTabella: senza le colonne Titolo e Autore', TB(['Nome', 'Cosa'], ['a', 'b']).colonne === false && TB(['Nome', 'Cosa'], ['a', 'b']).libri.length === 0);
   const es = TB(HM, riga({ Titolo: R.ESEMPI_MODELLO[0], Autore: 'Qualcuno' }), riga({ Titolo: '', Autore: 'Senza titolo' }), riga({ Titolo: 'Vero', Autore: 'Io' }));
   ok('libriDaTabella: righe d\'esempio e senza titolo saltate', R.ESEMPI_MODELLO.length === 2 && es.libri.length === 1 && es.libri[0].title === 'Vero', j(es));
+
+  { // ---- v92: lettore dei file Excel (.xlsx) ----
+    const C = (r, t, v) => t === 'is' ? `<c r="${r}" t="inlineStr"><is><t>${v}</t></is></c>` : `<c r="${r}"${t ? ` t="${t}"` : ''} s="1"><v>${v}</v></c>`;
+    const righe1 = `<row r="1">${C('A1', 's', 0)}${C('B1', 's', 1)}${C('C1', 's', 2)}</row><row r="2" spans="1:3">${C('A2', 's', 3)}${C('C2', 'is', 'Letto')}</row>`
+      + `<row r="4">${C('A4', 'is', 'Tom &amp; Jerry')}${C('B4', 'str', 'Autore_x000D_')}${C('C4', '', '9.7888046682370005E+12')}${C('D4', '', '9788804668237')}${C('E4', 'd', '2025-02-03T00:00:00')}${C('F4', 'b', '1')}<c r="G4" s="2"/>${C('H4', '', '45658')}</row>`;
+    const base = { fogli: [{ nome: 'Altro', celle: '<row r="1"><c r="A1" t="inlineStr"><is><t>no</t></is></c></row>' }, { nome: 'Libri', celle: righe1 }], condivise: ['Titolo', 'Autore', ['St', 'ato'], 'Primo'] };
+    const leggi = async opz => R.righeXlsx(await R.leggiZip(creaXlsx({ ...base, ...opz })));
+    const x1 = await leggi({});
+    ok('xlsx: foglio «Libri», testi condivisi (anche a pezzi) e in linea, celle e righe saltate', j(x1.righe[0]) === j(['Titolo', 'Autore', 'Stato']) && j(x1.righe[1]) === j(['Primo', '', 'Letto']) && j(x1.righe[2]) === j([]) && x1.data1904 === false, j(x1));
+    ok('xlsx: entità, a capo di Excel, ISBN in notazione scientifica e intero, data t="d", vero/falso, cella vuota, numero', j(x1.righe[3]) === j(['Tom & Jerry', 'Autore\r', '9788804668237', '9788804668237', '2025-02-03', 'TRUE', '', '45658']), j(x1.righe[3]));
+    const x2 = await leggi({ data1904: true, stored: true, relAssoluti: true });
+    ok('xlsx: date1904, voci senza compressione, percorsi assoluti', x2.data1904 === true && j(x2.righe[0]) === j(['Titolo', 'Autore', 'Stato']), j(x2));
+    const x3 = R.righeXlsx(await R.leggiZip(creaXlsx({ fogli: [{ nome: 'Foglio1', celle: righe1 }], condivise: base.condivise })));
+    ok('xlsx: senza foglio «Libri» si legge il primo', j(x3.righe[0]) === j(['Titolo', 'Autore', 'Stato']));
+    let errZip = null; try { await R.leggiZip(new TextEncoder().encode('Titolo,Autore\nUbik,Dick')); } catch (e) { errZip = e && e.code; }
+    let errX = null; try { R.righeXlsx(await R.leggiZip(creaZip({ 'a.txt': 'ciao' }))); } catch (e) { errX = e && e.code; }
+    ok('leggiZip: un file che non è ZIP o non è Excel dà un errore riconoscibile', errZip === 'zip' && errX === 'xlsx', j([errZip, errX]));
+  }
 
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
   const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
