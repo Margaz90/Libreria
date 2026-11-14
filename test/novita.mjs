@@ -331,7 +331,25 @@ async function popup(browser) {
   await q.close2();
 }
 
+// v91: installazione nuova, i libri arrivano dal cloud dopo l'avvio (quando il giro dell'avvio ha già trovato la libreria vuota):
+// aprendo la sezione il primo giro deve partire, senza aspettare la prossima apertura dell'app
+async function libriDalCloud(browser) {
+  const p = await apri(browser, { libri: [] });
+  await p.waitForTimeout(1800); // il giro dell'avvio (1,2 s) è già passato, a libreria vuota
+  await p.evaluate(libri => { const H = window.libreriaHost; libri.forEach(b => H.setLocal(b.id, b)); H.refresh(); }, LIB);
+  await p.waitForTimeout(300);
+  await vai(p);
+  await finito(p);
+  const m = await memoria(p);
+  ok('libri arrivati dal cloud dopo l\'avvio: aprendo Novità il primo giro parte', !!(m && m.ultimoGiro), JSON.stringify(m && { ultimoGiro: m.ultimoGiro }));
+  await p.waitForTimeout(400);
+  ok('… e la sezione mostra le proposte', (await p.locator('.nov-card').count()) > 0, await p.locator('.nov').innerText());
+  ok('libri dal cloud: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
+  await libriDalCloud(browser);
   await popup(browser);
   await giro(browser);
   await piena(browser);

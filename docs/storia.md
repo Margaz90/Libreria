@@ -2,6 +2,7 @@
 
 Estratta verbatim da `CLAUDE.md`. Le voci nuove vanno in cima (le scrive `/pubblica`).
 
+- **Novità anche dopo una installazione nuova** (v91): installando l'app da zero i libri arrivano dal cloud dopo l'avvio, quando il giro delle novità aveva già trovato la libreria vuota; la sezione restava su «Le novità arrivano quando sei online…» fino alla riapertura dell'app. Ora aprendo la sezione il primo giro parte subito. Segnalazione di Diego dopo il passaggio al nuovo indirizzo.
 - **Anche su Firebase Hosting, con Google sull'iPhone** (v90): l'app è pubblicata anche su https://mylibrary-2ea05.web.app/ da GitHub a ogni push su `main` (azione ufficiale di Firebase, chiave nei Secrets); lì la pagina di accesso è dello stesso sito, quindi nell'app installata su iPhone c'è «Accedi con Google» a pagina intera. Il vecchio indirizzo resta com'è durante la transizione (avviso nella v91). Dalla revisione: niente cache per `/` e per le pagine di accesso nel service worker, segnale di accesso in corso scritto prima del redirect. Richiesta di Diego.
 - **Libreria vuota: prima l'accesso** (v89): con la libreria vuota (per esempio dopo aver tolto l'app dalla Home e averla rimessa) l'avviso propone per primo «Accedi e riprendi i libri», perché i libri tornano dal cloud; «Carica i libri Goodreads» diventa la seconda scelta. Nata dalla revisione dell'accesso con Diego.
 - **Righe corallo nei gruppi** (v88): la riga sottile corallo della v87 anche sotto «Dai tuoi autori», «Dai tuoi generi» e «Da scoprire» nelle proposte. Richiesta di Diego.

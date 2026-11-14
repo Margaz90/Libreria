@@ -627,6 +627,7 @@
         await prova(() => googleSearch(`subject:"${g.nome}"`, { max: 20, newest: true, italian: LINGUA === "it" }), { genere: g.nome });
         await prova(() => openLibrarySearch("subject:" + g.nome.toLowerCase(), "", 20).then(l => l.map(x => ({ ...x, lang: x.lang || olLingua(x.lingue) }))), { genere: g.nome });
       }
+      if (!risposte) novita.senzaRisposta = true;
       if (gen !== dataGen || !risposte) return; // nessuna fonte ha risposto: si tengono le novità di prima e si riprova alla prossima apertura
       const oggi = today(), out = novitaDa(ris, state.books, oggi, LINGUA, gusti), da = addDays(oggi, -90);
       // Le uscite restano 90 giorni, ma solo se trovate con le stesse regole: quelle di regole vecchie non sono state ricontrollate (v86).
@@ -1867,6 +1868,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     else if (state.view === "novita") {
       const n = leggiNovita();
       if (n.ultimoGiro && n.motore < NOV_MOTORE && !novita.busy) setTimeout(() => giroNovita({ forza: true }).catch(() => {}), 0); // regole nuove: rifà il giro (una volta)
+      // v91: mai fatto un giro (installazione nuova: all'avvio la libreria era vuota, i libri sono arrivati dopo dal cloud): parte ora, una volta per sessione
+      else if (!n.ultimoGiro && !novita.busy && !novita.senzaRisposta && navigator.onLine) setTimeout(() => giroNovita().catch(() => {}), 0); // se esce subito (altri lavori, pochi voti) riprova al prossimo ridisegno; se le fonti non rispondono, alla prossima apertura dell'app
       main.innerHTML = renderNovita(); segnaNovitaViste();
     }
     else {
