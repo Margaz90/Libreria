@@ -12,6 +12,13 @@ export default async function ({ browser }) {
   await p.waitForFunction(() => navigator.serviceWorker.getRegistration().then(r => !!(r && r.active)), null, { timeout: 15000 });
   await p.reload();
   await p.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15000 });
+  // v90: sul sito Firebase le pagine di accesso (/__/auth/…) stanno sullo stesso dominio: il service worker non deve metterle in cache
+  setOverride('__/auth/handler', '<!doctype html><p>handler</p>');
+  await p.evaluate(() => fetch('/__/auth/handler').then(r => r.text()));
+  await p.waitForTimeout(300);
+  const inCache = await p.evaluate(async () => { for (const k of await caches.keys()) { const c = await caches.open(k); if (await c.match('/__/auth/handler')) return true; } return false; });
+  ok('service worker: le pagine di accesso di Firebase (/__/) non finiscono in cache', !inCache);
+  setOverride('__/auth/handler', null);
   // Il server pubblica un sw.js con una versione diversa: il browser la installa e la mette in attesa
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   setOverride('sw.js', sw.replace(/const VERSION = "([^"]+)"/, 'const VERSION = "$1-test"'));

@@ -63,6 +63,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
+    if (url.pathname.startsWith("/__/")) return; // pagine di accesso di Firebase (sito Firebase, v90): sempre dalla rete, mai in cache né sostituite da index.html
     if (url.pathname.endsWith("seed.json")) return; // sempre dalla rete
     if (url.pathname.endsWith("zxing.min.js")) { e.respondWith(cacheFirst(req, LIBS)); return; }
     e.respondWith(networkFirst(req));
