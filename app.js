@@ -2973,16 +2973,17 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const STATI_MODELLO = { "da leggere": "da-leggere", "to read": "da-leggere", "in lettura": "in-lettura", "currently reading": "in-lettura", "letto": "letto", "letti": "letto", "read": "letto",
     "desiderato": "desiderato", "desiderati": "desiderato", "desiderio": "desiderato", "lista dei desideri": "desiderato" };
   // Data da una cella: numero di Excel (dal 1900, o dal 1904 nei vecchi file per Mac), AAAA-MM-GG, AAAA/MM/GG, GG/MM/AAAA (sempre giorno prima).
-  function dataCella(v, data1904) {
+  // I numeri valgono come date solo nei file Excel e dal 1910 in poi (3653): un «2019» o un «5» scritti a mano non diventano 1905 o 1900.
+  function dataCella(v, data1904, seriali) {
     const iso = (y, m, d) => { const s = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; const t = new Date(s + "T12:00Z"); return !isNaN(t) && t.toISOString().slice(0, 10) === s ? s : ""; };
     let m;
-    if (/^\d{1,6}(\.\d+)?$/.test(v)) { const n = Math.floor(Number(v)); if (n < 1) return ""; const t = new Date(Date.UTC(1899, 11, 30) + (n + (data1904 ? 1462 : 0)) * 864e5); return t.toISOString().slice(0, 10); }
+    if (/^\d{1,6}(\.\d+)?$/.test(v)) { const n = Math.floor(Number(v)); if (!seriali || n < 3653 || n > 73050) return ""; const t = new Date(Date.UTC(1899, 11, 30) + (n + (data1904 ? 1462 : 0)) * 864e5); return t.toISOString().slice(0, 10); }
     if ((m = v.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ].*)?$/))) return iso(m[1], m[2], m[3]);
     if ((m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/))) return iso(m[3], m[2], m[1]);
     return "";
   }
   // Righe di una tabella (la prima = intestazioni) → libri, più gli avvisi sui valori scartati (riga del foglio, colonna, valore).
-  function libriDaTabella(righe, { data1904 = false } = {}) {
+  function libriDaTabella(righe, { data1904 = false, seriali = false } = {}) {
     const h = (righe[0] || []).map(x => norm(x));
     const goodreads = h.includes("title") || h.includes("exclusive shelf") || h.includes("my rating");
     const ix = n => h.indexOf(n);
@@ -3013,7 +3014,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const intero = (k, min, max, dest = k) => { const v = g(k); if (!v) return; const n = Number(v.replace(",", ".")); if (Number.isInteger(n) && n >= min && n <= max) b[dest] = n; else no(k, v); };
       const st = g("status"); if (st && STATI_MODELLO[norm(st)]) b.status = STATI_MODELLO[norm(st)]; else if (st) no("status", st);
       intero("rating", 1, 5);
-      for (const k of ["started", "finished"]) { const v = g(k); if (!v) continue; const d = dataCella(v, data1904); if (d) b[k] = d; else no(k, v); }
+      const annoOra = new Date().getFullYear();
+      for (const k of ["started", "finished"]) {
+        const v = g(k); if (!v) continue;
+        if (k === "finished" && /^\d{4}$/.test(v) && +v >= 1900 && +v <= annoOra && !g("finishedYear")) { b.finishedYear = +v; continue; } // solo l'anno: è l'anno di lettura
+        const d = dataCella(v, data1904, seriali); if (d) b[k] = d; else no(k, v);
+      }
       intero("finishedYear", 1000, 9999); intero("pages", 1, 100000); intero("year", -3000, 9999);
       for (const k of ["genre", "series", "notes", "quote"]) if (g(k)) b[k] = g(k);
       if (g("seriesNo")) b.seriesNo = g("seriesNo").replace(",", ".");
@@ -3057,8 +3063,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const rels = new Map([...xml("xl/_rels/workbook.xml.rels").matchAll(/<Relationship\b[^>]*>/g)].map(m => [attr(m[0], "Id"), attr(m[0], "Target")]));
     const f = fogli.find(x => norm(x.nome) === "libri") || fogli[0]; if (!f) throw err();
     const t = rels.get(f.id) || ""; const foglio = xml(t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, "")); if (!foglio) throw err();
-    const testiSi = s => ent([...s.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, "").matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map(m => m[1]).join(""));
-    const condivise = [...xml("xl/sharedStrings.xml").matchAll(/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/g)].map(m => testiSi(m[1]));
+    const testiSi = s => ent([...s.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, "").matchAll(/<(?:\w+:)?t\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:\w+:)?t>)/g)].map(m => m[1] || "").join("")); // anche <t/> vuoto
+    const condivise = [...xml("xl/sharedStrings.xml").matchAll(/<(?:\w+:)?si\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:\w+:)?si>)/g)].map(m => testiSi(m[1] || ""));
     const col = r => { let n = 0; for (const c of (r.match(/^[A-Z]+/) || [""])[0]) n = n * 26 + c.charCodeAt(0) - 64; return n - 1; };
     const righe = []; let rAuto = 0;
     for (const m of foglio.matchAll(/<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g)) {
@@ -3085,7 +3091,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (/\.xlsx$/i.test(file.name) || (bytes[0] === 0x50 && bytes[1] === 0x4B)) {
       if (typeof DecompressionStream === "undefined") throw { code: "browser" };
       const { righe, data1904 } = righeXlsx(await leggiZip(bytes));
-      return { ...libriDaTabella(righe, { data1904 }), acquisti: false, tipo: "xlsx" };
+      return { ...libriDaTabella(righe, { data1904, seriali: true }), acquisti: false, tipo: "xlsx" };
     }
     const txt = decodificaTesto(bytes), t = txt.trim();
     if (/\.json$/i.test(file.name) || t.startsWith("{") || t.startsWith("[")) {
@@ -3164,7 +3170,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sheet = openSheet(`<h2>Carica i libri</h2>
       <p class="hint">Scegli un file: il modello Excel compilato, il CSV esportato da Goodreads o un backup di MyLibrary.</p>
       <p class="hint">Non hai ancora il modello? Scaricalo, scrivi un libro per riga (bastano titolo e autore) e poi caricalo qui.</p>
-      <div class="actions"><a class="btn" href="modello-libri.xlsx" download="modello-libri.xlsx">Scarica il modello Excel</a></div>
+      <div class="actions"><a class="btn" href="modello-libri.xlsx" download="modello-libri.xlsx" target="_blank" rel="noopener">Scarica il modello Excel</a></div>
       ${importHTML()}
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);

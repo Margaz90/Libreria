@@ -10,7 +10,7 @@ async function carica(browser) {
   ok('libreria vuota: «Carica i libri», niente più i 108 libri Goodreads', (await p.locator('#notice #carica-go').count()) === 1 && !/108|Carica i libri Goodreads/.test(vuota), vuota);
   const apri = async () => { await p.click('#carica-go'); await p.waitForSelector('.sheet #i-file'); };
   await apri();
-  const h2 = await p.locator('.sheet h2').first().innerText(), link = p.locator('.sheet a[href="modello-libri.xlsx"][download]');
+  const h2 = await p.locator('.sheet h2').first().innerText(), link = p.locator('.sheet a[href="modello-libri.xlsx"][download][target="_blank"][rel="noopener"]'); // nell'app installata su iPhone si apre in una vista con «Fine»
   const stato = await p.evaluate(() => fetch('modello-libri.xlsx').then(r => r.status));
   ok('«Carica i libri» apre la scheda con il modello Excel da scaricare', h2 === 'Carica i libri' && (await link.count()) === 1 && stato === 200, `${h2} ${await link.count()} ${stato}`);
   const C = (r, v) => `<c r="${r}" t="inlineStr"><is><t>${v}</t></is></c>`, N = (r, v) => `<c r="${r}"><v>${v}</v></c>`;

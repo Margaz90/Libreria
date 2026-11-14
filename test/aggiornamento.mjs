@@ -19,6 +19,9 @@ export default async function ({ browser }) {
   const inCache = await p.evaluate(async () => { for (const k of await caches.keys()) { const c = await caches.open(k); if (await c.match('/__/auth/handler')) return true; } return false; });
   ok('service worker: le pagine di accesso di Firebase (/__/) non finiscono in cache', !inCache);
   setOverride('__/auth/handler', null);
+  // v92: il modello Excel sempre dalla rete (mai in cache, mai sostituito da index.html se la rete è lenta)
+  await p.evaluate(() => fetch('modello-libri.xlsx').then(r => r.arrayBuffer())); await p.waitForTimeout(300);
+  ok('service worker: il modello Excel non finisce in cache', !(await p.evaluate(async () => { for (const k of await caches.keys()) if (await (await caches.open(k)).match('modello-libri.xlsx')) return true; return false; })));
   // Il server pubblica un sw.js con una versione diversa: il browser la installa e la mette in attesa
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   setOverride('sw.js', sw.replace(/const VERSION = "([^"]+)"/, 'const VERSION = "$1-test"'));

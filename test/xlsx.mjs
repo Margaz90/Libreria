@@ -33,7 +33,7 @@ export function creaXlsx({ fogli, condivise = [], data1904 = false, stored = fal
       + fogli.map((f, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="${relAssoluti ? '/xl/' : ''}worksheets/sheet${i + 1}.xml"/>`).join('') + '</Relationships>',
   };
   if (condivise.length) files['xl/sharedStrings.xml'] = `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${condivise.length}">`
-    + condivise.map(t => Array.isArray(t) ? `<si>${t.map(p => `<r><rPr><b/></rPr><t xml:space="preserve">${esc(p)}</t></r>`).join('')}</si>` : `<si><t>${esc(t)}</t></si>`).join('') + '</sst>';
+    + condivise.map(t => t && t.xml ? `<si>${t.xml}</si>` : Array.isArray(t) ? `<si>${t.map(p => `<r><rPr><b/></rPr><t xml:space="preserve">${esc(p)}</t></r>`).join('')}</si>` : `<si><t>${esc(t)}</t></si>`).join('') + '</sst>';
   fogli.forEach((f, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${f.celle}</sheetData></worksheet>`; });
   return creaZip(files, { stored });
 }

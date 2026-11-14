@@ -45,7 +45,7 @@ export default async function run() {
   const v1 = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'letto', Voto: '6', 'Data di fine': '31/02/2025', Pagine: 'tante' }));
   ok('libriDaTabella: valori non validi lasciati vuoti, con riga e colonna', v1.libri[0].rating === undefined && v1.libri[0].finished === undefined && v1.libri[0].pages === undefined
     && j(v1.avvisi.map(a => [a.riga, a.colonna, a.valore])) === j([[2, 'Voto', '6'], [2, 'Data di fine', '31/02/2025'], [2, 'Pagine', 'tante']]), j(v1));
-  const sr = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })]), sr4 = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { data1904: true });
+  const sr = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { seriali: true }), sr4 = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { data1904: true, seriali: true });
   ok('libriDaTabella: data come numero di Excel (1900 e 1904)', sr.libri[0].finished === '2025-01-01' && sr4.libri[0].finished === '2029-01-02', j([sr.libri, sr4.libri]));
   const vari = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'In lettura', 'Data di inizio': '5.3.2024', 'Data di fine': '2024/06/01', Pagine: '320.0', 'Anno di pubblicazione': '1980', Voto: '4,0', 'Numero nella serie': '0,5', Serie: 'Slough House', Note: 'n', Citazione: 'c', Genere: 'Giallo' }),
     riga({ Titolo: 'B', Autore: 'X', Stato: 'DESIDERATI', 'Data di fine': '7-8-2023' }));
@@ -82,6 +82,19 @@ export default async function run() {
     const COL = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di inizio', 'Data di fine', 'Anno di lettura', 'Pagine', 'Anno di pubblicazione', 'Genere', 'ISBN', 'Serie', 'Numero nella serie', 'Note', 'Citazione'];
     ok('modello-libri.xlsx: colonne nell\'ordine del modello, esempi saltati, meno di 20 KB', !!mx && j(mx.righe[0]) === j(COL) && mx.righe.slice(1).filter(r => r.length).length === 2
       && ml.colonne && ml.libri.length === 0 && ml.avvisi.length === 0 && mb.length < 20000, j(mx && mx.righe.slice(0, 3)) + ' ' + (mb && mb.length));
+  }
+
+  { // ---- v92, dopo la revisione: un numero in una colonna di date non diventa una data a caso ----
+    const HD = ['Titolo', 'Autore', 'Data di inizio', 'Data di fine'];
+    const a = R.libriDaTabella([HD, ['A', 'X', '', '2019']]), b = R.libriDaTabella([HD, ['B', 'X', '', '5']]), c = R.libriDaTabella([HD, ['C', 'X', '2019', '']]);
+    ok('un anno da solo in «Data di fine» è l\'anno di lettura (non il 1905)', j(a.libri[0]) === j({ title: 'A', author: 'X', status: 'letto', finishedYear: 2019 }) && !a.avvisi.length, j(a));
+    ok('un numero piccolo in una colonna di date: avviso, niente data', !b.libri[0].finished && b.libri[0].status === undefined && j(b.avvisi.map(x => [x.colonna, x.valore])) === j([['Data di fine', '5']])
+      && !c.libri[0].started && j(c.avvisi.map(x => [x.colonna, x.valore])) === j([['Data di inizio', '2019']]), j([b, c]));
+    const s1 = R.libriDaTabella([HD, ['D', 'X', '', '45658'], ['E', 'X', '', '2019'], ['F', 'X', '', '5']], { seriali: true }), s2 = R.libriDaTabella([HD, ['G', 'X', '', '45658']]);
+    ok('numeri di data di Excel solo dai file Excel, e solo dal 1910 in poi', s1.libri[0].finished === '2025-01-01' && s1.libri[1].finishedYear === 2019 && !s1.libri[2].finished && s1.avvisi.length === 1
+      && !s2.libri[0].finished && s2.avvisi.length === 1, j([s1, s2]));
+    const vuoto = R.righeXlsx(await R.leggiZip(creaXlsx({ fogli: [{ nome: 'Libri', celle: '<row r="1"><c r="A1" t="s"><v>0</v></c></row>' }], condivise: [{ xml: '<r><t/></r><r><t>Ciao</t></r>' }] })));
+    ok('xlsx: un pezzo di testo vuoto (<t/>) non si mangia il resto', vuoto.righe[0][0] === 'Ciao', j(vuoto.righe));
   }
 
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
