@@ -2946,34 +2946,87 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
 
   /* ---------- importa / esporta ---------- */
+  // Import dei libri (v92): testo dei file, CSV (virgola o punto e virgola), tabelle del modello Excel e di Goodreads.
+  // <regole>
+  // UTF-8 (il BOM si toglie da sé); se non è UTF-8 valido è il «CSV (delimitato…)» di Excel in italiano: Windows-1252.
+  const decodificaTesto = bytes => { try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return new TextDecoder("windows-1252").decode(bytes); } };
   function parseCSV(text) {
+    text = String(text).replace(/^﻿/, "");
+    const prima = text.split(/\r?\n/, 1)[0].replace(/"[^"]*"/g, "");
+    const sep = (prima.match(/;/g) || []).length > (prima.match(/,/g) || []).length ? ";" : ",";
     const rows = []; let row = [], cur = "", q = false;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
       if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
       else if (c === '"') q = true;
-      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === sep) { row.push(cur); cur = ""; }
       else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cur); rows.push(row); row = []; cur = ""; }
       else cur += c;
     }
     if (cur || row.length) { row.push(cur); rows.push(row); }
     return rows.filter(r => r.some(x => x.trim()));
   }
-  function fromGoodreads(text) {
-    const rows = parseCSV(text); if (rows.length < 2) return [];
-    const h = rows[0].map(x => x.trim()); const ix = n => h.indexOf(n);
-    const shelf = { "read": "letto", "currently-reading": "in-lettura", "to-read": "da-leggere" };
-    return rows.slice(1).map(r => {
-      const g = n => (ix(n) >= 0 ? (r[ix(n)] || "").trim() : "");
-      return {
-        title: g("Title").replace(/\s*\([^)]*#\d+[^)]*\)\s*$/, ""), author: g("Author").replace(/\s+/g, " "),
-        rating: Number(g("My Rating")) || undefined, pages: Number(g("Number of Pages")) || undefined,
-        year: Number(g("Original Publication Year")) || Number(g("Year Published")) || undefined,
-        finished: g("Date Read").replace(/\//g, "-"), status: shelf[g("Exclusive Shelf")], // voto 0 e scaffale sconosciuto = dato assente: con «aggiorna» non cambiano il libro (un libro nuovo va in Da leggere)
-        notes: g("My Review").replace(/<br\s*\/?>/gi, "\n")
-      };
-    }).filter(b => b.title);
+  const ESEMPI_MODELLO = ["Esempio: Il nome della rosa", "Esempio: Il barone rampante"]; // righe d'esempio di modello-libri.xlsx
+  const COLONNE_MODELLO = { "titolo": "title", "autore": "author", "stato": "status", "voto": "rating", "data di inizio": "started", "data di fine": "finished",
+    "anno di lettura": "finishedYear", "pagine": "pages", "anno di pubblicazione": "year", "genere": "genre", "isbn": "isbn", "serie": "series",
+    "numero nella serie": "seriesNo", "note": "notes", "citazione": "quote" };
+  const STATI_MODELLO = { "da leggere": "da-leggere", "to read": "da-leggere", "in lettura": "in-lettura", "currently reading": "in-lettura", "letto": "letto", "letti": "letto", "read": "letto",
+    "desiderato": "desiderato", "desiderati": "desiderato", "desiderio": "desiderato", "lista dei desideri": "desiderato" };
+  // Data da una cella: numero di Excel (dal 1900, o dal 1904 nei vecchi file per Mac), AAAA-MM-GG, AAAA/MM/GG, GG/MM/AAAA (sempre giorno prima).
+  function dataCella(v, data1904) {
+    const iso = (y, m, d) => { const s = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; const t = new Date(s + "T12:00Z"); return !isNaN(t) && t.toISOString().slice(0, 10) === s ? s : ""; };
+    let m;
+    if (/^\d{1,6}(\.\d+)?$/.test(v)) { const n = Math.floor(Number(v)); if (n < 1) return ""; const t = new Date(Date.UTC(1899, 11, 30) + (n + (data1904 ? 1462 : 0)) * 864e5); return t.toISOString().slice(0, 10); }
+    if ((m = v.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ].*)?$/))) return iso(m[1], m[2], m[3]);
+    if ((m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/))) return iso(m[3], m[2], m[1]);
+    return "";
   }
+  // Righe di una tabella (la prima = intestazioni) → libri, più gli avvisi sui valori scartati (riga del foglio, colonna, valore).
+  function libriDaTabella(righe, { data1904 = false } = {}) {
+    const h = (righe[0] || []).map(x => norm(x));
+    const goodreads = h.includes("title") || h.includes("exclusive shelf") || h.includes("my rating");
+    const ix = n => h.indexOf(n);
+    if (goodreads) { // il CSV esportato da Goodreads, come prima della v92
+      const shelf = { "read": "letto", "currently-reading": "in-lettura", "to-read": "da-leggere" };
+      const libri = righe.slice(1).map(r => {
+        const g = n => (ix(n) >= 0 ? String(r[ix(n)] || "").trim() : "");
+        return {
+          title: g("title").replace(/\s*\([^)]*#\d+[^)]*\)\s*$/, ""), author: g("author").replace(/\s+/g, " "),
+          rating: Number(g("my rating")) || undefined, pages: Number(g("number of pages")) || undefined,
+          year: Number(g("original publication year")) || Number(g("year published")) || undefined,
+          finished: g("date read").replace(/\//g, "-"), status: shelf[g("exclusive shelf")], // voto 0 e scaffale sconosciuto = dato assente: con «aggiorna» non cambiano il libro
+          notes: g("my review").replace(/<br\s*\/?>/gi, "\n")
+        };
+      }).filter(b => b.title).map(b => Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined && v !== "")));
+      return { libri, avvisi: [], colonne: ix("title") >= 0 };
+    }
+    const campo = {}; h.forEach((n, i) => { const k = COLONNE_MODELLO[n]; if (k && !(k in campo)) campo[k] = i; });
+    const nome = Object.fromEntries(Object.entries(COLONNE_MODELLO).map(([n, k]) => [k, n[0].toUpperCase() + n.slice(1)]));
+    nome.isbn = "ISBN";
+    if (!("title" in campo) || !("author" in campo)) return { libri: [], avvisi: [], colonne: false };
+    const libri = [], avvisi = [];
+    righe.slice(1).forEach((r, i) => {
+      const g = k => k in campo ? String(r[campo[k]] ?? "").trim() : "";
+      const title = g("title"), author = g("author").replace(/\s+/g, " ");
+      if (!title || ESEMPI_MODELLO.includes(title)) return;
+      const b = { title, author }, no = (k, v) => avvisi.push({ riga: i + 2, colonna: nome[k], valore: v });
+      const intero = (k, min, max, dest = k) => { const v = g(k); if (!v) return; const n = Number(v.replace(",", ".")); if (Number.isInteger(n) && n >= min && n <= max) b[dest] = n; else no(k, v); };
+      const st = g("status"); if (st && STATI_MODELLO[norm(st)]) b.status = STATI_MODELLO[norm(st)]; else if (st) no("status", st);
+      intero("rating", 1, 5);
+      for (const k of ["started", "finished"]) { const v = g(k); if (!v) continue; const d = dataCella(v, data1904); if (d) b[k] = d; else no(k, v); }
+      intero("finishedYear", 1000, 9999); intero("pages", 1, 100000); intero("year", -3000, 9999);
+      for (const k of ["genre", "series", "notes", "quote"]) if (g(k)) b[k] = g(k);
+      if (g("seriesNo")) b.seriesNo = g("seriesNo").replace(",", ".");
+      const isbn = g("isbn"); if (isbn) { const c = parseIsbn(isbn); if (c) b.isbn = c; else no("isbn", isbn); }
+      if (!b.status) b.status = b.finished || b.finishedYear ? "letto" : b.started ? "in-lettura" : undefined; // stato vuoto: dai dati, così le date restano
+      if (!b.status) delete b.status;
+      const ordine = ["title", "author", "status", "rating", "started", "finished", "finishedYear", "pages", "year", "genre", "isbn", "series", "seriesNo", "notes", "quote"];
+      libri.push(Object.fromEntries(ordine.filter(k => k in b).map(k => [k, b[k]])));
+    });
+    return { libri, avvisi, colonne: true };
+  }
+  const fromGoodreads = text => libriDaTabella(parseCSV(text)).libri;
+  // </regole>
   async function loadSeed() {
     try {
       const r = await fetch("seed.json", { cache: "no-store" });

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT } from './lib.mjs';
 
 const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
-  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi'];
+  'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'fromGoodreads'];
 
 export function caricaRegole() {
   const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,11 +23,39 @@ export default async function run() {
   let L;
   try { L = caricaRegole(); } catch (e) { ok('regole: i tratti segnati si caricano da soli', false, e.message); return; }
   const { R, parts, code } = L;
-  ok('regole: tratti segnati trovati (12) e caricati senza browser', parts.length === 12, String(parts.length));
+  ok('regole: tratti segnati trovati (13) e caricati senza browser', parts.length === 13, String(parts.length));
   ok('regole: nei tratti segnati niente pagina, stato dell\'app o memoria del dispositivo', !/\bdocument\b|\bstate\.|localStorage|\$\(|indexedDB|navigator\./.test(code));
   ok('regole: tutte le funzioni attese ci sono', EXPORTS.every(k => R[k] !== undefined), EXPORTS.filter(k => R[k] === undefined).join(', '));
   const { lettura, clean, tidy } = R, O = '2026-10-31';
   const j = JSON.stringify;
+
+  // ---- v92: «Carica i libri»: testo, CSV, tabella del modello ----
+  ok('decodificaTesto: UTF-8 con BOM e Windows-1252', R.decodificaTesto(Uint8Array.of(0xEF, 0xBB, 0xBF, 0x63, 0x69, 0x61, 0x6F)) === 'ciao' && R.decodificaTesto(Uint8Array.of(0x50, 0x65, 0x72, 0xF2)) === 'Però'
+    && R.decodificaTesto(new TextEncoder().encode('Però')) === 'Però');
+  ok('parseCSV: punto e virgola e virgolette', j(R.parseCSV('Titolo;Autore\n"Uno; due";Eco\n')) === j([['Titolo', 'Autore'], ['Uno; due', 'Eco']]) && j(R.parseCSV('a,b\n"x, y",z')) === j([['a', 'b'], ['x, y', 'z']]));
+  const TB = (h, ...rows) => R.libriDaTabella([h, ...rows]);
+  const m1 = TB([' titolo', 'AUTORE', 'Stato', 'Voto', 'Data di fine', 'ISBN', 'Colonna mia'], ['Il nome della rosa', 'Umberto Eco', 'Letto', '5', '03/02/2025', '978-88-452-1234-5', 'x']);
+  ok('libriDaTabella: modello (intestazioni libere, colonne in più ignorate)', m1.colonne && m1.avvisi.length === 0 && j(m1.libri) === j([{ title: 'Il nome della rosa', author: 'Umberto Eco', status: 'letto', rating: 5, finished: '2025-02-03', isbn: '9788845212345' }]), j(m1));
+  const HM = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di inizio', 'Data di fine', 'Anno di lettura', 'Pagine', 'Anno di pubblicazione', 'Genere', 'ISBN', 'Serie', 'Numero nella serie', 'Note', 'Citazione'];
+  const riga = o => HM.map(k => o[k] ?? '');
+  const d1 = TB(HM, riga({ Titolo: 'A', Autore: 'X', 'Anno di lettura': '2019' }), riga({ Titolo: 'B', Autore: 'X', 'Data di inizio': '2026-01-10' }), riga({ Titolo: 'C', Autore: 'X', Stato: 'boh' }), riga({ Titolo: 'D', Autore: 'X' }));
+  ok('libriDaTabella: stato dedotto dai dati, sconosciuto con avviso', d1.libri[0].status === 'letto' && d1.libri[0].finishedYear === 2019 && d1.libri[1].status === 'in-lettura' && d1.libri[1].started === '2026-01-10'
+    && d1.libri[2].status === undefined && d1.libri[3].status === undefined && d1.avvisi.length === 1 && d1.avvisi[0].colonna === 'Stato' && d1.avvisi[0].valore === 'boh' && d1.avvisi[0].riga === 4, j(d1));
+  const v1 = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'letto', Voto: '6', 'Data di fine': '31/02/2025', Pagine: 'tante' }));
+  ok('libriDaTabella: valori non validi lasciati vuoti, con riga e colonna', v1.libri[0].rating === undefined && v1.libri[0].finished === undefined && v1.libri[0].pages === undefined
+    && j(v1.avvisi.map(a => [a.riga, a.colonna, a.valore])) === j([[2, 'Voto', '6'], [2, 'Data di fine', '31/02/2025'], [2, 'Pagine', 'tante']]), j(v1));
+  const sr = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })]), sr4 = R.libriDaTabella([HM, riga({ Titolo: 'A', Autore: 'X', 'Data di fine': '45658' })], { data1904: true });
+  ok('libriDaTabella: data come numero di Excel (1900 e 1904)', sr.libri[0].finished === '2025-01-01' && sr4.libri[0].finished === '2029-01-02', j([sr.libri, sr4.libri]));
+  const vari = TB(HM, riga({ Titolo: 'A', Autore: 'X', Stato: 'In lettura', 'Data di inizio': '5.3.2024', 'Data di fine': '2024/06/01', Pagine: '320.0', 'Anno di pubblicazione': '1980', Voto: '4,0', 'Numero nella serie': '0,5', Serie: 'Slough House', Note: 'n', Citazione: 'c', Genere: 'Giallo' }),
+    riga({ Titolo: 'B', Autore: 'X', Stato: 'DESIDERATI', 'Data di fine': '7-8-2023' }));
+  ok('libriDaTabella: formati di data e numeri', j(vari.libri[0]) === j({ title: 'A', author: 'X', status: 'in-lettura', rating: 4, started: '2024-03-05', finished: '2024-06-01', pages: 320, year: 1980, genre: 'Giallo', series: 'Slough House', seriesNo: '0.5', notes: 'n', quote: 'c' })
+    && vari.libri[1].status === 'desiderato' && vari.libri[1].finished === '2023-08-07' && !vari.avvisi.length, j(vari));
+  const gr = R.libriDaTabella(R.parseCSV('Title,Author,My Rating,Number of Pages,Original Publication Year,Year Published,Date Read,Exclusive Shelf,My Review,ISBN\n"Dead Lions (Slough House, #2)",Mick  Herron,0,352,,2013,2024/05/06,read,Bello<br/>davvero,"=""123"""\nUbik,Philip K. Dick,4,,1969,,,scaffale-strano,,'));
+  ok('libriDaTabella: CSV di Goodreads come prima', gr.avvisi.length === 0 && j(gr.libri) === j([{ title: 'Dead Lions', author: 'Mick Herron', pages: 352, year: 2013, finished: '2024-05-06', status: 'letto', notes: 'Bello\ndavvero' }, { title: 'Ubik', author: 'Philip K. Dick', rating: 4, year: 1969 }])
+    && j(R.fromGoodreads('Title,Author\nUbik,Dick')) === j([{ title: 'Ubik', author: 'Dick' }]), j(gr));
+  ok('libriDaTabella: senza le colonne Titolo e Autore', TB(['Nome', 'Cosa'], ['a', 'b']).colonne === false && TB(['Nome', 'Cosa'], ['a', 'b']).libri.length === 0);
+  const es = TB(HM, riga({ Titolo: R.ESEMPI_MODELLO[0], Autore: 'Qualcuno' }), riga({ Titolo: '', Autore: 'Senza titolo' }), riga({ Titolo: 'Vero', Autore: 'Io' }));
+  ok('libriDaTabella: righe d\'esempio e senza titolo saltate', R.ESEMPI_MODELLO.length === 2 && es.libri.length === 1 && es.libri[0].title === 'Vero', j(es));
 
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
   const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
