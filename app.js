@@ -86,6 +86,9 @@
   const sitoDi = h => { const k = String(h || "").toLowerCase(); return Object.hasOwn(SITI, k) ? SITI[k] : "altro"; };
   // </regole>
   const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test
+  // Su invito (v94): l'amministratore (Diego) per uid; stesso elenco in firestore.rules.
+  const ADMIN_UIDS = ["46AtxF1piJQGsWcqm665Wjf6nFA3"];
+  const isAdmin = uid => ADMIN_UIDS.includes(uid);
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
   const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
@@ -2860,6 +2863,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     info(text) { const el = $("#sy-info"); if (el) el.textContent = text; },
     askMerge,
     sito: SITO, // v90: sul sito Firebase la pagina di accesso è dello stesso sito
+    isAdmin,
     accountLink: () => ACCOUNT_LINK
   };
   const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";

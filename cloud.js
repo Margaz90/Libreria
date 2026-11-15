@@ -180,7 +180,28 @@
   }
   let goalsUnsub = null;
 
+  // Su invito (v94): prima di toccare i libri controllo che l'account sia ammesso (amministratore o invitato).
+  // Le regole di Firestore lo impongono comunque; qui serve a mostrare la schermata giusta e a non provare a sincronizzare.
+  async function invitato(u) {
+    if (H.isAdmin && H.isAdmin(u.uid)) return true;
+    const s = await db.doc(`invitati/${String(u.email || "").toLowerCase()}`).get();
+    return !!s.exists;
+  }
+  async function entra(u) {
+    let esito = null;
+    try { esito = await invitato(u); } catch { esito = null; } // senza rete: resta l'ultimo stato
+    if (user !== u) return; // nel frattempo è cambiato account
+    if (esito === false || (esito === null && ck.ammesso === false)) {
+      Object.assign(ck, { ammesso: false, uid: u.uid, email: u.email }); saveCk();
+      if (H.ammesso) H.ammesso(false, u.email);
+      return;
+    }
+    if (esito === true) { ck.ammesso = true; saveCk(); if (H.ammesso) H.ammesso(true, u.email); }
+    start();
+  }
+
   async function start() {
+    const altro = !!ck.uid && ck.uid !== user.uid; // un altro account su questo dispositivo: i libri rimasti non vanno nel suo cloud
     const first = ck.uid !== user.uid;
     ck.email = user.email; saveCk();
     H.connected(user.email);
@@ -191,7 +212,8 @@
       let choice = "merge";
       const live = snap.docs.filter(d => !d.data().deleted).length;
       // Primo accesso da questo dispositivo, con libri da entrambe le parti: chiedo come unirli.
-      if (first && H.books().length && live) {
+      if (altro) choice = "cloud";
+      else if (first && H.books().length && live) {
         choice = await H.askMerge(live);
         if (!choice) { await auth.signOut(); return; }
       }
@@ -239,6 +261,20 @@
       return auth.signInWithEmailLink(email, link).then(() => history.replaceState(null, "", location.pathname));
     },
     signOut() { return auth.signOut(); },
+    // Modifiche non ancora arrivate al cloud (v94: «Esci» le aspetta)
+    inSospeso() { return !!(timer || pending.size || gone.size || (info && info.pending)); },
+    // «Esci» (v94): fuori dall'account e via i libri da questo dispositivo (restano nel cloud)
+    async esci() {
+      if (this.inSospeso()) throw { code: "sospeso" };
+      await auth.signOut();
+      for (const k of Object.keys(ck)) delete ck[k];
+      ck.spineAt = {};
+      if (H.pulisci) H.pulisci();
+    },
+    // Elenco degli invitati (solo l'amministratore: le regole lo vietano agli altri)
+    invitati() { return db.collection("invitati").get().then(s => s.docs.map(d => d.id).sort()); },
+    invita(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).set({ aggiunto: Date.now(), da: user ? user.uid : "" }); },
+    togliInvito(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).delete(); },
     goals() { if (user) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato (" + why(e) + ")."));
     },
     reconnect() {
@@ -256,7 +292,7 @@
 
   auth.onAuthStateChanged(u => {
     user = u || null;
-    if (user) { start(); return; }
+    if (user) { entra(user); return; }
     window.libreriaCloud.connected = false;
     clearTimeout(timer); pending.clear(); gone.clear();
     if (unsub) unsub();

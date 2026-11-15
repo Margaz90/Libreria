@@ -53,11 +53,28 @@ export default async function ({ browser }) {
   ok('vecchio sito: pagina di accesso su firebaseapp.com', await V.evaluate(() => window.__fbConfig && window.__fbConfig.authDomain === 'mylibrary-2ea05.firebaseapp.com'));
   for (const x of [F, E, V]) await x.close2();
 
+  // v94: controllo dell'invito prima della sincronizzazione
+  const conEmail = (email, uid) => ({ fn: ([e, u]) => { if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); } }, arg: [email, uid] });
+  const ammesso = p => p.evaluate(() => JSON.parse(localStorage.getItem('libreria-cloud') || '{}').ammesso);
+  const U = await newPage(browser, { width: 1366, height: 860, init: conEmail('ugo@example.com', 'ugo1') });
+  const libriChiesti = []; U.on('request', r => { if (/path=users/.test(r.url())) libriChiesti.push(r.url()); });
+  await U.goto(APP + '/'); await openSync(U); await U.click('#sy-google');
+  await U.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-cloud') || '{}').ammesso === false, null, { timeout: 8000 }).catch(() => {});
+  await U.waitForTimeout(800);
+  ok('invito: chi non è invitato non arriva ai libri del cloud', (await ammesso(U)) === false && !libriChiesti.length, JSON.stringify([await ammesso(U), libriChiesti.length]));
+  const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3';
+  putDoc(`users/${ADMIN}/books/a1`, { title: 'Libro di Diego', author: 'X', status: 'da-leggere', updated: now, added: now, hasSpine: false, deleted: false });
+  const AD = await newPage(browser, { width: 1366, height: 860, init: conEmail('diego.vero@example.com', ADMIN) });
+  await AD.goto(APP + '/'); await openSync(AD); await AD.click('#sy-google');
+  await AD.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(b => b.title === 'Libro di Diego'), null, { timeout: 10000 }).catch(() => {});
+  ok('invito: l\'amministratore entra anche senza essere nell\'elenco', (await ammesso(AD)) === true && (await localBooks(AD)).some(b => b.title === 'Libro di Diego'));
+  for (const x of [U, AD]) await x.close2();
+
   // Computer: accesso con Google (popup)
   const C = await newPage(browser, { width: 1366, height: 860, init: fake() });
   await C.goto(APP + '/'); await openSync(C);
   await C.click('#sy-google'); await until3(C);
-  ok('computer: accesso con Google, arrivano i libri', (await count(C)) === 3, 'libri: ' + await count(C));
+  ok('computer: accesso con Google, arrivano i libri (invitato)', (await count(C)) === 3 && (await C.evaluate(() => JSON.parse(localStorage.getItem('libreria-cloud') || '{}').ammesso)) === true, 'libri: ' + await count(C));
 
   // Popup bloccato: ripiego sul redirect, che torna senza accesso → avviso
   const B = await newPage(browser, { width: 1366, height: 860, init: fake('blocked') });
