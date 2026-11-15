@@ -24,6 +24,9 @@ export default async function ({ browser }) {
   ok('service worker: il modello Excel non finisce in cache', !(await p.evaluate(async () => { for (const k of await caches.keys()) if (await (await caches.open(k)).match('modello-libri.xlsx')) return true; return false; })));
   // v93: l'app si apre dalla copia sul telefono (niente attesa della rete); le versioni nuove arrivano con «Aggiorna»
   const appJs = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  // v93: cloud.js (la sincronizzazione) è tra i file di ogni versione, scaricato fresco: mai una sincronizzazione vecchia con un'app nuova
+  ok('cloud.js è nella copia della versione', await p.evaluate(async () => { for (const k of await caches.keys()) if (k.startsWith('libreria-shell-') && await (await caches.open(k)).match('cloud.js')) return true; return false; }));
+  try {
   setOverride('app.js', appJs + '\nwindow.__nuovo = 1;');
   await p.reload(); await p.waitForSelector('#main');
   ok('apertura dalla copia sul telefono: il codice non aspetta la rete', !(await p.evaluate(() => window.__nuovo)));
@@ -39,7 +42,6 @@ export default async function ({ browser }) {
   // Il server pubblica un sw.js con una versione diversa: il browser la installa e la mette in attesa
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   setOverride('sw.js', sw.replace(/const VERSION = "([^"]+)"/, 'const VERSION = "$1-test"'));
-  try {
     await p.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r.update()));
     const shown = await p.waitForSelector('#upd-bar', { timeout: 20000 }).then(() => true, () => false);
     ok('nuova versione: compare l\'avviso in alto', shown);

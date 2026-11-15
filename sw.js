@@ -7,7 +7,7 @@ const VERSION = "v93";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
-const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "cloud.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"]; // cloud.js (v93): sincronizzazione sempre della stessa versione dell'app
 const MAX_ASSETS = 400;
 
 self.addEventListener("install", e => {
@@ -39,7 +39,8 @@ async function networkFirst(req) {
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 4000);
-    const res = await fetch(req, { signal: ctl.signal });
+    // I file caricati dopo (v93): il server li ricontrolla sempre, così una versione nuova non si tiene una copia vecchia del browser
+    const res = await fetch(req.mode === "navigate" ? req : new Request(req.url, { cache: "no-cache" }), { signal: ctl.signal });
     clearTimeout(timer);
     if (res.ok) cache.put(req, res.clone());
     return res;
