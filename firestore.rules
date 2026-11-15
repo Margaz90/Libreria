@@ -1,0 +1,30 @@
+rules_version = '2';
+// MyLibrary su invito (v94). Ognuno vede solo i propri libri, e solo se è l'amministratore (Diego) o un invitato.
+// L'elenco degli invitati (invitati/{email in minuscolo}) lo scrive solo l'amministratore, dalla sezione «Invitati» dell'app.
+// Provate dal gruppo di test `firestore` con l'emulatore; pubblicate da GitHub (.github/workflows/firebase.yml).
+// ADMIN_UIDS: stesso elenco in app.js.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function admin() {
+      return request.auth != null && request.auth.uid in ["46AtxF1piJQGsWcqm665Wjf6nFA3"];
+    }
+    function verificata() {
+      return request.auth != null && request.auth.token.email is string && request.auth.token.email_verified == true;
+    }
+    function email() {
+      return request.auth.token.email.lower();
+    }
+    function invitato() {
+      return verificata() && exists(/databases/$(db)/documents/invitati/$(email()));
+    }
+
+    match /users/{uid}/{doc=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid && (admin() || invitato());
+    }
+
+    match /invitati/{e} {
+      allow get: if admin() || (verificata() && email() == e);
+      allow list, write: if admin();
+    }
+  }
+}
