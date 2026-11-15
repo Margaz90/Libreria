@@ -132,11 +132,13 @@ async function porta(browser) {
   await A.evaluate(() => { window.__inSosp = window.libreriaCloud.inSospeso; window.libreriaCloud.inSospeso = () => true; });
   await esci(A);
   ok('Esci: bloccato con modifiche non ancora salvate nel cloud', /Ci sono modifiche non ancora salvate nel cloud: collegati alla rete e riprova\./.test(await A.locator('.sheet').innerText()) && (await localBooks(A)).length === 2);
-  await A.evaluate(() => { window.libreriaCloud.inSospeso = window.__inSosp; }); await A.keyboard.press('Escape'); await A.waitForTimeout(300);
+  await A.evaluate(() => { window.libreriaCloud.inSospeso = window.__inSosp; localStorage.setItem('libreria-settings', JSON.stringify({ ...JSON.parse(localStorage.getItem('libreria-settings') || '{}'), goals: { 2026: 30 }, goalsAt: Date.now() })); });
+  await A.keyboard.press('Escape'); await A.waitForTimeout(300);
   await esci(A);
   await A.waitForSelector('#porta #sy-email', { timeout: 5000 }).catch(() => {});
   ok('Esci: toglie i libri da questo dispositivo e torna alla porta', (await localBooks(A)).length === 0 && (await A.locator('#porta #sy-email').count()) === 1
     && await A.evaluate(() => !localStorage.getItem('libreria-cloud') || !JSON.parse(localStorage.getItem('libreria-cloud')).uid), JSON.stringify(await localBooks(A)));
+  ok('Esci: l\'obiettivo dell\'anno non passa al prossimo account', await A.evaluate(() => { const s = JSON.parse(localStorage.getItem('libreria-settings') || '{}'); return !s.goals || !Object.keys(s.goals).length; }));
   // 8. Un secondo invitato sullo stesso dispositivo non riceve i libri del primo
   putDoc('invitati/anna@example.com', { aggiunto: 1, da: ADMIN });
   await A.evaluate(() => { localStorage.setItem('fake-uid', 'anna1'); localStorage.setItem('fake-email', 'anna@example.com'); });

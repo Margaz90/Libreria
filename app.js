@@ -2960,6 +2960,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY].includes(k)) localStorage.removeItem(k);
     } catch {}
     try { indexedDB.deleteDatabase("libreria-copie"); } catch {} // le copie di «Annulla» contengono i libri di questo account
+    try { const s = getSet(); delete s.goals; delete s.goalsAt; delete s.lastBackup; localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch {} // l'obiettivo è dell'account (va nel cloud): non deve passare al prossimo
     state.books = []; novitaMem = null; cloud.email = "";
     if (PORTA) mostraPorta("accesso"); else render();
   }
