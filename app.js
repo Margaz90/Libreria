@@ -2867,7 +2867,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     sito: SITO, // v90: sul sito Firebase la pagina di accesso è dello stesso sito
     isAdmin,
     ammesso(si, email) { if (!PORTA) return; if (si) { if ($("#porta")) { chiudiPorta(); render(); } } else mostraPorta("invito", email); },
-    pulisci: () => pulisciDispositivo(),
+    pulisci: opz => pulisciDispositivo(opz),
     accountLink: () => ACCOUNT_LINK
   };
   const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";
@@ -2892,10 +2892,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function collegaAccesso(root, { primaVolta = false } = {}) {
     const { aPagina, googleQui } = accessoModo();
     const st = msg => { $("#sy-status", root).textContent = msg; };
-    loadCloud().then(() => {
+    const prepara = () => loadCloud().then(() => {
       ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { const b = $(sel, root); if (b) b.disabled = false; });
       st("");
-    }).catch(() => st(primaVolta && !navigator.onLine ? "Serve la connessione per entrare la prima volta." : "Non riesco a caricare il servizio. Controlla la connessione e riprova."));
+    }).catch(() => {
+      st(primaVolta && !navigator.onLine ? "Serve la connessione per entrare la prima volta." : "Non riesco a caricare il servizio. Controlla la connessione e riprova.");
+      addEventListener("online", () => { if (root.isConnected) { st("Preparo l'accesso…"); prepara(); } }, { once: true }); // riprova quando torna la rete
+    });
+    prepara();
     // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
     if (googleQui) $("#sy-google", root).onclick = () => {
       st("Apro l'accesso con Google…");
@@ -2950,12 +2954,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       : `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
         <p class="hint">Questa libreria è su invito: entra con il tuo account.</p>
         ${accessoHTML()}</div>`;
-    if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci()).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
+    if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci({ soloAccount: true })).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
     else collegaAccesso(el, { primaVolta: true });
   }
   function chiudiPorta() { const el = $("#porta"); if (el) el.remove(); document.body.classList.remove("in-porta"); }
   // «Esci» (v94): via dal dispositivo i dati di questo account (restano nel cloud), così un'altra persona non li vede né li riceve.
-  function pulisciDispositivo() {
+  function pulisciDispositivo({ soloAccount = false } = {}) {
+    dataGen++; novita.busy = false; // i lavori in sottofondo dell'account che esce (Novità, copertine) non scrivono più
+    if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); } catch {} cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
     try {
       for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY].includes(k)) localStorage.removeItem(k);
     } catch {}

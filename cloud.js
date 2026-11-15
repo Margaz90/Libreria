@@ -23,7 +23,7 @@
   const auth = firebase.auth(), db = firebase.firestore();
   db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); // cache offline: le scritture in attesa restano salvate
 
-  let user = null, unsub = null, timer = null;
+  let user = null, unsub = null, timer = null, gen = 0, sincronizzo = false; // gen (v94): cambia a ogni account; un lavoro di un account precedente si ferma
   const pending = new Set(), gone = new Set();
   const plain = o => JSON.parse(JSON.stringify(o));
   const books = () => db.collection(`users/${user.uid}/books`);
@@ -82,12 +82,12 @@
   }
 
   /* ---- dal cloud al dispositivo ---- */
-  async function adopt(id, r) {
+  async function adopt(id, r, g = gen) {
     const local = H.books().find(x => x.id === id);
     let spine = null;
     if (r.hasSpine) {
       if (local && local.spine && local.spineAt === r.spineAt) spine = local.spine;
-      else { const s = await spines().doc(id).get(); if (s.exists) spine = s.data().data; }
+      else { const s = await spines().doc(id).get(); if (g !== gen) return; if (s.exists) spine = s.data().data; }
       if (spine) ck.spineAt[id] = r.spineAt;
     } else delete ck.spineAt[id];
     saveCk();
@@ -105,7 +105,9 @@
 
   // Confronta tutto il cloud con il dispositivo e applica la scelta: "merge" (vince il più recente), "cloud" o "device".
   async function reconcile(choice = "merge", snap = null) {
+    const g = gen;
     snap = snap || await books().get();
+    if (g !== gen) return;
     const remote = new Map();
     snap.forEach(d => remote.set(d.id, d.data()));
     // Stesso libro (titolo e autore) con un id diverso: uso quello del cloud, così non si duplica.
@@ -127,7 +129,7 @@
       if (win && win.book && win === L) {
         if (!R || !R.book || R.t < L.t || choice === "device") pending.add(id);
       } else if (win && win.book) {
-        if (choice === "cloud" || !lb || (lb.updated || 0) < win.t) await adopt(id, r);
+        if (choice === "cloud" || !lb || (lb.updated || 0) < win.t) { await adopt(id, r, g); if (g !== gen) return; }
       } else {
         if (lb) H.setLocal(id, null);
         if (R && R.book) gone.add(id);
@@ -153,7 +155,9 @@
   const nz = v => (v === undefined || v === null || v === "" ? null : v);
   function listen() {
     if (unsub) unsub();
+    const g = gen;
     unsub = books().onSnapshot({ includeMetadataChanges: true }, snap => {
+      if (g !== gen) return;
       info = { pending: !!snap.metadata.hasPendingWrites, fromCache: !!snap.metadata.fromCache, at: Date.now(), count: snap.docs.filter(d => !d.data().deleted).length };
       showInfo();
       const list = [], jobs = [];
@@ -196,7 +200,8 @@
       if (H.ammesso) H.ammesso(false, u.email);
       return;
     }
-    if (esito === true) { ck.ammesso = true; saveCk(); if (H.ammesso) H.ammesso(true, u.email); }
+    if (esito === true) { ck.ammesso = true; saveCk(); }
+    if (H.ammesso) H.ammesso(true, u.email); // anche se il controllo non ha risposto: il cloud resta protetto dalle regole
     start();
   }
 
@@ -207,8 +212,10 @@
     H.connected(user.email);
     window.libreriaCloud.connected = true;
     H.status("Sincronizzo i libri…");
+    const g = gen; sincronizzo = true;
     try {
       const snap = await books().get();
+      if (g !== gen) return;
       let choice = "merge";
       const live = snap.docs.filter(d => !d.data().deleted).length;
       // Primo accesso da questo dispositivo, con libri da entrambe le parti: chiedo come unirli.
@@ -219,15 +226,17 @@
       }
       if (first && H.books().length && H.snapshot) await H.snapshot("Prima dell'unione con il cloud"); // si può annullare da Backup
       await reconcile(choice, snap);
+      if (g !== gen) return; // nel frattempo si è usciti o è cambiato account
       listen();
       const n = H.books().length;
       // Account senza libri nel cloud e dispositivo vuoto: probabilmente i libri sono su un altro account.
       if (!n && !live) H.notice(`Collegato come ${user.email}, ma in questo account non ci sono libri. Se li avevi sincronizzati con un altro account (Google o link via email), esci e accedi con quello.`);
       else H.done(`Libreria sincronizzata: ${n} ${n === 1 ? "libro" : "libri"} · ${user.email}.`);
     } catch (e) {
+      if (g !== gen) return;
       listen();
       H.error("Sincronizzazione non riuscita (" + why(e) + "). Riprovo quando torna la connessione.");
-    }
+    } finally { if (g === gen) sincronizzo = false; }
   }
 
   // Ponte per app.js. Le modifiche arrivano da changed/removed; il resto è interno.
@@ -262,14 +271,16 @@
     },
     signOut() { return auth.signOut(); },
     // Modifiche non ancora arrivate al cloud (v94: «Esci» le aspetta)
-    inSospeso() { return !!(timer || pending.size || gone.size || (info && info.pending)); },
+    inSospeso() { return !!(sincronizzo || timer || pending.size || gone.size || (info && info.pending)); },
     // «Esci» (v94): fuori dall'account e via i libri da questo dispositivo (restano nel cloud)
-    async esci() {
-      if (this.inSospeso()) throw { code: "sospeso" };
+    // soloAccount: dalla schermata «non invitato» si esce soltanto, i libri del dispositivo (mai sincronizzati con questo account) restano
+    async esci({ soloAccount = false } = {}) {
+      if (!soloAccount && this.inSospeso()) throw { code: "sospeso" };
+      gen++;
       await auth.signOut();
       for (const k of Object.keys(ck)) delete ck[k];
       ck.spineAt = {};
-      if (H.pulisci) H.pulisci();
+      if (H.pulisci) H.pulisci({ soloAccount });
     },
     // Elenco degli invitati (solo l'amministratore: le regole lo vietano agli altri)
     invitati() { return db.collection("invitati").get().then(s => s.docs.map(d => d.id).sort()); },
@@ -291,6 +302,7 @@
   };
 
   auth.onAuthStateChanged(u => {
+    if ((u && u.uid) !== (user && user.uid)) { gen++; sincronizzo = false; }
     user = u || null;
     if (user) { entra(user); return; }
     window.libreriaCloud.connected = false;

@@ -348,7 +348,19 @@ async function libriDalCloud(browser) {
   await p.close2();
 }
 
+// v94: una ricerca delle novità in corso quando si esce dall'account non scrive i gusti di chi è uscito sul dispositivo
+async function esceDuranteGiro(browser) {
+  const p = await apri(browser);
+  await riapri(p); await p.evaluate(() => { window.libreriaNovitaMs = 250; });
+  await vai(p); await p.waitForTimeout(300);
+  await p.evaluate(() => window.libreriaHost.pulisci());
+  await p.waitForTimeout(6000);
+  ok('uscita durante la ricerca delle novità: niente novità dell\'account uscito sul dispositivo', !(await memoria(p)), JSON.stringify(await memoria(p) || null).slice(0, 120));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
+  await esceDuranteGiro(browser);
   await libriDalCloud(browser);
   await popup(browser);
   await giro(browser);

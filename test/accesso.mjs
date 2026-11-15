@@ -1,5 +1,5 @@
 // Accesso: link via email nell'app su iPhone, Google su computer, popup bloccato o chiuso, account senza libri.
-import { APP, API, ok, newPage, localBooks, toastText, resetCloud, putDoc } from './lib.mjs';
+import { APP, API, STUB, ok, newPage, localBooks, toastText, resetCloud, putDoc } from './lib.mjs';
 
 const fake = (popup = 'ok', uid = 'u1') => ({
   fn: ([popup, uid]) => { if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', popup); localStorage.setItem('fake-uid', uid); } },
@@ -115,7 +115,7 @@ async function porta(browser) {
   const cloudCol = p => fetch(`${API}/col?path=${encodeURIComponent(p)}`).then(r => r.json());
   const vedeLibri = p => p.locator('#main [data-id]').first().isVisible().catch(() => false);
   // Senza rete (nei test il service worker è spento: si simula con navigator.onLine falso e i servizi esterni bloccati)
-  const offline = async p => { await p.unroute(/cdn\.jsdelivr\.net/); await p.route(/cdn\.jsdelivr\.net|localhost:\d+\/(doc|col)/, r => r.abort()); await p.addInitScript(() => Object.defineProperty(navigator, 'onLine', { get: () => false })); await p.reload(); };
+  const offline = async p => { await p.unroute(/cdn\.jsdelivr\.net/); await p.route(/cdn\.jsdelivr\.net|localhost:\d+\/(doc|col)/, r => r.abort()); await p.addInitScript(() => Object.defineProperty(navigator, 'onLine', { get: () => false, configurable: true })); await p.reload(); };
   ['Primo', 'Secondo'].forEach((t, i) => putDoc('users/porta1/books/p' + i, { title: t, author: 'Autore', status: 'da-leggere', updated: now, added: now, hasSpine: false, deleted: false }));
 
   // 1-2. Senza accesso solo la porta; un invitato entra e trova i suoi libri
@@ -198,4 +198,40 @@ async function porta(browser) {
   await I.locator('.dock .more').click(); await I.waitForTimeout(300);
   ok('Invitati: un invitato non vede la voce', (await I.locator('[data-m=inv]').count()) === 0);
   await I.close2();
+  // ---- Correzioni dopo la revisione (v94) ----
+  // I1: «Esci» dalla schermata «non invitato» non cancella i libri che erano solo su questo dispositivo
+  const L = await nuova('ugo@example.com', 'ugo1');
+  await L.evaluate(() => localStorage.setItem('libreria-diego-v1', JSON.stringify([{ id: 'loc1', title: 'Solo qui', author: 'X', status: 'da-leggere', added: 1, updated: 1 }])));
+  await L.reload(); await L.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {});
+  await L.click('#porta #sy-google'); await L.waitForFunction(() => /su invito\./.test(document.querySelector('#porta')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+  await L.click('#porta >> text=Esci e usa un altro account'); await L.waitForSelector('#porta #sy-email', { timeout: 5000 }).catch(() => {});
+  ok('«non invitato» → Esci: i libri mai sincronizzati restano sul dispositivo', (await localBooks(L)).some(b => b.title === 'Solo qui'), JSON.stringify(await localBooks(L)));
+  await L.close2();
+  // I2: durante la prima sincronizzazione «Esci» aspetta (risposte del cloud rallentate)
+  const S2 = await nuova();
+  await S2.route(/localhost:\d+\/col/, async r => { await new Promise(x => setTimeout(x, 1500)); r.continue(); });
+  await S2.waitForFunction(() => !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {});
+  await S2.click('#porta #sy-google'); await S2.waitForTimeout(500);
+  ok('durante la prima sincronizzazione ci sono modifiche «in sospeso» (Esci aspetta)', await S2.evaluate(() => window.libreriaCloud.inSospeso()));
+  await S2.close2();
+  // I4: senza rete al primo accesso, quando la rete torna si può entrare
+  const R = await nuova();
+  await offline(R); await R.waitForTimeout(1200);
+  await R.unroute(/cdn\.jsdelivr\.net|localhost:\d+\/(doc|col)/);
+  await R.route(/cdn\.jsdelivr\.net/, r => r.fulfill({ contentType: 'application/javascript', body: /app-compat/.test(r.request().url()) ? STUB : '' }));
+  await R.evaluate(() => { Object.defineProperty(navigator, 'onLine', { get: () => true, configurable: true }); window.dispatchEvent(new Event('online')); });
+  await R.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 8000 }).catch(() => {});
+  ok('porta: quando torna la rete si può entrare (pulsanti di nuovo attivi)', await R.evaluate(() => !!document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled));
+  // M2: l'avviso di una nuova versione resta visibile anche sopra la porta
+  await R.evaluate(() => { const b = document.createElement('div'); b.id = 'upd-bar'; b.className = 'update-bar'; b.textContent = 'Nuova versione disponibile.'; document.body.append(b); });
+  ok('porta: l\'avviso «Nuova versione disponibile» resta visibile', await R.locator('#upd-bar').isVisible());
+  await R.close2();
+  // M3: controllo dell'invito che non risponde (rete instabile): l'invitato già ammesso entra lo stesso (il cloud resta protetto dalle regole)
+  const N = await nuova();
+  await N.route(/localhost:\d+\/doc\?path=invitati/, r => r.abort());
+  await N.waitForFunction(() => !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {});
+  await N.click('#porta #sy-google'); await N.waitForFunction(() => !document.querySelector('#porta'), null, { timeout: 8000 }).catch(() => {});
+  ok('porta: se il controllo dell\'invito non risponde, chi è entrato non resta fermo sulla porta', !(await N.locator('#porta').count()));
+  await N.close2();
 }
+

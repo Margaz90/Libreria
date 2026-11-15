@@ -809,7 +809,7 @@ html { scroll-behavior: smooth; }
 .nov-det .actions .btn { min-height: 44px; }
 
 /* Porta d'ingresso (v94): a pagina intera, sopra tutto; il resto dell'app nascosto finché non si entra */
-body.in-porta > :not(#porta):not(.toast) { display: none !important; }
+body.in-porta > :not(#porta):not(.toast):not(.update-bar) { display: none !important; }
 #porta { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); box-sizing: border-box; background: var(--bg); }
 #porta .porta-box { width: 100%; max-width: 420px; }
 #porta h1 { margin: 0 0 18px; }
