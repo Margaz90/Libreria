@@ -15,7 +15,7 @@ export const API = `http://localhost:${PORT + 1}`;
 export const STUB = fs.readFileSync(path.join(ROOT, 'test', 'firebase-stub.js'), 'utf8').replace("'http://localhost:8766'", `'${API}'`);
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml' };
-const overrides = new Map(); // percorso → contenuto sostitutivo (es. un sw.js con una versione nuova)
+const overrides = new Map(); // percorso → contenuto sostitutivo (es. un sw.js con una versione nuova), oppure { body, headers }
 export const setOverride = (p, body) => body == null ? overrides.delete(p) : overrides.set(p, body);
 
 const store = new Map(); // dati del finto Firestore: "users/u1/books/b1" → documento
@@ -26,7 +26,7 @@ export const putDoc = (p, data) => store.set(p, data);
 export async function startServers() {
   const app = http.createServer((req, res) => {
     let p = decodeURIComponent(new URL(req.url, APP).pathname).replace(/^\/+/, '') || 'index.html';
-    if (overrides.has(p)) { res.setHeader('Content-Type', TYPES[path.extname(p)] || 'text/plain'); return res.end(overrides.get(p)); }
+    if (overrides.has(p)) { const o = overrides.get(p); res.setHeader('Content-Type', TYPES[path.extname(p)] || 'text/plain'); if (o && o.headers) for (const [k, v] of Object.entries(o.headers)) res.setHeader(k, v); return res.end(o && o.body !== undefined ? o.body : o); }
     const file = path.join(ROOT, p);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.statusCode = 404; return res.end('non trovato'); }
     res.setHeader('Content-Type', TYPES[path.extname(file)] || 'application/octet-stream');

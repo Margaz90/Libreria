@@ -36,8 +36,8 @@ Il dettaglio completo (id, classi, casi limite, versioni, spec) è in [docs/funz
 - **Altro**: menu rapido con pressione prolungata (Elimina in due tocchi), anteprima al passaggio del mouse, scorciatoie `/`, `N`, `1`/`2`, `refreshChanged` per le modifiche dal cloud, `prefers-reduced-motion`.
 
 ## Regole di lavoro
-- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v92), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
-- Prestazioni: niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
+- Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v93), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
+- Prestazioni: i file dell'app arrivano dalla copia del service worker (v93, `copiaPrima`; versione nuova scaricata intera con `cache: "reload"` e mostrata con «Aggiorna»; controllo degli aggiornamenti anche tornando nell'app, ogni 5 minuti al massimo); niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
 - Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
 - Commit in italiano, poi push su `main` (la pubblicazione su Pages e su Firebase Hosting è automatica).
@@ -55,7 +55,7 @@ Testo completo (cosa controlla ogni gruppo di test e ogni hook): [docs/strumenti
 `cloud.js`, caricata solo al bisogno; progetto `mylibrary-2ea05` (Google + link email, Firestore `users/{uid}/books|spines|meta`). Vince la modifica più recente (`updated`); in `app.js` il ponte è `libreriaHost`, ogni modifica chiama `cloudHook("changed"|"removed", id)`, le eliminazioni da disconnesso stanno in `libreria-tombs`. Nell'app installata su iPhone: sul vecchio indirizzo solo link via email; sul sito Firebase (v90) anche Google a pagina intera (`signInGoogleRedirect`, `authDomain` = il sito). Il dettaglio è in [.claude/rules/sincronizzazione.md](.claude/rules/sincronizzazione.md) (si carica da solo lavorando su `cloud.js`; leggilo se tocchi la sincronizzazione da `app.js`).
 
 ## Storia del lavoro
-Tutte le versioni, dalla più recente, in [docs/storia.md](docs/storia.md) (`/pubblica` aggiunge lì la riga nuova). Ultime: v92 «Carica i libri» con modello Excel, via i 108 libri Goodreads; v91 Novità anche dopo un'installazione nuova; v90 app anche su Firebase Hosting, con Google sull'iPhone (provato dal vivo da Diego). Consultala per capire perché una scelta è stata fatta (es. i molti tentativi su Google per gli ISBN, v66–v72).
+Tutte le versioni, dalla più recente, in [docs/storia.md](docs/storia.md) (`/pubblica` aggiunge lì la riga nuova). Ultime: v93 apertura dalla copia sul telefono (0,2 s invece di 0,5–4 s); v92 «Carica i libri» con modello Excel, via i 108 libri Goodreads; v91 Novità anche dopo un'installazione nuova. Consultala per capire perché una scelta è stata fatta (es. i molti tentativi su Google per gli ISBN, v66–v72).
 
 ## Altre idee in sospeso
 - Voti dal vivo (8 novembre 2026): Open Library sì, Apple sì (nelle Novità), Google no per l'ISBN di prova.
@@ -64,4 +64,4 @@ Tutte le versioni, dalla più recente, in [docs/storia.md](docs/storia.md) (`/pu
 - Eventuale attività pianificata settimanale per `/acquisti` (oggi è su richiesta; Amazon poco utile perché le email non hanno ISBN).
 - Futura app iOS nativa (SwiftUI) partendo da questo modello dati.
 - Vecchio indirizzo: Diego usa solo la nuova app (14 novembre 2026) e per ora lascia tutto così; più avanti eventuale rimando dal vecchio al nuovo.
-- Aprire l'app ad altre persone (chiesto da Diego il 14 novembre 2026): i dati sono già separati per utente; servirebbero intestazione per utente, (fatto nella v92: «Carica i libri» al posto dei 108 libri Goodreads), attenzione alla quota della chiave di Google Books e ai costi di Firebase, una nota sulla privacy con cancellazione dell'account, acquisti da Gmail solo per Diego.
+- Aprire l'app ad altre persone (chiesto da Diego il 14 novembre 2026; il 15 novembre ha scelto «solo persone invitate da lui», elenco di email): i dati sono già separati per utente; servirebbero intestazione per utente, (fatto nella v92: «Carica i libri» al posto dei 108 libri Goodreads), attenzione alla quota della chiave di Google Books e ai costi di Firebase, una nota sulla privacy con cancellazione dell'account, acquisti da Gmail solo per Diego.
