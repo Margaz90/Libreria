@@ -3427,6 +3427,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("sw.js").then(reg => {
+        // v93: l'app si apre dalla copia sul telefono; tornando nell'app dal sottofondo (sull'iPhone non si ricarica)
+        // chiedo al browser se c'è una versione nuova, al massimo ogni 5 minuti. Se c'è, compare l'avviso qui sotto.
+        let ultimoControllo = Date.now();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible" || Date.now() - ultimoControllo < 5 * 60e3) return;
+          ultimoControllo = Date.now(); reg.update().catch(() => {});
+        });
         // Avviso fisso in alto: resta finché non si aggiorna o si sceglie "Più tardi", così nessun altro messaggio lo copre.
         const offer = w => {
           if ($("#upd-bar")) return;

@@ -1,8 +1,9 @@
 /* Service worker della Libreria di Diego.
-   - File dell'app: rete prima (così gli aggiornamenti arrivano subito), copia locale se sei offline.
+   - File dell'app (v93): copia sul telefono prima, così l'app si apre subito anche con poca rete; la prima volta dalla rete.
+     Una versione nuova (VERSION) si scarica intera all'installazione, fresca dal server, e arriva con «Aggiorna».
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v92";
+const VERSION = "v93";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
@@ -10,7 +11,8 @@ const SHELL_FILES = ["./", "index.html", "style.css", "app.js", "manifest.webman
 const MAX_ASSETS = 400;
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)));
+  // cache: "reload": i file della versione nuova vengono dal server, non dalla memoria del browser (GitHub Pages la tiene 10 minuti)
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES.map(u => new Request(u, { cache: "reload" })))));
 });
 
 self.addEventListener("activate", e => {
@@ -47,6 +49,12 @@ async function networkFirst(req) {
   }
 }
 
+// File dell'app (v93): la copia di questa versione se c'è, altrimenti la rete (che la mette in copia).
+async function copiaPrima(req) {
+  const hit = await (await caches.open(SHELL)).match(req, { ignoreSearch: true });
+  return hit || networkFirst(req);
+}
+
 async function cacheFirst(req, cacheName = ASSETS) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(req);
@@ -66,7 +74,7 @@ self.addEventListener("fetch", e => {
     if (url.pathname.endsWith(".xlsx")) return; // modello Excel (v92): sempre dalla rete, mai sostituito da index.html
     if (url.pathname.startsWith("/__/")) return; // pagine di accesso di Firebase (sito Firebase, v90): sempre dalla rete, mai in cache né sostituite da index.html
     if (url.pathname.endsWith("zxing.min.js")) { e.respondWith(cacheFirst(req, LIBS)); return; }
-    e.respondWith(networkFirst(req));
+    e.respondWith(copiaPrima(req));
     return;
   }
   if (url.hostname === "www.googleapis.com") return; // ricerche: solo rete
