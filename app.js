@@ -693,7 +693,7 @@
   }
   // Pop-up all'apertura (v84): uscite non viste di autori che hai letto, una volta per libro; mai sopra un'altra scheda.
   function mostraPopupNovita() {
-    if (sheetOpen()) return; // aspetta l'apertura successiva
+    if (sheetOpen() || $("#porta")) return; // aspetta l'apertura successiva (e mai sopra la porta d'ingresso, v94)
     const n = leggiNovita(), oggi = today();
     const nuove = novitaVisibili(n).uscite.filter(x => x.autoreLetto && !n.viste[x.id] && !n.mostrate[x.id]);
     if (!nuove.length) return;
@@ -2806,12 +2806,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="menu-list">
         <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
         <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
+        ${isAdmin(cloudInfo().uid) && cloud.email ? `<button type="button" data-m="inv"><b>Invitati</b><span>Chi può usare MyLibrary</span></button>` : ""}
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
       </div>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
     $("[data-m=goal]", sheet).onclick = openGoal;
     $("[data-m=backup]", sheet).onclick = openImport;
     $("[data-m=sync]", sheet).onclick = openSync;
+    const inv = $("[data-m=inv]", sheet); if (inv) inv.onclick = openInvitati;
     $("#m-close", sheet).onclick = closeSheet;
   }
 
@@ -2864,33 +2866,38 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     askMerge,
     sito: SITO, // v90: sul sito Firebase la pagina di accesso è dello stesso sito
     isAdmin,
+    ammesso(si, email) { if (!PORTA) return; if (si) { if ($("#porta")) { chiudiPorta(); render(); } } else mostraPorta("invito", email); },
+    pulisci: () => pulisciDispositivo(),
     accountLink: () => ACCOUNT_LINK
   };
   const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";
-  function openSync() {
-    if (cloud.email) return openSyncDone();
+  // Contenuto dell'accesso (scheda «Accedi e sincronizza» e porta d'ingresso, v94): stessi campi e stessi pulsanti.
+  function accessoModo() {
     // Nell'app installata su iPhone l'accesso con Google non torna all'app quando app e pagina di accesso stanno su siti diversi
     // (github.io e firebaseapp.com): lì si usa il link via email. Sul sito Firebase (v90) sono lo stesso sito: Google a pagina intera.
-    const iosApp = navigator.standalone === true, aPagina = iosApp && SITO === "firebase", googleQui = !iosApp || aPagina;
-    const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
-      <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
-      ${!googleQui
+    const iosApp = navigator.standalone === true, aPagina = iosApp && SITO === "firebase";
+    return { aPagina, googleQui: !iosApp || aPagina };
+  }
+  function accessoHTML() {
+    const { googleQui } = accessoModo();
+    return `${!googleQui
         ? `<p class="hint">Nell'app installata su iPhone, iOS non lascia completare l'accesso con Google: usa il link via email, con lo stesso indirizzo del tuo account Google. Se l'account non ha libri, l'app te lo dice.</p>`
         : `<div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>`}
       <div class="field"><label for="sy-email">${!googleQui ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
       <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
       <div class="field"><label for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
       <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
-      <div class="status-line" id="sy-status" aria-live="polite">Preparo l'accesso…</div>
-      <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
-    const st = msg => { $("#sy-status", sheet).textContent = msg; };
-    $("#sy-close", sheet).onclick = closeSheet;
+      <div class="status-line" id="sy-status" aria-live="polite">Preparo l'accesso…</div>`;
+  }
+  function collegaAccesso(root, { primaVolta = false } = {}) {
+    const { aPagina, googleQui } = accessoModo();
+    const st = msg => { $("#sy-status", root).textContent = msg; };
     loadCloud().then(() => {
-      ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { const b = $(sel, sheet); if (b) b.disabled = false; });
+      ["#sy-google", "#sy-link", "#sy-paste-go"].forEach(sel => { const b = $(sel, root); if (b) b.disabled = false; });
       st("");
-    }).catch(() => st("Non riesco a caricare il servizio. Controlla la connessione e riprova."));
+    }).catch(() => st(primaVolta && !navigator.onLine ? "Serve la connessione per entrare la prima volta." : "Non riesco a caricare il servizio. Controlla la connessione e riprova."));
     // Il clic su Google deve partire subito (il browser blocca le finestre aperte dopo): per questo il servizio si carica quando la scheda si apre.
-    if (googleQui) $("#sy-google", sheet).onclick = () => {
+    if (googleQui) $("#sy-google", root).onclick = () => {
       st("Apro l'accesso con Google…");
       const lc = window.libreriaCloud;
       (aPagina ? lc.signInGoogleRedirect() : lc.signInGoogle()).catch(e => {
@@ -2901,20 +2908,87 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
           : "Accesso non riuscito (" + c + "). Puoi usare il link via email qui sotto.");
       });
     };
-    $("#sy-link", sheet).onclick = () => {
-      const email = $("#sy-email", sheet).value.trim();
+    $("#sy-link", root).onclick = () => {
+      const email = $("#sy-email", root).value.trim();
       if (!/^\S+@\S+\.\S+$/.test(email)) { st("Scrivi un indirizzo email valido."); return; }
       st("Invio il link…");
       window.libreriaCloud.sendLink(email)
         .then(() => { setCloudInfo({ lastEmail: email }); st("Link inviato a " + email + ". Copialo dall'email e incollalo qui sopra, senza aprirlo."); })
         .catch(e => st("Non riesco a inviare il link (" + ((e && e.code) || "errore") + ")."));
     };
-    $("#sy-paste-go", sheet).onclick = () => {
-      const link = $("#sy-paste", sheet).value.trim(), email = $("#sy-email", sheet).value.trim() || cloudInfo().lastEmail || "";
+    $("#sy-paste-go", root).onclick = () => {
+      const link = $("#sy-paste", root).value.trim(), email = $("#sy-email", root).value.trim() || cloudInfo().lastEmail || "";
       if (!link) { st("Incolla il link."); return; }
       if (!email) { st("Scrivi l'email a cui hai ricevuto il link."); return; }
       st("Accedo…");
       window.libreriaCloud.finishLink(email, link).catch(() => st("Link non valido o scaduto: chiedine uno nuovo."));
+    };
+  }
+  function openSync() {
+    if (cloud.email) return openSyncDone();
+    const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
+      <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
+      ${accessoHTML()}
+      <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
+    $("#sy-close", sheet).onclick = closeSheet;
+    collegaAccesso(sheet);
+  }
+  // Porta d'ingresso (v94): sui siti dell'app si entra solo con l'accesso, e solo se invitati da Diego (o se è Diego).
+  // Nei test si sceglie con window.libreriaPorta; su localhost resta spenta, così le altre prove non cambiano.
+  const PORTA = typeof window.libreriaPorta === "boolean" ? window.libreriaPorta : SITO !== "altro"; // nei test: vero o falso a scelta
+  function mostraPorta(tipo, email = cloudInfo().email || "") {
+    if (sheetOpen()) closeSheet();
+    let el = $("#porta");
+    if (!el) { el = document.createElement("div"); el.id = "porta"; el.setAttribute("role", "main"); document.body.append(el); }
+    document.body.classList.add("in-porta");
+    el.innerHTML = tipo === "invito"
+      ? `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
+        <h2>Questa libreria è su invito.</h2>
+        <p>L'indirizzo ${esc(email)} non è tra gli invitati. Chiedi a Diego di aggiungerti.</p>
+        <div class="actions"><button class="btn primary" id="porta-esci">Esci e usa un altro account</button></div>
+        <div class="status-line" id="porta-st" aria-live="polite"></div></div>`
+      : `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
+        <p class="hint">Questa libreria è su invito: entra con il tuo account.</p>
+        ${accessoHTML()}</div>`;
+    if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci()).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
+    else collegaAccesso(el, { primaVolta: true });
+  }
+  function chiudiPorta() { const el = $("#porta"); if (el) el.remove(); document.body.classList.remove("in-porta"); }
+  // «Esci» (v94): via dal dispositivo i dati di questo account (restano nel cloud), così un'altra persona non li vede né li riceve.
+  function pulisciDispositivo() {
+    try {
+      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY].includes(k)) localStorage.removeItem(k);
+    } catch {}
+    try { indexedDB.deleteDatabase("libreria-copie"); } catch {} // le copie di «Annulla» contengono i libri di questo account
+    state.books = []; novitaMem = null; cloud.email = "";
+    if (PORTA) mostraPorta("accesso"); else render();
+  }
+  // Invitati (v94, solo l'amministratore): elenco delle email che possono usare l'app; le regole di Firestore lo impongono.
+  function openInvitati() {
+    const sheet = openSheet(`<h2>Invitati</h2>
+      <p class="hint">Manda a questa persona il link dell'app: entra con Google o con il link via email usando questo indirizzo.</p>
+      <div class="field"><label for="inv-email">Email da invitare</label><input id="inv-email" type="email" autocomplete="off" inputmode="email" placeholder="nome@email.it"></div>
+      <div class="actions"><button class="btn primary" id="inv-add">Aggiungi</button></div>
+      <div class="status-line" id="inv-st" aria-live="polite">Carico l'elenco…</div>
+      <div class="ulist" id="inv-list"></div>
+      <div class="actions"><button class="btn ghost" id="inv-close">Chiudi</button></div>`);
+    const st = $("#inv-st", sheet), list = $("#inv-list", sheet);
+    const carica = () => loadCloud().then(c => c.invitati()).then(l => {
+      st.textContent = l.length ? `${l.length} ${l.length === 1 ? "persona invitata" : "persone invitate"}.` : "Nessuno ancora.";
+      list.innerHTML = l.map(e => `<div class="urow"><span>${esc(e)}</span><button class="btn" type="button" data-togli="${esc(e)}">Togli</button></div>`).join("");
+    }, e => { st.textContent = "Non riesco a leggere l'elenco (" + errText(e) + ")."; });
+    carica();
+    $("#inv-close", sheet).onclick = closeSheet;
+    $("#inv-add", sheet).onclick = () => {
+      const email = $("#inv-email", sheet).value.trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) { st.textContent = "Scrivi un indirizzo email valido."; return; }
+      st.textContent = "Aggiungo…";
+      loadCloud().then(c => c.invita(email)).then(() => { $("#inv-email", sheet).value = ""; carica(); }, e => { st.textContent = "Non riesco ad aggiungerla (" + errText(e) + ")."; });
+    };
+    list.onclick = e => { // togliere: due tocchi
+      const b = e.target.closest("[data-togli]"); if (!b) return;
+      if (!b.classList.contains("danger")) { list.querySelectorAll(".danger").forEach(x => { x.classList.remove("danger"); x.textContent = "Togli"; }); b.classList.add("danger"); b.textContent = "Conferma"; return; }
+      loadCloud().then(c => c.togliInvito(b.dataset.togli)).then(carica, err => { st.textContent = "Non riesco a toglierla (" + errText(err) + ")."; });
     };
   }
   function openSyncDone() {
@@ -2923,14 +2997,24 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
       <div class="status-line" id="sy-info">Controllo lo stato…</div>
       <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
-      <p class="hint">Uscendo i libri restano su questo dispositivo, ma smettono di aggiornarsi dal cloud.</p>
+      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo (v94): così un'altra persona può entrare con il suo account.</p>
       <div class="status-line" id="sy-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
     $("#sy-close", sheet).onclick = closeSheet;
     loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
     $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
     $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
-    $("#sy-out", sheet).onclick = () => { if (window.libreriaCloud) window.libreriaCloud.signOut(); closeSheet(); toast("Sei uscito: i libri restano su questo dispositivo."); };
+    const out = $("#sy-out", sheet), sst = $("#sy-status", sheet);
+    out.onclick = () => {
+      if (!out.classList.contains("conferma")) { // primo tocco: chiedo conferma
+        out.classList.add("conferma"); out.textContent = "Conferma: esci";
+        sst.textContent = "I tuoi libri restano nel cloud; da questo telefono vengono tolti."; return;
+      }
+      loadCloud().then(c => c.esci()).then(() => toast("Sei uscito: i tuoi libri sono al sicuro nel cloud."), e => {
+        out.classList.remove("conferma"); out.textContent = "Esci da questo dispositivo";
+        sst.textContent = e && e.code === "sospeso" ? "Ci sono modifiche non ancora salvate nel cloud: collegati alla rete e riprova." : "Non riesco a uscire (" + errText(e) + ").";
+      });
+    };
   }
   // Primo accesso con libri da entrambe le parti: decide l'utente. Annullare = non sincronizzare.
   function askMerge(cloudCount) {
@@ -3422,6 +3506,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
   }
   render();
+  // Porta d'ingresso (v94): senza accesso, o se l'ultimo controllo ha detto «non invitato», si vede solo la porta.
+  // Chi era già collegato (anche senza «ammesso» salvato, come prima della v94) entra subito, anche offline.
+  if (PORTA && !cloudInfo().uid) mostraPorta("accesso");
+  else if (PORTA && cloudInfo().ammesso === false) mostraPorta("invito");
   mostraPopupNovita(); // uscite dei tuoi autori trovate nell'ultimo giro (v84)
   setTimeout(() => giroNovita().catch(() => {}), 1200); // novità della settimana, in sottofondo (v84)
   // Carico il servizio in sottofondo solo se eri già connesso o se un link di accesso è appena tornato qui.
