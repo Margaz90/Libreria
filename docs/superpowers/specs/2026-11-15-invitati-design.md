@@ -42,14 +42,14 @@ Diego vuole poter dare il link dell'app ad alcune persone scelte da lui, ognuna 
 ## Come (deciso)
 ### Dati
 - `invitati/{email}` (id = email in minuscolo): `{ aggiunto: <ms>, da: <uid amministratore> }`.
-- Amministratore: elenco `ADMIN_UIDS` nelle regole e in `app.js` con gli uid di Diego, letti da lui nella console (Authentication → Utenti → «UID utente»: se la sua email compare in più righe, tutti). In più la sua email è anche tra gli invitati, come riserva. Le regole si pubblicano solo con gli uid veri: un segnaposto lo chiuderebbe fuori (l'azione GitHub le pubblica a ogni push). (Dopo la revisione.)
+- Amministratore: elenco `ADMIN_UIDS` nelle regole e in `app.js` con gli uid di Diego (15 novembre: `46AtxF1piJQGsWcqm665Wjf6nFA3`, dato da Diego), letti da lui nella console (Authentication → Utenti → «UID utente»: se la sua email compare in più righe, tutti). In più la sua email è anche tra gli invitati, come riserva. Le regole si pubblicano solo con gli uid veri: un segnaposto lo chiuderebbe fuori (l'azione GitHub le pubblica a ogni push). (Dopo la revisione.)
 
 ### Regole (`firestore.rules`, bozza)
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-    function admin() { return request.auth != null && request.auth.uid in ["<UID_DIEGO>"]; }
+    function admin() { return request.auth != null && request.auth.uid in ["46AtxF1piJQGsWcqm665Wjf6nFA3"]; }
     function email() { return request.auth.token.email.lower(); }
     function invitato() { return request.auth != null && request.auth.token.email_verified == true
       && exists(/databases/$(db)/documents/invitati/$(email())); }
@@ -65,7 +65,8 @@ service cloud.firestore {
 - All'avvio, prima di disegnare la libreria: se `libreria-cloud` non ha un utente (`uid`) → schermata d'accesso a schermo pieno (stesso contenuto di «Accedi e sincronizza», senza «Chiudi»; l'SDK di Firebase si carica mentre la schermata compare, il pulsante Google si abilita a caricamento finito, come oggi). Se ha un utente e `ammesso` non è `false` (cioè `true`, o assente: i dispositivi già collegati prima di questa versione, compreso quello di Diego) → app normale subito, controllo in sottofondo. Solo `ammesso === false` mostra la schermata «non invitato». (Dopo la revisione.)
 - Controllo dell'invito in `cloud.js`, in `onAuthStateChanged` **prima** di `start()` e di `H.connected()` (così un non invitato non arriva a sincronizzazione, unione o copie); `ammesso` si scrive attraverso la copia `ck` di `cloud.js` (oggi `saveCk` riscriverebbe la chiave). Regole: amministratore → ammesso; altrimenti lettura di `invitati/{email}`: esiste → ammesso; non esiste → `ammesso = false` e schermata «non invitato»; errore di rete → si tiene l'ultimo stato (offline si apre come prima).
 - Schermata «non invitato»: titolo, testo «Questa libreria è su invito. L'indirizzo … non è tra gli invitati. Chiedi a Diego di aggiungerti.», pulsante «Esci e usa un altro account» (esce da Firebase e torna alla schermata d'accesso). I libri locali di quel dispositivo non si cancellano (restano nascosti).
-- Uscita dall'account (già esistente in «Accedi e sincronizza»): riporta alla schermata d'accesso.
+- **Uscita dall'account** (scelta A di Diego, 15 novembre: un telefono può passare da una persona all'altra senza mescolare le librerie): «Esci» chiede conferma («I tuoi libri restano nel cloud; da questo telefono vengono tolti»), poi toglie dal dispositivo libri, foto dei dorsi, segnaposto, impostazioni dell'account e memoria delle Novità, e torna alla schermata d'accesso. Con modifiche non ancora inviate al cloud (`pending`/`gone` in `cloud.js` o scritture in attesa di Firestore) l'uscita è bloccata con il messaggio «Ci sono modifiche non ancora salvate nel cloud: collegati alla rete e riprova». Anche «Esci» dalla schermata «non invitato» toglie i dati locali (di solito vuoti). Al primo accesso di un account diverso dall'ultimo su quel dispositivo (`ck.uid` diverso) non si propone l'unione: i libri locali, se ci fossero, non vanno nel cloud del nuovo account.
+- Scartata (B): libri separati per account sullo stesso telefono, più complicata e con lo spazio delle foto moltiplicato.
 
 ### Sezione «Invitati» (solo amministratore)
 - Voce «Invitati» in Altro, solo se l'utente è l'amministratore. Scheda: elenco delle email (dalla raccolta `invitati`, ordinate), campo email + «Aggiungi» (convalida formato, minuscolo, niente doppioni), «Togli» con conferma in due tocchi, testo breve «Manda a questa persona il link dell'app: entra con Google o con il link via email usando questo indirizzo.»
@@ -76,6 +77,7 @@ service cloud.firestore {
 ### Test
 - Nuovo gruppo `firestore` (da Node, con l'emulatore ufficiale di Firestore via `firebase-tools` e `@firebase/rules-unit-testing`, in una cartella `test/firestore/` con il suo `package.json`; serve Java 21, presente; se Java o il download dell'emulatore mancano, il gruppo lo dice e si salta senza far fallire la suite): amministratore legge e scrive i suoi libri e l'elenco; invitato (Google e link email, email in maiuscolo) legge e scrive solo i suoi; non invitato non legge né scrive niente; invitato non legge i libri altrui né l'elenco altrui né scrive in `invitati`; email non verificata respinta; invitato tolto perde subito l'accesso; un invio di 400 libri in un colpo di un invitato passa (limite di 20 letture `exists()` per scrittura multipla).
 - `accesso` (con lo stub di Firebase esteso a `invitati`): senza utente compare la schermata d'accesso; invitato entra; non invitato vede la schermata e «Esci» funziona; ammesso offline apre subito; amministratore vede «Invitati», aggiunge e toglie; un invitato non vede «Invitati».
+- `accesso`: «Esci» toglie i libri dal dispositivo e torna alla schermata d'accesso; con modifiche in sospeso è bloccato; un secondo account sullo stesso dispositivo non vede né riceve i libri del primo.
 - Gli altri gruppi restano verdi: i test che usano l'app senza accesso entrano con un utente finto ammesso.
 
 ## Lasciato al costruttore
