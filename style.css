@@ -815,3 +815,7 @@ body.in-porta > :not(#porta):not(.toast) { display: none !important; }
 #porta h1 { margin: 0 0 18px; }
 #porta h2 { color: var(--title); font-size: 20px; margin: 0 0 8px; }
 #porta .btn { min-height: 44px; }
+#porta .hint { margin: 0 0 16px; }
+#porta .field { margin: 16px 0 8px; display: flex; flex-direction: column; gap: 6px; }
+#porta .actions { margin: 8px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+#porta .status-line { margin-top: 10px; min-height: 1.4em; }
