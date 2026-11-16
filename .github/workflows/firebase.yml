@@ -1,4 +1,5 @@
-# Pubblica MyLibrary su Firebase Hosting (https://mylibrary-2ea05.web.app) a ogni push su main (v90).
+# Pubblica MyLibrary su Firebase Hosting (https://mylibrary-2ea05.web.app) a ogni push su main (v90),
+# poi le regole di Firestore (firestore.rules, v94: libreria su invito).
 # La chiave sta nei Secrets del repository (FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05), mai nei file.
 # GitHub Pages continua a pubblicare il vecchio indirizzo come prima.
 name: Pubblica su Firebase Hosting
@@ -19,3 +20,12 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05 }}
           channelId: live
           projectId: mylibrary-2ea05
+      # v94: regole di Firestore (su invito). Dopo l'app: se questo passo fallisce, l'app è comunque pubblicata e l'errore resta visibile qui.
+      # Servono i ruoli «Amministratore regole Firebase» e «Consumer Service Usage» sull'account della chiave.
+      - name: Pubblica le regole di Firestore
+        env:
+          CHIAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05 }}
+        run: |
+          printf '%s' "$CHIAVE" > "$RUNNER_TEMP/chiave.json"
+          trap 'rm -f "$RUNNER_TEMP/chiave.json"' EXIT
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/chiave.json" npx --yes firebase-tools@15.36.0 deploy --only firestore:rules --project mylibrary-2ea05 --non-interactive

@@ -313,6 +313,17 @@ export default async function run() {
   const iTutto = hs.findIndex(h => h.source === '**' && hv(h) === 'no-cache'), iPng = hs.findIndex(h => h.source === '**/*.png' && /max-age=86400/.test(hv(h)));
   ok('firebase.json: no-cache su tutto (anche su /), icone in cache un giorno', iTutto >= 0 && iPng > iTutto, j(hs));
   let rc = null; try { rc = JSON.parse(leggi('.firebaserc')); } catch {}
+  { // ---- v94: regole di Firestore pubblicate da GitHub ----
+    let fj = null; try { fj = JSON.parse(leggi('firebase.json')); } catch {}
+    ok('firebase.json: regole di Firestore in firestore.rules, non pubblicate come file dell\'app', !!fj && fj.firestore && fj.firestore.rules === 'firestore.rules' && (fj.hosting.ignore || []).includes('firestore.rules'));
+    const wf2 = leggi('.github/workflows/firebase.yml');
+    ok('azione GitHub: pubblica le regole con una versione fissa della CLI e la chiave dai Secrets, poi cancella il file della chiave',
+      /firebase-tools@\d+\.\d+\.\d+ deploy --only firestore:rules --project mylibrary-2ea05 --non-interactive/.test(wf2) && /GOOGLE_APPLICATION_CREDENTIALS/.test(wf2)
+      && /secrets\.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05/.test(wf2.split('firestore:rules')[0].split('Pubblica le regole')[1] || '') && /rm -f/.test(wf2));
+    const uidRegole = (leggi('firestore.rules').match(/request\.auth\.uid in \[([^\]]*)\]/) || [])[1], uidApp = (leggi('app.js').match(/const ADMIN_UIDS = \[([^\]]*)\]/) || [])[1];
+    ok('amministratori: stesso elenco nelle regole e nell\'app', !!uidRegole && uidRegole.replace(/\s/g, '') === (uidApp || '').replace(/\s/g, ''), `${uidRegole} | ${uidApp}`);
+  }
+
   ok('.firebaserc: progetto mylibrary-2ea05', !!rc && rc.projects && rc.projects.default === 'mylibrary-2ea05');
   const wf = leggi('.github/workflows/firebase.yml');
   ok('azione GitHub: su push a main, canale live, chiave dai Secrets', /branches:\s*\[\s*main\s*\]|branches:\s*\n\s*-\s*main/.test(wf) && /channelId:\s*live/.test(wf) && /projectId:\s*mylibrary-2ea05/.test(wf)

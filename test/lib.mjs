@@ -19,7 +19,10 @@ const overrides = new Map(); // percorso → contenuto sostitutivo (es. un sw.js
 export const setOverride = (p, body) => body == null ? overrides.delete(p) : overrides.set(p, body);
 
 const store = new Map(); // dati del finto Firestore: "users/u1/books/b1" → documento
-export const resetCloud = () => store.clear();
+// v94: l'utente dei test (diego@test.it) è tra gli invitati, così le prove di sempre continuano a entrare
+const invitoDiTest = () => store.set('invitati/diego@test.it', { aggiunto: 1, da: 'test' });
+invitoDiTest();
+export const resetCloud = () => { store.clear(); invitoDiTest(); };
 export const putDoc = (p, data) => store.set(p, data);
 
 // Avvia il server dei file dell'app (8765) e il finto Firestore (8766), o le porte di TEST_PORT; restituisce una funzione per spegnerli.
