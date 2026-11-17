@@ -24,7 +24,9 @@ service cloud.firestore {
 
     match /invitati/{e} {
       allow get: if admin() || (verificata() && email() == e);
-      allow list, write: if admin();
+      allow list, create, update: if admin();
+      // v95: «Elimina il mio account» toglie anche il proprio invito (solo il proprio, solo cancellare)
+      allow delete: if admin() || (verificata() && email() == e);
     }
   }
 }
