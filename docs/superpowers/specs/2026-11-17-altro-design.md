@@ -25,7 +25,7 @@ Scelta: A con il riquadro del profilo della B (mockup approvato il 17 novembre 2
 - STRUMENTI: Copertine e serie `[data-m=copertine]`, Invitati `[data-m=inv]` (solo l'amministratore collegato).
 - In fondo: Privacy · Versione dell'app (`#i-ver`).
 
-**Pagine interne** (in alto «‹ Altro» per tornare indietro, in fondo «Chiudi»; gli id dei pulsanti restano quelli di oggi)
+**Pagine interne** (in alto «‹ Altro» per tornare indietro, anche su Carica libri, Obiettivo, Accedi e Invitati quando si arriva da Altro, in fondo «Chiudi»; gli id dei pulsanti restano quelli di oggi)
 - Backup: stato dell'ultimo backup ed «Esporta backup» (`#i-export`, `#i-status`).
 - Annulla una modifica: elenco delle copie (`#u-list`).
 - Copertine e serie: Cerca copertine mancanti, Rifai le copertine (edizioni italiane), Completa autori e copertine, Cerca le serie; sotto «Se qualcosa non va»: Verifica le ricerche (`#v-status`).

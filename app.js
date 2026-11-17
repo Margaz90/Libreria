@@ -1316,13 +1316,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     // Sul telefono si vede solo "ne mancano N": il ritmo mensile resta sul computer.
     return done >= expected ? `In linea · ne mancano ${left}` : `Ne mancano ${left}<span class="pace-extra"> · circa ${perMonth} al mese</span>`;
   }
-  function openGoal() {
+  function openGoal(o) {
     const y = new Date().getFullYear();
     const goals = getSet().goals || {};
-    const sheet = openSheet(`<h2>Obiettivo ${y}</h2>
+    const sheet = openSheet(`${indietroSe(o)}<h2>Obiettivo ${y}</h2>
       <p class="hint">Quanti libri vuoi leggere quest'anno? Contano quelli segnati come letti con una data di fine nel ${y}.</p>
       <div class="field"><label for="g-n">Libri</label><input id="g-n" type="number" inputmode="numeric" min="1" max="365" value="${goals[y] || ""}" placeholder="Es. 20"></div>
       <div class="actions"><button class="btn primary" id="g-save">Salva</button>${goals[y] ? `<button class="btn danger" id="g-del">Togli obiettivo</button>` : ""}<button class="btn ghost" id="g-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
     $("#g-close", sheet).onclick = closeSheet;
     $("#g-save", sheet).onclick = () => {
       const n = parseInt($("#g-n", sheet).value, 10);
@@ -2818,7 +2819,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   };
   const voce = (m, titolo, sotto, cls = "") => `<button type="button" data-m="${m}" class="vr ${cls}"><i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONE[m] || ""}</svg></i><span class="vt"><b>${titolo}</b><span>${sotto}</span></span></button>`;
   const indietro = `<button type="button" class="indietro">‹ Altro</button>`;
-  const collegaIndietro = sheet => { $(".indietro", sheet).onclick = openMore; };
+  const collegaIndietro = sheet => { const b = $(".indietro", sheet); if (b) b.onclick = openMore; };
+  const indietroSe = o => o && o.daAltro === true ? indietro : ""; // le schede aperte anche da altri punti hanno «‹ Altro» solo se arrivano da Altro
   const backupInfo = () => {
     const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
     return days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`;
@@ -2859,10 +2861,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <p class="hint piede"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><span id="i-ver"></span></p>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`, "altro");
     appVersion().then(v => { const el = $("#i-ver", sheet); if (el && v) el.textContent = "Versione " + v; });
-    $("[data-m=sync]", sheet).onclick = openSync;
-    $("[data-m=goal]", sheet).onclick = openGoal;
-    $(".goal-row .link", sheet).onclick = openGoal;
-    $("[data-m=carica]", sheet).onclick = openCarica;
+    const da = { daAltro: true };
+    $("[data-m=sync]", sheet).onclick = () => openSync(da);
+    $("[data-m=goal]", sheet).onclick = $(".goal-row .link", sheet).onclick = () => openGoal(da);
+    $("[data-m=carica]", sheet).onclick = () => openCarica(da);
     $("[data-m=backup]", sheet).onclick = openBackup;
     $("[data-m=annulla]", sheet).onclick = openAnnulla;
     $("[data-m=copertine]", sheet).onclick = openCopertine;
@@ -2983,12 +2985,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       window.libreriaCloud.finishLink(email, link).catch(() => st("Link non valido o scaduto: chiedine uno nuovo."));
     };
   }
-  function openSync() {
+  function openSync(o) {
     if (cloud.email) return openSyncDone();
-    const sheet = openSheet(`<h2>Accedi e sincronizza</h2>
+    const sheet = openSheet(`${indietroSe(o)}<h2>Accedi e sincronizza</h2>
       <p class="hint">La libreria diventa la stessa su iPhone, iPad e computer. Funziona anche offline: le modifiche partono appena torna la rete.</p>
       ${accessoHTML()}
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
     $("#sy-close", sheet).onclick = closeSheet;
     collegaAccesso(sheet);
   }
@@ -3058,13 +3061,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   // Invitati (v94, solo l'amministratore): elenco delle email che possono usare l'app; le regole di Firestore lo impongono.
   function openInvitati() {
-    const sheet = openSheet(`<h2>Invitati</h2>
+    const sheet = openSheet(`${indietro}<h2>Invitati</h2>
       <p class="hint">Manda a questa persona il link dell'app: entra con Google o con il link via email usando questo indirizzo.</p>
       <div class="field"><label for="inv-email">Email da invitare</label><input id="inv-email" type="email" autocomplete="off" inputmode="email" placeholder="nome@email.it"></div>
       <div class="actions"><button class="btn primary" id="inv-add">Aggiungi</button></div>
       <div class="status-line" id="inv-st" aria-live="polite">Carico l'elenco…</div>
       <div class="ulist" id="inv-list"></div>
       <div class="actions"><button class="btn ghost" id="inv-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
     const st = $("#inv-st", sheet), list = $("#inv-list", sheet);
     const carica = () => loadCloud().then(c => c.invitati()).then(l => {
       st.textContent = l.length ? `${l.length} ${l.length === 1 ? "persona invitata" : "persone invitate"}.` : "Nessuno ancora.";
@@ -3315,7 +3319,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <label class="check"><input type="checkbox" id="i-upd"> Aggiorna i libri già presenti con i dati del file (per ripristinare un backup)</label>
         <p class="warn" id="i-avvisi" hidden></p>
         <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button></div>`;
-  // Flusso unico di import (scheda «Carica i libri» e Backup): lettura del file, conteggi, avvisi, copia di sicurezza, import.
+  // Flusso unico di import (scheda «Carica i libri», anche da Altro): lettura del file, conteggi, avvisi, copia di sicurezza, import.
   function collegaImport(sheet, { dopo = () => {} } = {}) {
     let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, tipo = "";
     const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet), av = $("#i-avvisi", sheet);
@@ -3376,14 +3380,15 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       dopo({ added, updated });
     };
   }
-  function openCarica() {
-    const sheet = openSheet(`<h2>Carica i libri</h2>
+  function openCarica(o) {
+    const sheet = openSheet(`${indietroSe(o)}<h2>Carica i libri</h2>
       <p class="hint">Scegli un file: il modello Excel compilato, il CSV esportato da Goodreads o un backup di MyLibrary.</p>
       <p class="hint">Non hai ancora il modello? Scaricalo, scrivi un libro per riga (bastano titolo e autore) e poi caricalo qui.</p>
       <div class="actions"><a class="btn" href="modello-libri.xlsx" download="modello-libri.xlsx" target="_blank" rel="noopener">Scarica il modello Excel</a></div>
       ${importHTML()}
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
     $("#i-close", sheet).onclick = closeSheet;
     collegaImport(sheet, { dopo: ({ added, updated }) => {
       closeSheet();

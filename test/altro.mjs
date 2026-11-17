@@ -49,7 +49,7 @@ async function pagineInterne(browser) {
   ok('obiettivo fissato: l\'anello dice 1 di 5', /\b1\b/.test(anello) && /di 5/.test(anello), anello);
   ok('obiettivo fissato: riga «Obiettivo · Cambia»', new RegExp(`Obiettivo ${Y}.*Cambia`).test(await testo(p, '.sheet .goal-row')));
   await p.locator('.sheet .goal-row button').click(); await p.waitForSelector('#g-n');
-  ok('«Cambia» apre l\'obiettivo', await p.inputValue('#g-n') === '5');
+  ok('«Cambia» apre l\'obiettivo, con «‹ Altro»', await p.inputValue('#g-n') === '5' && (await p.locator('.sheet .indietro').count()) === 1);
   await p.click('#g-close'); await p.waitForTimeout(250);
 
   const apri = async m => { await altro(p); await p.locator(`.sheet [data-m=${m}]`).click(); await p.waitForTimeout(150); };
@@ -65,10 +65,12 @@ async function pagineInterne(browser) {
   ok('Copertine e serie: «Verifica le ricerche» sotto «Se qualcosa non va»', /Se qualcosa non va/i.test(await testo(p, '.sheet')));
   await p.click('#i-close'); await p.waitForTimeout(250);
   await apri('carica');
-  ok('Carica libri: la scheda con il file e il modello Excel', (await p.locator('#i-file').count()) === 1 && (await p.locator('a[href="modello-libri.xlsx"]').count()) === 1);
+  ok('Carica libri: la scheda con il file e il modello Excel, con «‹ Altro»', (await p.locator('#i-file').count()) === 1 && (await p.locator('a[href="modello-libri.xlsx"]').count()) === 1 && (await p.locator('.sheet .indietro').count()) === 1);
   await p.click('#i-close'); await p.waitForTimeout(250);
   await apri('sync');
-  ok('riquadro senza accesso: apre la scheda di accesso', (await p.locator('#sy-email, #sy-google').count()) > 0);
+  ok('riquadro senza accesso: apre la scheda di accesso, con «‹ Altro»', (await p.locator('#sy-email, #sy-google').count()) > 0 && (await p.locator('.sheet .indietro').count()) === 1);
+  ok('«‹ Altro» alto almeno 44 px', ((await p.locator('.sheet .indietro').boundingBox()) || {}).height >= 44);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(250);
   ok('pagine interne: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
