@@ -58,8 +58,36 @@ async function carica(browser) {
   await p.close2();
 }
 
+// Telefoni stretti (anche Android): niente scorrimento orizzontale né elementi fuori schermo in libreria, Altro, scheda e statistiche.
+async function telefoniStretti(browser) {
+  const fuori = p => p.evaluate(() => { const w = innerWidth; return document.documentElement.scrollWidth <= w
+    && ![...document.querySelectorAll('body *')].some(e => { const r = e.getBoundingClientRect(); return r.width && r.right > w + 1 && getComputedStyle(e).position !== 'fixed' && !e.closest('.pills'); }); });
+  for (const [width, height] of [[320, 568], [360, 780]]) for (const dark of [false, true]) {
+    const tag = `${width}px ${dark ? 'scuro' : 'chiaro'}`;
+    const p = await newPage(browser, { width, height, dark });
+    await p.goto(APP + '/');
+    await p.evaluate(b => { localStorage.setItem('libreria-diego-v1', JSON.stringify(b)); localStorage.setItem('libreria-nome', 'Diego Margaira'); }, libri108());
+    await p.reload(); await p.waitForSelector('#main [data-id]'); await p.waitForTimeout(400);
+    ok(`${tag}: libreria dentro lo schermo`, await fuori(p));
+    await p.locator('.dock .more').click(); await p.waitForTimeout(350);
+    ok(`${tag}: Altro dentro lo schermo, voci non sovrapposte`, await fuori(p) && await p.evaluate(() => {
+      const el = [...document.querySelector('.sheet').children].filter(e => e.offsetHeight);
+      return el.every((e, i) => !i || e.getBoundingClientRect().top >= el[i - 1].getBoundingClientRect().bottom - 1);
+    }));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+    await p.locator('#main [data-id]').first().click(); await p.waitForSelector('.sheet'); await p.waitForTimeout(350);
+    ok(`${tag}: scheda del libro dentro lo schermo`, await fuori(p));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+    await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(500);
+    ok(`${tag}: statistiche dentro lo schermo`, await fuori(p));
+    ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
+    await p.close2();
+  }
+}
+
 export default async function ({ browser }) {
   await carica(browser);
+  await telefoniStretti(browser);
   for (const [width, height] of [[390, 844], [1366, 860]]) for (const dark of [false, true]) {
     const tag = `${width}px ${dark ? 'scuro' : 'chiaro'}`;
     const p = await newPage(browser, { width, height, dark });

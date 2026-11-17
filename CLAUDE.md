@@ -38,7 +38,7 @@ Il dettaglio completo (id, classi, casi limite, versioni, spec) è in [docs/funz
 ## Regole di lavoro
 - Ogni modifica a file dell'app: incrementa `VERSION` in `sw.js` (ora v98), così sull'iPhone compare "Nuova versione disponibile → Aggiorna".
 - Prestazioni: i file dell'app arrivano dalla copia del service worker (v93, `copiaPrima`; versione nuova scaricata intera con `cache: "reload"` e mostrata con «Aggiorna»; controllo degli aggiornamenti anche tornando nell'app, ogni 5 minuti al massimo); niente `render()` completo per cambi che non spostano il libro (usa `patchBook`), salvataggi con `schedulePersist`, miniature con `thumb()`. Verificato su iPhone simulato (CPU 4x più lenta).
-- Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
+- Prima di pubblicare lancia `node test/run.mjs` (vedi "Strumenti per Claude Code"): controlla 390x844 e 1366x860, più i telefoni stretti 320x568 e 360x780 (anche Android), chiaro e scuro, nessun errore in console, niente scorrimento orizzontale. Per modifiche grafiche guarda anche gli screenshot.
 - Diego vuole un'app leggera: valuta il peso di ogni aggiunta. Confronti con pro e contro sempre in tabella.
 - Commit in italiano, poi push su `main` (la pubblicazione su Pages e su Firebase Hosting è automatica).
 - Quando cambia una funzione, aggiorna la sua voce in `docs/funzioni.md` (e il riassunto qui sopra se cambia qualcosa di essenziale).
