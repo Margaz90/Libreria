@@ -76,5 +76,10 @@ export default async function run() {
     const writes = Array.from({ length: 400 }, (_, i) => ({ update: { name: `projects/${P}/databases/(default)/documents/users/anna1/books/b${i}`, fields: doc.fields } }));
     const cm = await chiama(anna, 'POST', `${DOCS}:commit`, { writes });
     ok('invitato: 400 libri in un colpo solo (scrittura multipla)', sì(cm), String(cm));
+    // v95: profilo (nome) e «Elimina il mio account»
+    ok('invitato: scrive e cancella il proprio profilo, non quello degli altri', sì(await scrivi(anna, 'users/anna1/meta/profilo')) && sì(await cancella(anna, 'users/anna1/meta/profilo')) && no(await scrivi(anna, 'users/mario1/meta/profilo')));
+    ok('invitato: non crea né modifica il proprio invito', no(await scrivi(anna, 'invitati/anna@example.com')));
+    ok('invitato: non cancella l\'invito di un altro', no(await cancella(anna, 'invitati/nuovo2@example.com')));
+    ok('invitato: cancella il proprio invito (Elimina il mio account)', sì(await cancella(anna, 'invitati/anna@example.com')));
   } finally { proc.kill(); }
 }

@@ -24,6 +24,7 @@
   db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); // cache offline: le scritture in attesa restano salvate
 
   let user = null, unsub = null, timer = null, gen = 0, sincronizzo = false; // gen (v94): cambia a ogni account; un lavoro di un account precedente si ferma
+  let fermo = false; // v95: durante «Elimina il mio account» nessuna scrittura parte verso il cloud
   const pending = new Set(), gone = new Set();
   const plain = o => JSON.parse(JSON.stringify(o));
   const books = () => db.collection(`users/${user.uid}/books`);
@@ -35,8 +36,8 @@
 
   /* ---- dal dispositivo al cloud ---- */
   const later = (ms = 600) => { clearTimeout(timer); timer = setTimeout(flush, ms); };
-  const changed = id => { if (!user) return; gone.delete(id); pending.add(id); later(); };
-  const removed = id => { if (!user) return; pending.delete(id); gone.add(id); later(); };
+  const changed = id => { if (!user || fermo) return; gone.delete(id); pending.add(id); later(); };
+  const removed = id => { if (!user || fermo) return; pending.delete(id); gone.add(id); later(); };
   // iOS può sospendere l'app subito dopo una modifica: in quel caso invio ora, senza aspettare il ritardo.
   const sendNow = () => { if (timer && (pending.size || gone.size)) flush(); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendNow(); });
@@ -44,7 +45,8 @@
 
   async function flush() {
     timer = null;
-    if (!user || !(pending.size || gone.size)) return;
+    if (!user || fermo || !(pending.size || gone.size)) return;
+    const g = gen;
     const up = [...pending], down = new Set(gone), tombs = H.tombs();
     pending.clear(); gone.clear();
     const ops = [], spineDone = new Map();
@@ -68,6 +70,7 @@
       for (let i = 0; i < ops.length; i += 400) {
         const batch = db.batch();
         for (const o of ops.slice(i, i + 400)) { if (o.del) batch.delete(o.ref); else batch.set(o.ref, o.data); }
+        if (g !== gen || fermo) return; // uscita o eliminazione in corso: niente più scritture di questo account
         await batch.commit();
       }
       for (const [id, at] of spineDone) { if (at === null) delete ck.spineAt[id]; else ck.spineAt[id] = at; }
@@ -96,7 +99,9 @@
 
   // Obiettivo di lettura: vince la versione con la data più recente.
   async function syncGoals() {
+    const g = gen;
     const snap = await goalsDoc().get();
+    if (g !== gen || fermo) return;
     const r = snap.exists ? snap.data() : null, l = H.goals();
     const lu = l.updated || (Object.keys(l.goals).length ? 1 : 0);
     if (r && r.updated > lu) H.setGoals(r.goals || {}, r.updated);
@@ -203,6 +208,29 @@
     if (esito === true) { ck.ammesso = true; saveCk(); }
     if (H.ammesso) H.ammesso(true, u.email); // anche se il controllo non ha risposto: il cloud resta protetto dalle regole
     start();
+    profilo(u);
+  }
+
+  // Nome nell'intestazione (v95): dal profilo nel cloud; se manca, da Google; se manca anche quello, l'app lo chiede.
+  // L'amministratore senza profilo resta «Margaira Diego» (niente scritto nel cloud).
+  const profiloDoc = uid => db.doc(`users/${uid}/meta/profilo`);
+  async function salvaNome(n) {
+    const nome = String(n || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!user || !nome) return;
+    await profiloDoc(user.uid).set({ nome, updated: Date.now() });
+    if (H.nome) H.nome(nome);
+  }
+  async function profilo(u) {
+    try {
+      const d = await profiloDoc(u.uid).get();
+      if (user !== u) return;
+      const nome = d.exists && d.data() && d.data().nome;
+      if (nome) { if (H.nome) H.nome(nome); return; }
+      if (H.nome) H.nome(""); // il nome rimasto sul dispositivo era di un altro account (o di nessuno): via
+      if (H.isAdmin && H.isAdmin(u.uid)) return;
+      if (u.displayName && String(u.displayName).trim()) await salvaNome(u.displayName);
+      else if (H.chiediNome) H.chiediNome();
+    } catch {} // senza rete: resta il nome salvato sul dispositivo
   }
 
   async function start() {
@@ -270,6 +298,44 @@
       return auth.signInWithEmailLink(email, link).then(() => history.replaceState(null, "", location.pathname));
     },
     signOut() { return auth.signOut(); },
+    salvaNome,
+    // «Elimina il mio account» (v95): libri, foto, obiettivo, nome e invito dal cloud, poi l'account, poi il dispositivo.
+    // Prima di cancellare: online, accesso recente (3 minuti, Firebase ne chiede 5), invii al cloud fermati.
+    async eliminaAccount() {
+      const u = user;
+      if (!u) throw { code: "rete" };
+      if (H.isAdmin && H.isAdmin(u.uid)) throw { code: "admin" };
+      if (!navigator.onLine) throw { code: "rete" };
+      // Accesso recente misurato con gli orari del server (emissione del token − momento dell'accesso), non con l'orologio del telefono
+      const recente = async () => {
+        try { const t = await u.getIdTokenResult(true); return Date.parse(t.issuedAtTime) - Date.parse(t.authTime) < 3 * 60e3; }
+        catch { return Date.now() - Date.parse(u.metadata && u.metadata.lastSignInTime) < 3 * 60e3; }
+      };
+      if (!(await recente())) throw { code: "rientra" };
+      const fine = async () => { // l'account e il dispositivo
+        try { await u.delete(); }
+        catch (e) { fermo = false; if (/requires-recent-login/.test(why(e))) throw { code: "parziale" }; throw e; }
+        fermo = false;
+        for (const k of Object.keys(ck)) delete ck[k];
+        ck.spineAt = {};
+        if (H.pulisci) H.pulisci();
+      };
+      // Dalla schermata «non invitato» (anche dopo un'eliminazione a metà): il cloud non risponde più, resta solo l'account
+      if (ck.ammesso === false) { gen++; fermo = true; return fine(); }
+      const riprendi = () => { fermo = false; gen++; start(); }; // se ci si ferma prima di cancellare, la sincronizzazione riparte
+      fermo = true; gen++; sincronizzo = false; clearTimeout(timer); timer = null; pending.clear(); gone.clear();
+      if (unsub) unsub(); unsub = null; if (goalsUnsub) goalsUnsub(); goalsUnsub = null;
+      let snap;
+      try { snap = await books().get({ source: "server" }); } catch { riprendi(); throw { code: "rete" }; }
+      if (!(await recente())) { riprendi(); throw { code: "rientra" }; }
+      const refs = [];
+      snap.docs.forEach(d => refs.push(books().doc(d.id), spines().doc(d.id))); // le foto per id: niente download
+      refs.push(goalsDoc(), profiloDoc(u.uid));
+      for (let i = 0; i < refs.length; i += 400) { const b = db.batch(); refs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit(); }
+      try { await db.doc(`invitati/${String(u.email || "").toLowerCase()}`).delete(); } catch {}
+      ck.ammesso = false; saveCk(); // da qui il cloud non risponde più: se l'account non si elimina, si finisce dalla schermata «non invitato»
+      return fine();
+    },
     // Modifiche non ancora arrivate al cloud (v94: «Esci» le aspetta)
     inSospeso() { return !!(sincronizzo || timer || pending.size || gone.size || (info && info.pending)); },
     // «Esci» (v94): fuori dall'account e via i libri da questo dispositivo (restano nel cloud)
@@ -286,16 +352,17 @@
     invitati() { return db.collection("invitati").get().then(s => s.docs.map(d => d.id).sort()); },
     invita(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).set({ aggiunto: Date.now(), da: user ? user.uid : "" }); },
     togliInvito(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).delete(); },
-    goals() { if (user) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato (" + why(e) + ")."));
+    goals() { if (user && !fermo) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato (" + why(e) + ")."));
     },
     reconnect() {
+      if (fermo) return Promise.resolve();
       H.info("Riconnessione in corso…");
       return db.disableNetwork().then(() => db.enableNetwork()).then(() => { if (user) return reconcile("merge"); })
         .then(() => showInfo(), e => H.info("Riconnessione non riuscita (" + why(e) + ")."));
     },
     refreshInfo() { showInfo(); },
     syncNow() {
-      if (!user) return Promise.resolve();
+      if (!user || fermo) return Promise.resolve();
       H.status("Sincronizzo i libri…");
       return reconcile("merge").then(() => H.done("Libreria sincronizzata."), e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
     }
@@ -312,6 +379,7 @@
     if (goalsUnsub) goalsUnsub();
     goalsUnsub = null;
     ck.email = ""; saveCk();
+    if (H.nome) H.nome(""); // uscita senza pulizia (unione annullata, account tolto altrove): il nome non resta per il prossimo
     H.connected("");
   });
   // Ritorno da un accesso con redirect: se non ha funzionato lo dico, invece di lasciare l'app scollegata e vuota.

@@ -58,15 +58,23 @@
         commit: () => Promise.all(ops.map(o => o.del ? put(o.ref.path, null) : put(o.ref.path, o.data))) };
     }
   };
-  const listeners = []; let cur = JSON.parse(localStorage.getItem('fake-auth') || 'null');
-  const setUser = u => { cur = u; if (u) localStorage.setItem('fake-auth', JSON.stringify(u)); else localStorage.removeItem('fake-auth'); listeners.forEach(f => f(cur)); };
+  const listeners = [];
+  // v95: utente con data dell'ultimo accesso (fake-signin, ms; se manca: adesso) e delete()
+  const conMetodi = u => u && Object.assign(u, {
+    metadata: { lastSignInTime: new Date(Number(localStorage.getItem('fake-signin')) || Date.now()).toUTCString() },
+    delete: () => { const err = localStorage.getItem('fake-delete-error'); if (err) return Promise.reject({ code: err }); localStorage.setItem('fake-deleted', u.uid); setUser(null); return Promise.resolve(); },
+    // orari del server: authTime (fake-authtime, altrimenti come fake-signin) ed emissione del token (adesso)
+    getIdTokenResult: () => Promise.resolve({ authTime: new Date(Number(localStorage.getItem('fake-authtime')) || Number(localStorage.getItem('fake-signin')) || Date.now()).toUTCString(), issuedAtTime: new Date().toUTCString() })
+  });
+  let cur = conMetodi(JSON.parse(localStorage.getItem('fake-auth') || 'null'));
+  const setUser = u => { cur = conMetodi(u); if (u) localStorage.setItem('fake-auth', JSON.stringify({ uid: u.uid, email: u.email, displayName: u.displayName || null })); else localStorage.removeItem('fake-auth'); listeners.forEach(f => f(cur)); };
   const auth = () => ({
     onAuthStateChanged: cb => { listeners.push(cb); setTimeout(() => cb(cur), 0); return () => {}; },
     signInWithPopup: () => {
       const m = localStorage.getItem('fake-popup') || 'ok'; localStorage.setItem('fake-popup-called', '1');
       if (m === 'blocked') return Promise.reject({ code: 'auth/popup-blocked' });
       if (m === 'closed') return Promise.reject({ code: 'auth/popup-closed-by-user' });
-      setUser({ uid: localStorage.getItem('fake-uid') || 'u1', email: localStorage.getItem('fake-email') || 'diego@test.it' }); return Promise.resolve({});
+      setUser({ uid: localStorage.getItem('fake-uid') || 'u1', email: localStorage.getItem('fake-email') || 'diego@test.it', displayName: localStorage.getItem('fake-name') || null }); return Promise.resolve({});
     },
     signInWithRedirect: () => { const err = localStorage.getItem('fake-redirect-error'); if (err) return Promise.reject({ code: err }); localStorage.setItem('fake-redirect-called', '1'); setTimeout(() => location.reload(), 50); return new Promise(() => {}); },
     signOut: () => { setUser(null); return Promise.resolve(); },

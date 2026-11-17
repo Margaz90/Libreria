@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>MyLibrary · Privacy</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .privacy { max-width: 680px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom)); line-height: 1.55; }
+    .privacy h1 { margin: 12px 0 4px; }
+    .privacy h2 { color: var(--title); font-size: 18px; margin: 26px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--coral); }
+    .privacy p, .privacy li { color: var(--ink); font-size: 15px; }
+    .privacy ul { padding-left: 20px; }
+    .privacy .torna { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 600; text-decoration: none; }
+    .privacy .data { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="privacy">
+    <a class="torna" href="./">← Torna all'app</a>
+    <h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
+    <p class="data">Privacy · aggiornata il 17 novembre 2026</p>
+
+    <p>MyLibrary è un'app personale per tenere traccia dei libri letti, in lettura e da leggere. La gestisce <strong>Diego Margaira</strong>, che la offre su invito a poche persone. Qui trovi, senza giri di parole, cosa salva, dove, chi può vederlo e come cancellare tutto.</p>
+
+    <h2>Cosa salva</h2>
+    <ul>
+      <li>se entri con Google, Firebase riceve anche il <strong>nome e la foto</strong> del tuo profilo Google (l'app usa solo il nome, per l'intestazione);</li>
+      <li>l'<strong>indirizzo email</strong> con cui entri (Google o link via email) e il tuo <strong>nome</strong>, quello che compare in alto;</li>
+      <li>i tuoi <strong>libri</strong>, con quello che ci scrivi: stato, voti, date, pagine, note, citazioni, serie;</li>
+      <li>le <strong>foto dei dorsi</strong> che scatti;</li>
+      <li>il tuo <strong>obiettivo di lettura</strong>.</li>
+    </ul>
+
+    <h2>Dove</h2>
+    <ul>
+      <li>Libri, foto, obiettivo e nome stanno in <strong>Firestore</strong>, il database di Google Firebase, nella regione <strong>eur3 (Europa)</strong>.</li>
+      <li>L'account (email, identificativo, date di accesso) lo gestisce <strong>Google Firebase Authentication</strong>, un servizio di Google a livello globale.</li>
+      <li>Sul tuo telefono o computer resta una <strong>copia</strong>, per usare l'app anche senza rete.</li>
+    </ul>
+
+    <h2>Chi può vederlo</h2>
+    <ul>
+      <li><strong>Solo tu.</strong> Le regole del database permettono a ciascuno di leggere e scrivere soltanto i propri libri: gli altri invitati non vedono i tuoi, e tu non vedi i loro.</li>
+      <li>Diego, come gestore del progetto Firebase, tecnicamente può accedere ai dati dalla console di Google; non lo fa se non glielo chiedi tu (per esempio per aiutarti a recuperare qualcosa).</li>
+    </ul>
+
+    <h2>Cosa arriva ad altri servizi</h2>
+    <p>Per trovare copertine, trame, serie e novità, l'app manda <strong>titoli, autori, generi e ISBN</strong> a <strong>Google Books</strong>, <strong>Apple Books</strong>, <strong>Open Library</strong> e <strong>Wikidata</strong>: quelli che cerchi tu, e quelli dei tuoi libri quando l'app li completa o cerca le novità in automatico (una volta a settimana). Le copertine arrivano da Google, Apple e Open Library/Internet Archive, il carattere dei titoli da <strong>Google Fonts</strong>, e i programmi di Firebase per l'accesso da <strong>cdn.jsdelivr.net</strong>. Come per qualsiasi sito, questi servizi vedono l'indirizzo IP del tuo dispositivo. Non ricevono il tuo nome, la tua email né le tue note.</p>
+    <p>Nessuna pubblicità, nessun tracciamento, nessuna statistica sul tuo uso dell'app.</p>
+
+    <h2>Come cancellare</h2>
+    <ul>
+      <li><strong>Esci</strong> (Altro → Accedi e sincronizza → Esci da questo dispositivo): toglie i tuoi dati dall'app su questo telefono; restano nel cloud per la prossima volta. Il browser può conservare una copia tecnica della sincronizzazione finché non cancelli i dati del sito (o togli l'app dalla schermata Home).</li>
+      <li><strong>Elimina il mio account</strong> (nella stessa scheda): cancella per sempre i tuoi libri, le foto, l'obiettivo, il nome, il tuo invito e il tuo account, dal cloud e dal telefono. Per tornare servirà un nuovo invito.</li>
+      <li>Prima di eliminare puoi salvarti tutto: Altro → Backup → Esporta backup.</li>
+    </ul>
+
+    <h2>Contatti</h2>
+    <p>Per domande sui tuoi dati, o per chiederne la cancellazione, contatta direttamente Diego.</p>
+
+    <p><a class="torna" href="./">← Torna all'app</a></p>
+  </main>
+</body>
+</html>

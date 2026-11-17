@@ -102,13 +102,15 @@ export default async function ({ browser }) {
   ok('accesso: nessun errore in console', !errs.length, errs.join(' / '));
   for (const p of [A, C, B, P, D]) await p.close2();
   await porta(browser);
+  await profilo(browser);
+  await elimina(browser);
 }
 
 // v94: porta d'ingresso (accesa nei test con window.libreriaPorta), «Esci» che pulisce, «Invitati» per l'amministratore
 async function porta(browser) {
   const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3', now = Date.now();
   const nuova = async (email = 'diego@test.it', uid = 'porta1') => {
-    const p = await newPage(browser, { init: { fn: ([e, u]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); } }, arg: [email, uid] } });
+    const p = await newPage(browser, { init: { fn: ([e, u]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); localStorage.setItem('fake-name', 'Persona di prova'); } }, arg: [email, uid] } });
     await p.goto(APP + '/'); return p;
   };
   const cloudDoc = p => fetch(`${API}/doc?path=${encodeURIComponent(p)}`).then(r => r.json());
@@ -235,3 +237,135 @@ async function porta(browser) {
   await N.close2();
 }
 
+// v95: il nome di ciascuno nell'intestazione
+async function profilo(browser) {
+  const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3';
+  const pagina = async ({ email = 'diego@test.it', uid = 'nome1', nome = '', porta = true } = {}) => {
+    const p = await newPage(browser, { init: { fn: ([e, u, n, pt]) => { window.libreriaPorta = pt; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); if (n) localStorage.setItem('fake-name', n); } }, arg: [email, uid, nome, porta] } });
+    await p.goto(APP + '/'); return p;
+  };
+  const entraGoogle = async p => { await p.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {}); await p.click('#porta #sy-google'); await p.waitForFunction(() => !document.querySelector('#porta'), null, { timeout: 8000 }).catch(() => {}); };
+  const testa = p => p.evaluate(() => document.querySelector('.exlibris').textContent.trim());
+  const profiloCloud = uid => fetch(`${API}/doc?path=${encodeURIComponent(`users/${uid}/meta/profilo`)}`).then(r => r.json());
+
+  const Z = await pagina({ porta: false });
+  ok('nome: senza nessuno collegato l\'intestazione è «La mia libreria»', (await testa(Z)) === 'La mia libreria', await testa(Z));
+  await Z.close2();
+
+  const G = await pagina({ nome: 'Mario Rossi' });
+  await entraGoogle(G);
+  await G.waitForFunction(() => /Mario Rossi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: con Google il nome del profilo, anche nel cloud', (await testa(G)) === 'Libreria di Mario Rossi' && (await profiloCloud('nome1')).data?.nome === 'Mario Rossi', await testa(G));
+  // Altro → «Il tuo nome»; un nome con caratteri HTML resta testo
+  await G.locator('.dock .more').click(); await G.locator('[data-m=nome]').click(); await G.waitForSelector('#nome-in');
+  await G.fill('#nome-in', '  <b>Mario</b>   Bianchi  '); await G.click('#nome-ok');
+  await G.waitForFunction(() => /Bianchi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: si cambia da Altro, spazi ripuliti, caratteri HTML come testo', (await testa(G)) === 'Libreria di <b>Mario</b> Bianchi' && !(await G.locator('.exlibris b').count()) && (await profiloCloud('nome1')).data?.nome === '<b>Mario</b> Bianchi', await testa(G));
+  // «Esci» toglie il nome dal dispositivo
+  await G.locator('.dock .more').click(); await G.locator('[data-m=sync]').click(); await G.waitForSelector('#sy-out'); await G.click('#sy-out'); await G.click('#sy-out');
+  await G.waitForSelector('#porta', { timeout: 5000 }).catch(() => {});
+  ok('nome: «Esci» lo toglie dal dispositivo', !(await G.evaluate(() => localStorage.getItem('libreria-nome'))) && (await testa(G)) === 'La mia libreria', await testa(G));
+  await G.close2();
+
+  // Link via email (nessun nome dal profilo): «Come ti chiami?»; il nome di chi c'era prima non compare (v95, revisione)
+  const E = await pagina({ porta: true });
+  await E.evaluate(() => localStorage.setItem('libreria-nome', 'Persona di prima')); await E.reload();
+  await E.waitForFunction(() => !document.querySelector('#sy-link').disabled, null, { timeout: 10000 }).catch(() => {});
+  await E.fill('#porta #sy-email', 'diego@test.it'); await E.click('#porta #sy-link');
+  await E.fill('#porta #sy-paste', 'https://mylibrary-2ea05.firebaseapp.com/__/auth/action?mode=signIn&oobCode=abc'); await E.click('#porta #sy-paste-go');
+  await E.waitForSelector('#nome-in', { timeout: 10000 }).catch(() => {});
+  const chiesto = /Come ti chiami\?/.test(await E.locator('.sheet').innerText().catch(() => ''));
+  ok('nome: il nome di chi c\'era prima non compare né nell\'intestazione né nella domanda', !/Persona di prima/.test(await testa(E)) && (await E.inputValue('#nome-in').catch(() => 'x')) === '', await testa(E));
+  if (chiesto) { await E.fill('#nome-in', 'Anna'); await E.click('#nome-ok'); }
+  await E.waitForFunction(() => /Anna/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: con il link via email l\'app chiede «Come ti chiami?» e lo salva', chiesto && (await testa(E)) === 'Libreria di Anna' && (await profiloCloud('u1')).data?.nome === 'Anna', await testa(E));
+  await E.close2();
+
+  // Amministratore senza profilo: resta «Margaira Diego», niente scritto nel cloud
+  const D = await pagina({ uid: ADMIN, email: 'diego.vero@example.com', nome: 'Diego Margaira' });
+  await entraGoogle(D); await D.waitForTimeout(1500);
+  ok('nome: l\'amministratore senza profilo resta «Margaira Diego»', (await testa(D)) === 'Libreria di Margaira Diego' && !(await profiloCloud(ADMIN)).exists, await testa(D));
+  await D.close2();
+}
+
+// v95: «Elimina il mio account»
+async function elimina(browser) {
+  const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3', now = Date.now();
+  const doc = p => fetch(`${API}/doc?path=${encodeURIComponent(p)}`).then(r => r.json()), col = p => fetch(`${API}/col?path=${encodeURIComponent(p)}`).then(r => r.json());
+  const prepara = uid => { ['Uno', 'Due'].forEach((t, i) => putDoc(`users/${uid}/books/e${i}`, { title: t, author: 'A', status: 'da-leggere', updated: now, added: now, hasSpine: i === 0, spineAt: 1, deleted: false }));
+    putDoc(`users/${uid}/spines/e0`, { data: 'data:image/png;base64,AAAA', at: 1 }); putDoc(`users/${uid}/meta/goals`, { goals: { 2026: 10 }, updated: 1 }); putDoc(`users/${uid}/meta/profilo`, { nome: 'Elena', updated: 1 }); };
+  const pagina = async (uid, email, extra = {}) => {
+    putDoc(`invitati/${email}`, { aggiunto: 1, da: ADMIN });
+    const p = await newPage(browser, { init: { fn: ([u, e, x]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); localStorage.setItem('fake-name', 'Elena'); for (const [k, v] of Object.entries(x)) localStorage.setItem(k, v); } }, arg: [uid, email, extra] } });
+    await p.goto(APP + '/');
+    await p.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {});
+    await p.click('#porta #sy-google'); await p.waitForFunction(() => !document.querySelector('#porta') && JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').length > 0, null, { timeout: 10000 }).catch(() => {});
+    return p;
+  };
+  const apriSync = async p => { await p.locator('.dock .more').click(); await p.locator('[data-m=sync]').click(); await p.waitForSelector('#sy-out'); };
+  const elimina2 = async p => { await apriSync(p); await p.click('#sy-del'); await p.click('#sy-del'); };
+
+  // Accesso recente: cancella tutto, invito compreso, poi l'account e il dispositivo
+  prepara('el1');
+  const A = await pagina('el1', 'el1@example.com');
+  await elimina2(A);
+  await A.waitForSelector('#porta', { timeout: 10000 }).catch(() => {});
+  const vuoto = (await col('users/el1/books')).length === 0 && (await col('users/el1/spines')).length === 0 && !(await doc('users/el1/meta/goals')).exists && !(await doc('users/el1/meta/profilo')).exists;
+  ok('Elimina: libri, foto, obiettivo e nome tolti dal cloud', vuoto, JSON.stringify(await col('users/el1/books')));
+  ok('Elimina: tolto anche l\'invito, eliminato l\'account, dispositivo pulito', !(await doc('invitati/el1@example.com')).exists && (await A.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el1'
+    && (await localBooks(A)).length === 0 && (await A.locator('#porta').count()) === 1);
+  await A.close2();
+
+  // Accesso vecchio: prima bisogna rientrare, niente cancellato
+  prepara('el2');
+  const V = await pagina('el2', 'el2@example.com', { 'fake-signin': String(now - 10 * 60e3) });
+  await elimina2(V); await V.waitForTimeout(800);
+  ok('Elimina: con un accesso vecchio chiede di rientrare e non cancella niente', /Per sicurezza, prima di eliminare l'account rientra/.test(await V.locator('.sheet').innerText()) && (await col('users/el2/books')).length === 2 && (await doc('invitati/el2@example.com')).exists);
+  await V.close2();
+
+  // Senza rete: messaggio, niente cancellato
+  prepara('el3');
+  const O = await pagina('el3', 'el3@example.com');
+  await O.evaluate(() => Object.defineProperty(navigator, 'onLine', { get: () => false, configurable: true }));
+  await elimina2(O); await O.waitForTimeout(800);
+  ok('Elimina: senza rete non cancella niente', /Serve la connessione per eliminare l'account\./.test(await O.locator('.sheet').innerText()) && (await col('users/el3/books')).length === 2);
+  await O.close2();
+
+  // L'amministratore non ha «Elimina»
+  const D = await pagina(ADMIN, 'diego.vero@example.com');
+  await apriSync(D);
+  ok('Elimina: l\'amministratore non vede il pulsante', (await D.locator('#sy-del').count()) === 0);
+  await D.close2();
+  await correzioniElimina({ prepara, pagina, apriSync, elimina2, col, doc, now });
+}
+
+// v95, correzioni dopo la revisione di «Elimina»
+async function correzioniElimina({ prepara, pagina, apriSync, elimina2, col, doc, now }) {
+  // I1: un salvataggio partito durante «Elimina» non ricrea niente nel cloud
+  prepara('el5');
+  const W = await pagina('el5', 'el5@example.com');
+  await W.route(/localhost:\d+\/doc\?/, async r => { if (r.request().method() === 'PUT') await new Promise(x => setTimeout(x, 800)); r.continue(); });
+  await apriSync(W); await W.click('#sy-del'); await W.click('#sy-del');
+  await W.waitForTimeout(250);
+  await W.evaluate(() => { const c = window.libreriaCloud; c.changed('e0'); c.goals(); });
+  await W.waitForSelector('#porta', { timeout: 15000 }).catch(() => {}); await W.waitForTimeout(2500);
+  ok('Elimina: un salvataggio partito durante la cancellazione non ricrea libri né obiettivo', (await col('users/el5/books')).length === 0 && !(await doc('users/el5/meta/goals')).exists, JSON.stringify(await col('users/el5/books')));
+  await W.close2();
+  // I2a: l'accesso recente si misura con gli orari del server (token), non con l'orologio del telefono
+  prepara('el6');
+  const K = await pagina('el6', 'el6@example.com', { 'fake-signin': String(now - 10 * 60e3), 'fake-authtime': String(Date.now()) });
+  await elimina2(K); await K.waitForSelector('#porta', { timeout: 10000 }).catch(() => {});
+  ok('Elimina: l\'accesso recente si misura con gli orari del server', (await K.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el6');
+  await K.close2();
+  // I2b: se Firebase rifiuta l'account dopo i dati, rientrando si può finire dalla schermata «non invitato»
+  prepara('el7');
+  const Q = await pagina('el7', 'el7@example.com', { 'fake-delete-error': 'auth/requires-recent-login' });
+  await elimina2(Q); await Q.waitForTimeout(1500);
+  ok('Elimina a metà: messaggio chiaro', /I tuoi libri sono stati cancellati/.test(await Q.locator('.sheet').innerText().catch(() => '')));
+  await Q.evaluate(() => localStorage.removeItem('fake-delete-error'));
+  await Q.reload(); await Q.waitForFunction(() => /su invito\./.test(document.querySelector('#porta')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+  const fine = Q.locator('#porta #porta-elimina');
+  if (await fine.count()) { await fine.click(); await fine.click(); await Q.waitForTimeout(1500); }
+  ok('Elimina a metà: dalla schermata «non invitato» si elimina l\'account', (await Q.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el7', String(await fine.count()));
+  await Q.close2();
+}

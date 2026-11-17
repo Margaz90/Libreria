@@ -324,6 +324,12 @@ export default async function run() {
     ok('amministratori: stesso elenco nelle regole e nell\'app', !!uidRegole && uidRegole.replace(/\s/g, '') === (uidApp || '').replace(/\s/g, ''), `${uidRegole} | ${uidApp}`);
   }
 
+  { // ---- v95: pagina sulla privacy ----
+    const pv = leggi('privacy.html');
+    const servono = ['Diego Margaira', 'contatta direttamente Diego', 'eur3', 'Google Books', 'Apple Books', 'Open Library', 'Wikidata', 'Google Fonts', "Torna all'app", 'Elimina il mio account', 'Esci', 'nessuna pubblicità', 'cdn.jsdelivr.net', 'copia tecnica', 'in automatico'];
+    ok('privacy.html: responsabile, contatto, dove stanno i dati, servizi esterni, come cancellare', servono.every(x => pv.toLowerCase().includes(x.toLowerCase())), servono.filter(x => !pv.toLowerCase().includes(x.toLowerCase())).join(', '));
+  }
+
   ok('.firebaserc: progetto mylibrary-2ea05', !!rc && rc.projects && rc.projects.default === 'mylibrary-2ea05');
   const wf = leggi('.github/workflows/firebase.yml');
   ok('azione GitHub: su push a main, canale live, chiave dai Secrets', /branches:\s*\[\s*main\s*\]|branches:\s*\n\s*-\s*main/.test(wf) && /channelId:\s*live/.test(wf) && /projectId:\s*mylibrary-2ea05/.test(wf)

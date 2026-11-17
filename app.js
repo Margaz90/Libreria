@@ -89,6 +89,14 @@
   // Su invito (v94): l'amministratore (Diego) per uid; stesso elenco in firestore.rules.
   const ADMIN_UIDS = ["46AtxF1piJQGsWcqm665Wjf6nFA3"];
   const isAdmin = uid => ADMIN_UIDS.includes(uid);
+  // Nome nell'intestazione (v95): «Libreria di {nome}». Copia locale per disegnarlo subito; il nome vero sta nel cloud (users/{uid}/meta/profilo).
+  const NOME_KEY = "libreria-nome";
+  const pulisciNome = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  function mostraNome() {
+    let n = ""; try { n = localStorage.getItem(NOME_KEY) || ""; } catch {}
+    const el = document.querySelector(".exlibris"); if (!el) return;
+    el.textContent = n ? "Libreria di " + n : isAdmin(cloudInfo().uid) ? "Libreria di Margaira Diego" : "La mia libreria";
+  }
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
   const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
@@ -1864,6 +1872,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     document.querySelectorAll(".viewsw [data-mode]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.mode === state.mode)));
   }
   function render() {
+    mostraNome();
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
     const sk = state.view === "stats" ? statsFocusKey() : null;
@@ -2806,14 +2815,17 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="menu-list">
         <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
         <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
+        ${cloud.email ? `<button type="button" data-m="nome"><b>Il tuo nome</b><span>${esc((() => { try { return localStorage.getItem(NOME_KEY) || ""; } catch { return ""; } })() || "Come compare in alto")}</span></button>` : ""}
         ${isAdmin(cloudInfo().uid) && cloud.email ? `<button type="button" data-m="inv"><b>Invitati</b><span>Chi può usare MyLibrary</span></button>` : ""}
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
       </div>
+      <p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy: cosa salva l'app e dove</a></p>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
     $("[data-m=goal]", sheet).onclick = openGoal;
     $("[data-m=backup]", sheet).onclick = openImport;
     $("[data-m=sync]", sheet).onclick = openSync;
     const inv = $("[data-m=inv]", sheet); if (inv) inv.onclick = openInvitati;
+    const nm = $("[data-m=nome]", sheet); if (nm) nm.onclick = () => apriNome();
     $("#m-close", sheet).onclick = closeSheet;
   }
 
@@ -2868,6 +2880,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     isAdmin,
     ammesso(si, email) { if (!PORTA) return; if (si) { if ($("#porta")) { chiudiPorta(); render(); } } else mostraPorta("invito", email); },
     pulisci: opz => pulisciDispositivo(opz),
+    nome(n) { try { const v = pulisciNome(n); if (v) localStorage.setItem(NOME_KEY, v); else localStorage.removeItem(NOME_KEY); } catch {} mostraNome(); },
+    chiediNome: () => apriNome({ primaVolta: true }),
     accountLink: () => ACCOUNT_LINK
   };
   const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";
@@ -2950,10 +2964,23 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <h2>Questa libreria è su invito.</h2>
         <p>L'indirizzo ${esc(email)} non è tra gli invitati. Chiedi a Diego di aggiungerti.</p>
         <div class="actions"><button class="btn primary" id="porta-esci">Esci e usa un altro account</button></div>
+        <p class="hint">Avevi iniziato a eliminare il tuo account? Puoi finire qui: <button class="btn danger" type="button" id="porta-elimina">Elimina il mio account</button></p>
         <div class="status-line" id="porta-st" aria-live="polite"></div></div>`
       : `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
         <p class="hint">Questa libreria è su invito: entra con il tuo account.</p>
-        ${accessoHTML()}</div>`;
+        ${accessoHTML()}
+        <p class="hint porta-privacy"><a href="privacy.html">Cosa salva l'app e dove (privacy)</a></p></div>`;
+    if (tipo === "invito") { // v95: un'eliminazione a metà si finisce da qui (il cloud non risponde più, resta solo l'account)
+      const pe = $("#porta-elimina", el);
+      pe.onclick = () => {
+        if (!pe.classList.contains("conferma")) { pe.classList.add("conferma"); pe.textContent = "Conferma: elimina"; $("#porta-st", el).textContent = "Definitivo: cancella il tuo account e quello che resta su questo telefono."; return; }
+        pe.disabled = true;
+        loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato."), e => {
+          pe.disabled = false; pe.classList.remove("conferma"); pe.textContent = "Elimina il mio account";
+          $("#porta-st", el).textContent = e && e.code === "rientra" ? "Per sicurezza esci, accedi di nuovo e riprova." : e && e.code === "rete" ? "Serve la connessione per eliminare l'account." : "Non riesco a eliminare l'account (" + errText(e) + ").";
+        });
+      };
+    }
     if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci({ soloAccount: true })).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
     else collegaAccesso(el, { primaVolta: true });
   }
@@ -2961,14 +2988,32 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   // «Esci» (v94): via dal dispositivo i dati di questo account (restano nel cloud), così un'altra persona non li vede né li riceve.
   function pulisciDispositivo({ soloAccount = false } = {}) {
     dataGen++; novita.busy = false; // i lavori in sottofondo dell'account che esce (Novità, copertine) non scrivono più
-    if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); } catch {} cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
+    if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); localStorage.removeItem(NOME_KEY); } catch {} mostraNome(); cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
     try {
-      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY].includes(k)) localStorage.removeItem(k);
+      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY, NOME_KEY].includes(k)) localStorage.removeItem(k);
     } catch {}
     try { indexedDB.deleteDatabase("libreria-copie"); } catch {} // le copie di «Annulla» contengono i libri di questo account
     try { const s = getSet(); delete s.goals; delete s.goalsAt; delete s.lastBackup; localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch {} // l'obiettivo è dell'account (va nel cloud): non deve passare al prossimo
-    state.books = []; novitaMem = null; cloud.email = "";
+    state.books = []; novitaMem = null; cloud.email = ""; mostraNome();
     if (PORTA) mostraPorta("accesso"); else render();
+  }
+  // «Come ti chiami?» (v95): al primo ingresso senza nome (link via email) e da Altro → «Il tuo nome».
+  function apriNome({ primaVolta = false } = {}) {
+    if (primaVolta && (sheetOpen() || $("#porta"))) { setTimeout(() => apriNome({ primaVolta }), 1500); return; } // dopo l'unione o la porta
+    let att = ""; try { att = localStorage.getItem(NOME_KEY) || ""; } catch {}
+    const sheet = openSheet(`<h2>${primaVolta ? "Come ti chiami?" : "Il tuo nome"}</h2>
+      <p class="hint">Compare in alto: «Libreria di …». Lo vedi solo tu, su tutti i tuoi dispositivi.</p>
+      <div class="field"><label for="nome-in">Nome</label><input id="nome-in" type="text" autocomplete="name" maxlength="60" value="${esc(att)}"></div>
+      <div class="actions"><button class="btn primary" id="nome-ok">Salva</button><button class="btn ghost" id="nome-no">${primaVolta ? "Più tardi" : "Chiudi"}</button></div>
+      <div class="status-line" id="nome-st" aria-live="polite"></div>`);
+    $("#nome-no", sheet).onclick = closeSheet;
+    $("#nome-ok", sheet).onclick = () => {
+      const n = pulisciNome($("#nome-in", sheet).value);
+      if (!n) { $("#nome-st", sheet).textContent = "Scrivi un nome."; return; }
+      $("#nome-st", sheet).textContent = "Salvo…";
+      loadCloud().then(c => c.salvaNome(n)).then(closeSheet, e => { $("#nome-st", sheet).textContent = "Non riesco a salvarlo (" + errText(e) + ")."; });
+    };
+    setTimeout(() => $("#nome-in", sheet).focus(), 50);
   }
   // Invitati (v94, solo l'amministratore): elenco delle email che possono usare l'app; le regole di Firestore lo impongono.
   function openInvitati() {
@@ -3004,14 +3049,32 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
       <div class="status-line" id="sy-info">Controllo lo stato…</div>
       <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
-      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo (v94): così un'altra persona può entrare con il suo account.</p>
+      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo: così un'altra persona può entrare con il suo account.</p>
+      ${isAdmin(cloudInfo().uid) ? "" : `<div class="actions"><button class="btn danger" id="sy-del">Elimina il mio account</button></div>
+      <p class="hint">Cosa salva l'app e come cancellarlo: <a href="privacy.html" target="_blank" rel="noopener">privacy</a>.</p>`}
       <div class="status-line" id="sy-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
     $("#sy-close", sheet).onclick = closeSheet;
     loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
     $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
     $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
-    const out = $("#sy-out", sheet), sst = $("#sy-status", sheet);
+    const out = $("#sy-out", sheet), sst = $("#sy-status", sheet), del = $("#sy-del", sheet);
+    if (del) del.onclick = () => { // v95: due tocchi, poi tutto via dal cloud e dal telefono
+      if (!del.classList.contains("conferma")) {
+        del.classList.add("conferma"); del.textContent = "Conferma: elimina";
+        sst.textContent = "Definitivo: cancella i tuoi libri, le foto e il tuo account dal cloud e da questo telefono."; return;
+      }
+      const altri = ["#sy-now", "#sy-re", "#sy-out"].map(s => $(s, sheet)).filter(Boolean);
+      del.disabled = true; altri.forEach(b => b.disabled = true); sst.textContent = "Elimino…"; // niente «Sincronizza ora» o «Esci» durante l'eliminazione
+      loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato. Grazie di aver usato MyLibrary."), e => {
+        del.disabled = false; altri.forEach(b => b.disabled = false); del.classList.remove("conferma"); del.textContent = "Elimina il mio account";
+        const c = e && e.code;
+        sst.textContent = c === "rientra" ? "Per sicurezza, prima di eliminare l'account rientra: tocca «Esci», accedi di nuovo e torna qui."
+          : c === "rete" ? "Serve la connessione per eliminare l'account."
+          : c === "parziale" ? "I tuoi libri sono stati cancellati; per eliminare anche l'account esci, rientra e riprova."
+          : "Non riesco a eliminare l'account (" + errText(e) + ").";
+      });
+    };
     out.onclick = () => {
       if (!out.classList.contains("conferma")) { // primo tocco: chiedo conferma
         out.classList.add("conferma"); out.textContent = "Conferma: esci";
