@@ -3036,13 +3036,30 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="status-line" id="sy-info">Controllo lo stato…</div>
       <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
       <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo (v94): così un'altra persona può entrare con il suo account.</p>
+      ${isAdmin(cloudInfo().uid) ? "" : `<div class="actions"><button class="btn danger" id="sy-del">Elimina il mio account</button></div>
+      <p class="hint">Cosa salva l'app e come cancellarlo: <a href="privacy.html" target="_blank" rel="noopener">privacy</a>.</p>`}
       <div class="status-line" id="sy-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
     $("#sy-close", sheet).onclick = closeSheet;
     loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
     $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
     $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
-    const out = $("#sy-out", sheet), sst = $("#sy-status", sheet);
+    const out = $("#sy-out", sheet), sst = $("#sy-status", sheet), del = $("#sy-del", sheet);
+    if (del) del.onclick = () => { // v95: due tocchi, poi tutto via dal cloud e dal telefono
+      if (!del.classList.contains("conferma")) {
+        del.classList.add("conferma"); del.textContent = "Conferma: elimina";
+        sst.textContent = "Definitivo: cancella i tuoi libri, le foto e il tuo account dal cloud e da questo telefono."; return;
+      }
+      del.disabled = true; sst.textContent = "Elimino…";
+      loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato. Grazie di aver usato MyLibrary."), e => {
+        del.disabled = false; del.classList.remove("conferma"); del.textContent = "Elimina il mio account";
+        const c = e && e.code;
+        sst.textContent = c === "rientra" ? "Per sicurezza, prima di eliminare l'account rientra: tocca «Esci», accedi di nuovo e torna qui."
+          : c === "rete" ? "Serve la connessione per eliminare l'account."
+          : c === "parziale" ? "I tuoi libri sono stati cancellati; per eliminare anche l'account esci, rientra e riprova."
+          : "Non riesco a eliminare l'account (" + errText(e) + ").";
+      });
+    };
     out.onclick = () => {
       if (!out.classList.contains("conferma")) { // primo tocco: chiedo conferma
         out.classList.add("conferma"); out.textContent = "Conferma: esci";

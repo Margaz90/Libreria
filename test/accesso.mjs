@@ -103,6 +103,7 @@ export default async function ({ browser }) {
   for (const p of [A, C, B, P, D]) await p.close2();
   await porta(browser);
   await profilo(browser);
+  await elimina(browser);
 }
 
 // v94: porta d'ingresso (accesa nei test con window.libreriaPorta), «Esci» che pulisce, «Invitati» per l'amministratore
@@ -282,5 +283,55 @@ async function profilo(browser) {
   const D = await pagina({ uid: ADMIN, email: 'diego.vero@example.com', nome: 'Diego Margaira' });
   await entraGoogle(D); await D.waitForTimeout(1500);
   ok('nome: l\'amministratore senza profilo resta «Margaira Diego»', (await testa(D)) === 'Libreria di Margaira Diego' && !(await profiloCloud(ADMIN)).exists, await testa(D));
+  await D.close2();
+}
+
+// v95: «Elimina il mio account»
+async function elimina(browser) {
+  const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3', now = Date.now();
+  const doc = p => fetch(`${API}/doc?path=${encodeURIComponent(p)}`).then(r => r.json()), col = p => fetch(`${API}/col?path=${encodeURIComponent(p)}`).then(r => r.json());
+  const prepara = uid => { ['Uno', 'Due'].forEach((t, i) => putDoc(`users/${uid}/books/e${i}`, { title: t, author: 'A', status: 'da-leggere', updated: now, added: now, hasSpine: i === 0, spineAt: 1, deleted: false }));
+    putDoc(`users/${uid}/spines/e0`, { data: 'data:image/png;base64,AAAA', at: 1 }); putDoc(`users/${uid}/meta/goals`, { goals: { 2026: 10 }, updated: 1 }); putDoc(`users/${uid}/meta/profilo`, { nome: 'Elena', updated: 1 }); };
+  const pagina = async (uid, email, extra = {}) => {
+    putDoc(`invitati/${email}`, { aggiunto: 1, da: ADMIN });
+    const p = await newPage(browser, { init: { fn: ([u, e, x]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); localStorage.setItem('fake-name', 'Elena'); for (const [k, v] of Object.entries(x)) localStorage.setItem(k, v); } }, arg: [uid, email, extra] } });
+    await p.goto(APP + '/');
+    await p.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {});
+    await p.click('#porta #sy-google'); await p.waitForFunction(() => !document.querySelector('#porta') && JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').length > 0, null, { timeout: 10000 }).catch(() => {});
+    return p;
+  };
+  const apriSync = async p => { await p.locator('.dock .more').click(); await p.locator('[data-m=sync]').click(); await p.waitForSelector('#sy-out'); };
+  const elimina2 = async p => { await apriSync(p); await p.click('#sy-del'); await p.click('#sy-del'); };
+
+  // Accesso recente: cancella tutto, invito compreso, poi l'account e il dispositivo
+  prepara('el1');
+  const A = await pagina('el1', 'el1@example.com');
+  await elimina2(A);
+  await A.waitForSelector('#porta', { timeout: 10000 }).catch(() => {});
+  const vuoto = (await col('users/el1/books')).length === 0 && (await col('users/el1/spines')).length === 0 && !(await doc('users/el1/meta/goals')).exists && !(await doc('users/el1/meta/profilo')).exists;
+  ok('Elimina: libri, foto, obiettivo e nome tolti dal cloud', vuoto, JSON.stringify(await col('users/el1/books')));
+  ok('Elimina: tolto anche l\'invito, eliminato l\'account, dispositivo pulito', !(await doc('invitati/el1@example.com')).exists && (await A.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el1'
+    && (await localBooks(A)).length === 0 && (await A.locator('#porta').count()) === 1);
+  await A.close2();
+
+  // Accesso vecchio: prima bisogna rientrare, niente cancellato
+  prepara('el2');
+  const V = await pagina('el2', 'el2@example.com', { 'fake-signin': String(now - 10 * 60e3) });
+  await elimina2(V); await V.waitForTimeout(800);
+  ok('Elimina: con un accesso vecchio chiede di rientrare e non cancella niente', /Per sicurezza, prima di eliminare l'account rientra/.test(await V.locator('.sheet').innerText()) && (await col('users/el2/books')).length === 2 && (await doc('invitati/el2@example.com')).exists);
+  await V.close2();
+
+  // Senza rete: messaggio, niente cancellato
+  prepara('el3');
+  const O = await pagina('el3', 'el3@example.com');
+  await O.evaluate(() => Object.defineProperty(navigator, 'onLine', { get: () => false, configurable: true }));
+  await elimina2(O); await O.waitForTimeout(800);
+  ok('Elimina: senza rete non cancella niente', /Serve la connessione per eliminare l'account\./.test(await O.locator('.sheet').innerText()) && (await col('users/el3/books')).length === 2);
+  await O.close2();
+
+  // L'amministratore non ha «Elimina»
+  const D = await pagina(ADMIN, 'diego.vero@example.com');
+  await apriSync(D);
+  ok('Elimina: l\'amministratore non vede il pulsante', (await D.locator('#sy-del').count()) === 0);
   await D.close2();
 }

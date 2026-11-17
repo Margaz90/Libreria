@@ -58,8 +58,14 @@
         commit: () => Promise.all(ops.map(o => o.del ? put(o.ref.path, null) : put(o.ref.path, o.data))) };
     }
   };
-  const listeners = []; let cur = JSON.parse(localStorage.getItem('fake-auth') || 'null');
-  const setUser = u => { cur = u; if (u) localStorage.setItem('fake-auth', JSON.stringify(u)); else localStorage.removeItem('fake-auth'); listeners.forEach(f => f(cur)); };
+  const listeners = [];
+  // v95: utente con data dell'ultimo accesso (fake-signin, ms; se manca: adesso) e delete()
+  const conMetodi = u => u && Object.assign(u, {
+    metadata: { lastSignInTime: new Date(Number(localStorage.getItem('fake-signin')) || Date.now()).toUTCString() },
+    delete: () => { localStorage.setItem('fake-deleted', u.uid); setUser(null); return Promise.resolve(); }
+  });
+  let cur = conMetodi(JSON.parse(localStorage.getItem('fake-auth') || 'null'));
+  const setUser = u => { cur = conMetodi(u); if (u) localStorage.setItem('fake-auth', JSON.stringify({ uid: u.uid, email: u.email, displayName: u.displayName || null })); else localStorage.removeItem('fake-auth'); listeners.forEach(f => f(cur)); };
   const auth = () => ({
     onAuthStateChanged: cb => { listeners.push(cb); setTimeout(() => cb(cur), 0); return () => {}; },
     signInWithPopup: () => {

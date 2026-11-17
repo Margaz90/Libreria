@@ -293,6 +293,32 @@
     },
     signOut() { return auth.signOut(); },
     salvaNome,
+    // «Elimina il mio account» (v95): libri, foto, obiettivo, nome e invito dal cloud, poi l'account, poi il dispositivo.
+    // Prima di cancellare: online, accesso recente (3 minuti, Firebase ne chiede 5), invii al cloud fermati.
+    async eliminaAccount() {
+      const u = user;
+      if (!u) throw { code: "rete" };
+      if (H.isAdmin && H.isAdmin(u.uid)) throw { code: "admin" };
+      if (!navigator.onLine) throw { code: "rete" };
+      const recente = () => Date.now() - Date.parse(u.metadata && u.metadata.lastSignInTime) < 3 * 60e3;
+      if (!recente()) throw { code: "rientra" };
+      const riprendi = () => { gen++; start(); }; // se ci si ferma prima di cancellare, la sincronizzazione riparte
+      gen++; sincronizzo = false; clearTimeout(timer); timer = null; pending.clear(); gone.clear();
+      if (unsub) unsub(); unsub = null; if (goalsUnsub) goalsUnsub(); goalsUnsub = null;
+      let snap;
+      try { snap = await books().get({ source: "server" }); } catch { riprendi(); throw { code: "rete" }; }
+      if (!recente()) { riprendi(); throw { code: "rientra" }; }
+      const refs = [];
+      snap.docs.forEach(d => refs.push(books().doc(d.id), spines().doc(d.id))); // le foto per id: niente download
+      refs.push(goalsDoc(), profiloDoc(u.uid));
+      for (let i = 0; i < refs.length; i += 400) { const b = db.batch(); refs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit(); }
+      try { await db.doc(`invitati/${String(u.email || "").toLowerCase()}`).delete(); } catch {}
+      try { await u.delete(); }
+      catch (e) { if (/requires-recent-login/.test(why(e))) throw { code: "parziale" }; throw e; }
+      for (const k of Object.keys(ck)) delete ck[k];
+      ck.spineAt = {};
+      if (H.pulisci) H.pulisci();
+    },
     // Modifiche non ancora arrivate al cloud (v94: «Esci» le aspetta)
     inSospeso() { return !!(sincronizzo || timer || pending.size || gone.size || (info && info.pending)); },
     // «Esci» (v94): fuori dall'account e via i libri da questo dispositivo (restano nel cloud)
