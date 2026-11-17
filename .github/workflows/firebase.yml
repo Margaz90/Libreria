@@ -21,7 +21,7 @@ jobs:
           channelId: live
           projectId: mylibrary-2ea05
       # v94: regole di Firestore (su invito). Dopo l'app: se questo passo fallisce, l'app è comunque pubblicata e l'errore resta visibile qui.
-      # Servono i ruoli «Amministratore regole Firebase» e «Consumer Service Usage» sull'account della chiave.
+      # Servono i ruoli «Amministratore regole Firebase», «Consumer Service Usage» e «Visualizzatore Service Usage» sull'account della chiave.
       - name: Pubblica le regole di Firestore
         env:
           CHIAVE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05 }}

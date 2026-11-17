@@ -18,6 +18,8 @@ Servono perché GitHub possa pubblicare anche le regole.
 4. **+ Aggiungi un altro ruolo** e aggiungi, uno alla volta:
    - **Amministratore regole Firebase** (Firebase Rules Admin)
    - **Consumer Service Usage** (Service Usage Consumer)
+   - **Visualizzatore Service Usage** (Service Usage Viewer): senza, la pubblicazione si ferma con «Permission denied to get service» (17 novembre 2026)
+   I ruoli nuovi diventano attivi dopo qualche minuto: se la pubblicazione fallisce con «The caller does not have permission» subito dopo averli aggiunti, si riprova più tardi.
 5. **Salva**.
 
 ### 3. Dillo a Claude
