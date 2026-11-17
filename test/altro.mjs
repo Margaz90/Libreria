@@ -100,9 +100,25 @@ async function account(browser) {
   await p.close2();
 }
 
+async function schermoBasso(browser) {
+  const p = await newPage(browser, { width: 390, height: 600 });
+  await load(p, libri, { goals: { [Y]: 5 } });
+  await altro(p);
+  const tagliati = () => p.evaluate(() => [...document.querySelectorAll('.sheet .menu-list, .sheet .profilo')].filter(l => l.scrollHeight > l.clientHeight + 1).length);
+  ok('schermo basso: nessun elenco schiacciato, la scheda scorre', await tagliati() === 0 && await p.evaluate(() => { const s = document.querySelector('.sheet'); return s.scrollHeight > s.clientHeight; }));
+  await p.locator('.sheet [data-m=copertine]').click(); await p.waitForTimeout(200);
+  ok('schermo basso: Copertine e serie senza elementi sovrapposti', await p.evaluate(() => {
+    const el = [...document.querySelector('.sheet').children].filter(e => e.offsetHeight);
+    return el.every((e, i) => !i || e.getBoundingClientRect().top >= el[i - 1].getBoundingClientRect().bottom - 1);
+  }));
+  ok('schermo basso: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
   await pagina(browser);
   await pagina(browser, { dark: true });
   await pagineInterne(browser);
+  await schermoBasso(browser);
   await account(browser);
 }

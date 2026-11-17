@@ -287,7 +287,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 [data-shelf], #main .covers { scroll-margin-top: 150px; }
 
 /* Menu Altro */
-.menu-list { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+.menu-list { display: flex; flex-direction: column; flex: none; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; } /* flex: none: in una scheda alta più dello schermo la scheda scorre, l'elenco non si schiaccia */
 .menu-list > * { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; border-bottom: 1px solid var(--rule); background: var(--bg); padding: 13px 16px; position: relative; }
 .menu-list > *:last-child { border-bottom: 0; }
 .menu-list b { font-size: 15px; font-weight: 600; }
