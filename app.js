@@ -3049,7 +3049,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
       <div class="status-line" id="sy-info">Controllo lo stato…</div>
       <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
-      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo (v94): così un'altra persona può entrare con il suo account.</p>
+      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo: così un'altra persona può entrare con il suo account.</p>
       ${isAdmin(cloudInfo().uid) ? "" : `<div class="actions"><button class="btn danger" id="sy-del">Elimina il mio account</button></div>
       <p class="hint">Cosa salva l'app e come cancellarlo: <a href="privacy.html" target="_blank" rel="noopener">privacy</a>.</p>`}
       <div class="status-line" id="sy-status" aria-live="polite"></div>
