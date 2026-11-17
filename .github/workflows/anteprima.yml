@@ -21,4 +21,5 @@ jobs:
           expires: 7d
           projectId: mylibrary-2ea05
       - name: Indirizzo dell'anteprima
-        run: echo "Anteprima: ${{ steps.deploy.outputs.details_url }}" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Anteprima: ${{ steps.deploy.outputs.details_url }}" | tee -a "$GITHUB_STEP_SUMMARY"
