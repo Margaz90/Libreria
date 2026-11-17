@@ -1,0 +1,25 @@
+# Anteprima privata di MyLibrary (17 novembre 2026): a ogni push sul branch «anteprima» la versione va su un indirizzo
+# temporaneo di Firebase Hosting (canale «anteprima», scade dopo 7 giorni), senza toccare il sito vero né le regole di Firestore.
+# L'indirizzo è fisso per il canale e compare nel riepilogo dell'esecuzione; va aggiunto una volta ai domini autorizzati
+# di Firebase Authentication per poter accedere (passi in docs/anteprima-passi.md).
+name: Anteprima su Firebase Hosting
+on:
+  push:
+    branches: [anteprima]
+permissions:
+  contents: read
+jobs:
+  anteprima:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        id: deploy
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MYLIBRARY_2EA05 }}
+          channelId: anteprima
+          expires: 7d
+          projectId: mylibrary-2ea05
+      - name: Indirizzo dell'anteprima
+        run: |
+          echo "Anteprima: ${{ steps.deploy.outputs.details_url }}" | tee -a "$GITHUB_STEP_SUMMARY"

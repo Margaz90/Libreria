@@ -140,7 +140,7 @@ async function aspetto(browser) {
   ok('trama lunga: ridotta e con «…»', sy && await p.locator('#s-syn-more').isVisible());
   await p.locator('#s-syn-more').click();
   ok('«…» mostra tutta la trama', await p.locator('#s-syn').evaluate(e => e.scrollHeight <= e.clientHeight + 1) && await p.locator('#s-syn-more').getAttribute('aria-expanded') === 'true');
-  ok('citazione vuota: virgolette di apertura e chiusura nel testo d\'esempio', await p.locator('#f-quote').getAttribute('placeholder') === '“Una frase da ricordare”' && !(await p.locator('.quote .qm').first().isVisible()));
+  ok('citazione vuota: virgolette di apertura e chiusura nel testo d\'esempio', await p.locator('#f-quote').getAttribute('placeholder') === '«Una frase da ricordare»' && !(await p.locator('.quote .qm').first().isVisible()));
   await p.evaluate(() => { document.querySelector('.sheet').scrollTop = 0; });
   const sb = await p.locator('#s-save').boundingBox();
   ok('Salva visibile senza scorrere', sb.y >= 0 && sb.y + sb.height <= 844, JSON.stringify(sb));

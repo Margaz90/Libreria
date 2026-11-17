@@ -82,7 +82,7 @@
   // </regole>
   // Dove gira l'app (v90): sul sito Firebase l'accesso con Google funziona anche nell'app installata su iPhone.
   // <regole>
-  const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "margaz90.github.io": "vecchio" };
+  const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "mylibrary-2ea05--anteprima-roidf2ds.web.app": "firebase", "margaz90.github.io": "vecchio" }; // l'anteprima (docs/anteprima-passi.md) si comporta come il sito vero
   const sitoDi = h => { const k = String(h || "").toLowerCase(); return Object.hasOwn(SITI, k) ? SITI[k] : "altro"; };
   // </regole>
   const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test
@@ -1362,7 +1362,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const daAggiornare = b => needsDates(b) || senzaVoto(b);
   const STALE = "periodo di lettura da aggiornare";
   const staleText = b => needsDates(b) && senzaVoto(b) ? "periodo di lettura e voto da aggiornare" : senzaVoto(b) ? "voto da aggiungere" : STALE;
-  const badgeHTML = b => daAggiornare(b) ? `<i class="badge" aria-hidden="true">!</i>` : "";
+  const badgeHTML = b => daAggiornare(b) ? `<i class="badge" aria-hidden="true"></i>` : ""; // v99: pallino senza «!», il dettaglio è nella scheda
   function spineHTML(b, tag = "button", dim) { // dim: { w (%), h (px) } per le mensole delle Statistiche
     const p = Math.min(Number(b.pages) || 280, 900);
     const h = dim ? dim.h : Math.round(132 + p / 900 * 72);
@@ -1891,6 +1891,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       else main.innerHTML = list.length ? renderCovers(list) : `<p class="hint">${state.q.trim() ? "Nessun libro corrisponde alla ricerca." : "Nessun libro in questo scaffale."}</p>`;
     }
     $("#toolbar").hidden = state.view === "stats" || state.view === "novita";
+    $(".viewsw-m").hidden = state.view !== "libreria"; // v99: Dorsi/Copertine vale solo per la libreria
     aggiornaPallinoNovita();
     wireMain(main);
     if (sk) statsFocusRestore(sk);
@@ -2103,7 +2104,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
   function readingHead(b, rate = true) {
     return `<div class="rf rf-head">
-      <div class="field"><span class="label" id="f-status-l">Stato</span>
+      <div class="field"><span class="sr" id="f-status-l">Stato</span>
         <input type="hidden" id="f-status" value="${esc(b.status || "da-leggere")}">
         <div class="seg" role="radiogroup" aria-labelledby="f-status-l">${["da-leggere", "in-lettura", "letto"].map(k => `<button type="button" role="radio" data-v="${k}" aria-checked="${b.status === k}">${STATUS_ONE[k]}</button>`).join("")}<span class="seg-ink"></span></div>
       </div>
@@ -2128,7 +2129,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   function readingMemo(b) {
     return `<div class="rf rf-memo">
-      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">“</span><textarea id="f-quote" placeholder="“Una frase da ricordare”">${esc(b.quote || "")}</textarea><span class="qm qe" aria-hidden="true">”</span></div>
+      <div class="field quote"><label class="sr" for="f-quote">Citazione preferita</label><span class="qm" aria-hidden="true">«</span><textarea id="f-quote" placeholder="«Una frase da ricordare»">${esc(b.quote || "")}</textarea><span class="qm qe" aria-hidden="true">»</span></div>
       <div class="field notes"><label for="f-notes">Le tue note</label><textarea id="f-notes" placeholder="Cosa ti è rimasto di questo libro?">${esc(b.notes || "")}</textarea></div>
     </div>`;
   }
@@ -2396,7 +2397,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   function searchBlock(prefill, scan = false) {
     return `<div class="field"><label for="s-q">Cerca il libro</label>
-        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button>${scan ? `<button class="btn" id="s-scan" type="button" aria-label="Scansiona il codice a barre">▥ ISBN</button>` : ""}</div></div>
+        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button>${scan ? `<button class="btn" id="s-scan" type="button" aria-label="Scansiona il codice a barre"><svg class="ico-scan" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M17 9v6"/></svg>ISBN</button>` : ""}</div></div>
       <div class="scanner" id="s-scanner" hidden><video id="s-video" playsinline muted></video><div class="scan-frame"></div><button class="btn" id="s-scan-stop" type="button">Chiudi fotocamera</button></div>
       <div class="status-line" id="s-status" aria-live="polite"></div>
       <div class="results" id="s-results"></div>`;
@@ -2745,7 +2746,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <h2>Nuovo libro</h2>
       ${searchBlock("", true)}
       <div class="sheet-top" hidden id="a-prev"></div>
-      <div class="cover-edit" id="a-cov">
+      <div class="cover-edit" id="a-cov" hidden>
         <div class="cover-head"><span class="label">Copertina</span><button class="btn" id="a-cv-more" type="button">Scegli un'altra copertina</button></div>
         <div class="status-line" id="a-cv-status" aria-live="polite"></div>
         <div class="cover-picks" id="a-cv-picks" hidden></div>
@@ -2755,7 +2756,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
     wireRating(sheet, b); wirePageCtl(sheet);
     wireSearch(sheet, hit => {
-      const prev = $("#a-prev", sheet); prev.hidden = false;
+      const prev = $("#a-prev", sheet); prev.hidden = false; $("#a-cov", sheet).hidden = false; // v99: la scelta della copertina compare dopo il primo risultato
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;
       fillData(sheet, hit, b);
     });
@@ -2786,7 +2787,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sb = $("#s-scan", sheet);
     // La fotocamera può partire solo da un tocco dell'utente: la pressione prolungata apre la scheda con il pulsante ISBN in evidenza.
     if (sb && !sb.hidden) loadZXing().catch(() => {}); // libreria del lettore pronta prima del tocco
-    if (scan && sb && !sb.hidden) toast("Tocca ▥ ISBN per inquadrare il codice");
+    if (scan && sb && !sb.hidden) toast("Tocca «ISBN» per inquadrare il codice");
     if (!scan) setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || !sheet.contains(a)) $("#s-q", sheet).focus(); }, 50); // non rubo il cursore a un campo già scelto
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
@@ -2940,9 +2941,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return `${!googleQui
         ? `<p class="hint">Nell'app installata su iPhone, iOS non lascia completare l'accesso con Google: usa il link via email, con lo stesso indirizzo del tuo account Google. Se l'account non ha libri, l'app te lo dice.</p>`
         : `<div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>`}
-      <div class="field"><label for="sy-email">${!googleQui ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
+      <div class="field"><label class="frase" for="sy-email">${!googleQui ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
       <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
-      <div class="field"><label for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
+      <div class="field"><label class="frase" for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
       <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
       <div class="status-line" id="sy-status" aria-live="polite">Preparo l'accesso…</div>`;
   }
