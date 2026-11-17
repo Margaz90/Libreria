@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Acquisti da Gmail → file per MyLibrary
 
-Rispondi in italiano. Non modificare l'app: il risultato è un file che Diego importa da **Altro → Backup**.
+Rispondi in italiano. Non modificare l'app: il risultato è un file che Diego importa da **Altro → Carica libri**.
 
 ## 1. Cerca le email
 - Usa gli strumenti Gmail (`mcp__Gmail__search_threads`, poi `mcp__Gmail__get_thread`; se non sono caricati, cercali con ToolSearch).
@@ -41,4 +41,4 @@ Salvalo nella cartella temporanea della sessione come `acquisti-AAAA-MM-GG.json`
 ## 5. Consegna
 - Manda il file a Diego (SendUserFile, come allegato).
 - Riassumi: quanti libri, quanti con autore e pagine, quali dati mancano e perché.
-- Ricorda come importarlo: Altro → Backup → scegli il file → Importa. I libri già presenti restano invariati.
+- Ricorda come importarlo: Altro → Carica libri → scegli il file → Importa. I libri già presenti restano invariati.

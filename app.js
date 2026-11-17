@@ -92,10 +92,10 @@
   // Nome nell'intestazione (v95): «Libreria di {nome}». Copia locale per disegnarlo subito; il nome vero sta nel cloud (users/{uid}/meta/profilo).
   const NOME_KEY = "libreria-nome";
   const pulisciNome = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const leggiNome = () => { try { return localStorage.getItem(NOME_KEY) || ""; } catch { return ""; } };
+  const nomeLibreria = () => { const n = leggiNome(); return n ? "Libreria di " + n : isAdmin(cloudInfo().uid) ? "Libreria di Margaira Diego" : "La mia libreria"; };
   function mostraNome() {
-    let n = ""; try { n = localStorage.getItem(NOME_KEY) || ""; } catch {}
-    const el = document.querySelector(".exlibris"); if (!el) return;
-    el.textContent = n ? "Libreria di " + n : isAdmin(cloudInfo().uid) ? "Libreria di Margaira Diego" : "La mia libreria";
+    const el = document.querySelector(".exlibris"); if (el) el.textContent = nomeLibreria();
   }
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
@@ -2806,26 +2806,67 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     guardSheet(sheet, () => $("#a-save", sheet).click(), () => JSON.stringify(b));
   }
 
+  // «Altro» (v96): riquadro del profilo con l'obiettivo, poi «I miei libri» e «Strumenti»; ogni voce apre una pagina con «‹ Altro».
+  const ICONE = {
+    carica: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    backup: '<path d="M12 15V4M7 9l5-5 5 5M5 20h14"/>',
+    annulla: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+    copertine: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6"/>',
+    inv: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c.8-3.5 3.3-5 6-5s5.2 1.5 6 5M17 8v6M14 11h6"/>',
+    nome: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
+    privacy: '<path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/>',
+  };
+  const voce = (m, titolo, sotto, cls = "") => `<button type="button" data-m="${m}" class="vr ${cls}"><i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONE[m] || ""}</svg></i><span class="vt"><b>${titolo}</b><span>${sotto}</span></span></button>`;
+  const indietro = `<button type="button" class="indietro">‹ Altro</button>`;
+  const collegaIndietro = sheet => { $(".indietro", sheet).onclick = openMore; };
+  const backupInfo = () => {
+    const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+    return days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`;
+  };
   function openMore() {
     const y = new Date().getFullYear(), goal = (getSet().goals || {})[y];
     const t = today(), done = state.books.filter(b => lettura.annoLetto(b, t) === y).length;
-    const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
+    const tot = state.books.filter(b => b.status !== "desiderato").length;
     const missing = state.books.filter(b => !b.cover && !b.noCover).length;
+    const nome = nomeLibreria(), iniziale = (leggiNome() || cloud.email || "").trim().charAt(0).toUpperCase();
+    const C = 2 * Math.PI * 27, pieno = goal ? Math.min(1, done / goal) * C : 0;
+    const anello = goal
+      ? `<svg viewBox="0 0 64 64" aria-hidden="true"><circle class="r0" cx="32" cy="32" r="27"/><circle class="r1" cx="32" cy="32" r="27" stroke-dasharray="${pieno.toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="34">${done}</text><text class="lab" x="32" y="45">di ${goal}</text></svg>`
+      : `<svg viewBox="0 0 64 64" aria-hidden="true"><circle class="r0 vuoto" cx="32" cy="32" r="27"/><text class="piu" x="32" y="39">+</text></svg>`;
     const sheet = openSheet(`<h2>Altro</h2>
-      <div class="menu-list">
-        <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
-        <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
-        ${cloud.email ? `<button type="button" data-m="nome"><b>Il tuo nome</b><span>${esc((() => { try { return localStorage.getItem(NOME_KEY) || ""; } catch { return ""; } })() || "Come compare in alto")}</span></button>` : ""}
-        ${isAdmin(cloudInfo().uid) && cloud.email ? `<button type="button" data-m="inv"><b>Invitati</b><span>Chi può usare MyLibrary</span></button>` : ""}
-        <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
+      <div class="glabel profilo-label">Account</div>
+      <div class="profilo">
+        <button type="button" data-m="sync" class="prof-main">
+          <i class="av" aria-hidden="true">${iniziale ? esc(iniziale) : `<svg viewBox="0 0 24 24">${ICONE.nome}</svg>`}</i>
+          <span class="vt"><b>${esc(nome)}</b>
+            <span>${cloud.email ? `<i class="ok" aria-hidden="true"></i>Collegato · ${esc(cloud.email)}` : "Accedi per avere i libri su tutti i dispositivi"}</span>
+            <span>${plural(tot, "libro", "libri")} · ${done} ${done === 1 ? "letto" : "letti"} nel ${y}</span></span>
+        </button>
+        <button type="button" data-m="goal" class="anello" aria-label="${goal ? `Obiettivo ${y}: ${done} di ${goal} libri` : `Fissa un obiettivo per il ${y}`}">${anello}</button>
       </div>
-      <p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy: cosa salva l'app e dove</a></p>
-      <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
-    $("[data-m=goal]", sheet).onclick = openGoal;
-    $("[data-m=backup]", sheet).onclick = openImport;
+      <div class="goal-row">${goal ? `Obiettivo ${y} · <button type="button" class="link">Cambia</button>` : `<button type="button" class="link">Fissa un obiettivo per il ${y}</button>`}</div>
+      <div class="glabel">I miei libri</div>
+      <div class="menu-list">
+        ${voce("carica", "Carica libri", "Excel, CSV o backup")}
+        ${voce("backup", "Backup", backupInfo(), backupDue() ? "due" : "")}
+        ${voce("annulla", "Annulla una modifica", "Le copie salvate prima degli import")}
+      </div>
+      <div class="glabel">Strumenti</div>
+      <div class="menu-list">
+        ${voce("copertine", "Copertine e serie", missing ? `${plural(missing, "libro", "libri")} senza copertina` : "Copertine, autori e serie")}
+        ${isAdmin(cloudInfo().uid) && cloud.email ? voce("inv", "Invitati", "Chi può usare MyLibrary") : ""}
+      </div>
+      <p class="hint piede"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><span id="i-ver"></span></p>
+      <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`, "altro");
+    appVersion().then(v => { const el = $("#i-ver", sheet); if (el && v) el.textContent = "Versione " + v; });
     $("[data-m=sync]", sheet).onclick = openSync;
+    $("[data-m=goal]", sheet).onclick = openGoal;
+    $(".goal-row .link", sheet).onclick = openGoal;
+    $("[data-m=carica]", sheet).onclick = openCarica;
+    $("[data-m=backup]", sheet).onclick = openBackup;
+    $("[data-m=annulla]", sheet).onclick = openAnnulla;
+    $("[data-m=copertine]", sheet).onclick = openCopertine;
     const inv = $("[data-m=inv]", sheet); if (inv) inv.onclick = openInvitati;
-    const nm = $("[data-m=nome]", sheet); if (nm) nm.onclick = () => apriNome();
     $("#m-close", sheet).onclick = closeSheet;
   }
 
@@ -2997,7 +3038,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     state.books = []; novitaMem = null; cloud.email = ""; mostraNome();
     if (PORTA) mostraPorta("accesso"); else render();
   }
-  // «Come ti chiami?» (v95): al primo ingresso senza nome (link via email) e da Altro → «Il tuo nome».
+  // «Come ti chiami?» (v95): al primo ingresso senza nome (link via email) e da Altro → Account → «Il tuo nome».
   function apriNome({ primaVolta = false } = {}) {
     if (primaVolta && (sheetOpen() || $("#porta"))) { setTimeout(() => apriNome({ primaVolta }), 1500); return; } // dopo l'unione o la porta
     let att = ""; try { att = localStorage.getItem(NOME_KEY) || ""; } catch {}
@@ -3044,16 +3085,27 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     };
   }
   function openSyncDone() {
-    const sheet = openSheet(`<h2>Sincronizzazione</h2>
-      <p class="hint">Collegato come <b>${esc(cloud.email)}</b>. Ogni modifica va nel cloud e arriva anche sugli altri dispositivi.</p>
-      <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn danger" id="sy-out">Esci da questo dispositivo</button></div>
+    const sheet = openSheet(`${indietro}<h2>Account</h2>
+      <div class="menu-list">
+        ${voce("nome", "Il tuo nome", esc(leggiNome() || "Come compare in alto"))}
+        <div class="vr"><i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></i><span class="vt"><b>Email</b><span>${esc(cloud.email)}</span></span></div>
+      </div>
+      <p class="hint">Ogni modifica va nel cloud e arriva anche sugli altri dispositivi.</p>
+      <div class="actions"><button class="btn primary" id="sy-now">Sincronizza ora</button><button class="btn" id="sy-re">Riconnetti</button></div>
       <div class="status-line" id="sy-info">Controllo lo stato…</div>
-      <div class="actions"><button class="btn" id="sy-re">Riconnetti</button></div>
-      <p class="hint">Uscendo, i tuoi libri restano nel cloud e vengono tolti da questo dispositivo: così un'altra persona può entrare con il suo account.</p>
-      ${isAdmin(cloudInfo().uid) ? "" : `<div class="actions"><button class="btn danger" id="sy-del">Elimina il mio account</button></div>
-      <p class="hint">Cosa salva l'app e come cancellarlo: <a href="privacy.html" target="_blank" rel="noopener">privacy</a>.</p>`}
-      <div class="status-line" id="sy-status" aria-live="polite"></div>
+      <div class="menu-list">
+        <a href="privacy.html" target="_blank" rel="noopener" class="vr"><i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONE.privacy}</svg></i><span class="vt"><b>Privacy</b><span>Cosa salva l'app e come cancellarlo</span></span></a>
+      </div>
+      <section class="uscita">
+        <div class="glabel">Uscita</div>
+        <button class="btn danger" id="sy-out">Esci da questo dispositivo</button>
+        <p class="hint">I tuoi libri restano nel cloud e vengono tolti da questo dispositivo: così un'altra persona può entrare con il suo account.</p>
+        ${isAdmin(cloudInfo().uid) ? "" : `<button class="btn danger" id="sy-del">Elimina il mio account</button>`}
+        <div class="status-line" id="sy-status" aria-live="polite"></div>
+      </section>
       <div class="actions"><button class="btn ghost" id="sy-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
+    $("[data-m=nome]", sheet).onclick = () => apriNome();
     $("#sy-close", sheet).onclick = closeSheet;
     loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
     $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
@@ -3316,7 +3368,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         closeSheet();
         toast(`Acquisti importati: ${r.added} nuovi, ${r.moved} spostati in Da leggere.`);
         if (r.newIds.length && navigator.onLine) enrichBooks(r.newIds);
-        else if (r.newIds.length) toast("Connettiti per completare autori e copertine: lo trovi in Backup.");
+        else if (r.newIds.length) toast("Connettiti per completare autori e copertine: lo trovi in Altro → Copertine e serie.");
         return;
       }
       const { added, updated } = addMany(pending, { update: upd.checked }); pending = []; go.disabled = true; av.hidden = true;
@@ -3333,9 +3385,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
     $("#i-close", sheet).onclick = closeSheet;
-    collegaImport(sheet, { dopo: ({ added }) => {
+    collegaImport(sheet, { dopo: ({ added, updated }) => {
       closeSheet();
-      toast(`Caricati ${added} libri.`, added && navigator.onLine ? { label: "Cerca copertine", run: () => runCoverJob() } : null);
+      toast(`Caricati ${added} libri` + (updated ? `, aggiornati ${updated}` : "") + ".", added && navigator.onLine ? { label: "Cerca copertine", run: () => runCoverJob() } : null);
     } });
   }
   async function exportBackup(status) {
@@ -3357,42 +3409,27 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (!sw) return Promise.resolve("");
     return new Promise(res => { const ch = new MessageChannel(); ch.port1.onmessage = e => res(String(e.data || "")); sw.postMessage("version", [ch.port2]); setTimeout(() => res(""), 1500); });
   }
-  function openImport() {
-    const last = getSet().lastBackup;
-    const days = last ? Math.floor((Date.now() - last) / 864e5) : null;
-    const missing = state.books.filter(b => !b.cover && !b.noCover).length;
-    const noAuthor = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).length;
-    const sheet = openSheet(`
-      <h2>Backup e copertine</h2>
-      <section class="arch">
-        <span class="label">Annulla</span>
-        <p class="hint">Prima delle operazioni su molti libri salvo una copia: puoi tornare indietro.</p>
-        <div class="ulist" id="u-list"></div>
-      </section>
-      <section class="arch">
-        <span class="label">Backup</span>
-        <p class="${backupDue() ? "warn" : "hint"}">${days === null ? "Non hai ancora fatto un backup." : days === 0 ? "Ultimo backup: oggi." : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa.`} I dati stanno solo su questo iPhone: esportalo ogni tanto in File o iCloud.</p>
-        <div class="actions"><button class="btn primary" id="i-export">Esporta backup</button></div>
-      </section>
-      <section class="arch">
-        <span class="label">Copertine</span>
-        <p class="hint">${missing ? `${missing} libri senza copertina.` : "Tutti i libri hanno una copertina o hai scelto quella disegnata."}</p>
-        <div class="actions">${missing ? `<button class="btn" id="i-covers">Cerca copertine mancanti</button>` : ""}<button class="btn" id="i-redo">Rifai tutte preferendo le edizioni italiane</button></div>
-        <div class="actions"><button class="btn" id="i-verify" type="button">Verifica ricerche</button><button class="btn" id="i-series" type="button">Cerca le serie</button></div>
-        <div class="status-line" id="v-status" aria-live="polite"></div>
-        ${noAuthor ? `<p class="hint">${noAuthor} libri senza autore o copertina: li cerco per ISBN, titolo e autore (serve la connessione).</p><div class="actions"><button class="btn" id="i-authors">Completa autori e copertine</button></div>` : ""}
-        <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati.</p>
-      </section>
-      <section class="arch">
-        <span class="label">Importa</span>
-        <p class="hint">Un foglio Excel (il modello è in «Carica i libri»), un CSV o un backup JSON.</p>${importHTML()}
-      </section>
+  function openBackup() {
+    const sheet = openSheet(`${indietro}<h2>Backup</h2>
+      <p class="${backupDue() ? "warn" : "hint"}">${backupInfo()}.</p>
+      <p class="hint">I dati stanno su questo dispositivo${cloud.email ? " e nel cloud" : ""}: il backup è un file con tutti i tuoi libri, da tenere al sicuro (per esempio in File o su Drive). Si ricarica da «Carica libri».</p>
+      <div class="actions"><button class="btn primary" id="i-export">Esporta backup</button></div>
       <div class="status-line" id="i-status" aria-live="polite"></div>
-      <p class="hint" id="i-ver"></p>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
-    appVersion().then(v => { const el = $("#i-ver", sheet); if (el && v) el.textContent = "Versione dell'app: " + v; });
+    collegaIndietro(sheet);
+    const st = $("#i-status", sheet);
+    $("#i-close", sheet).onclick = closeSheet;
+    $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
+  }
+  function openAnnulla() {
+    const sheet = openSheet(`${indietro}<h2>Annulla una modifica</h2>
+      <p class="hint">Prima delle operazioni su molti libri (import, copertine, autori) salvo una copia: da qui puoi tornare indietro.</p>
+      <div class="ulist" id="u-list"></div>
+      <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
+    $("#i-close", sheet).onclick = closeSheet;
     const ul = $("#u-list", sheet); let snaps = [];
-    const fillCopies = () => listSnapshots().then(l => { // richiamata dopo un import con la scheda aperta
+    const fillCopies = () => listSnapshots().then(l => {
       snaps = l;
       ul.innerHTML = l.length ? l.map(c => `<div class="urow"><span>${esc(c.label)}<small>${when(c.at)} · ${plural(c.count, "libro", "libri")}</small></span><button class="btn" type="button" data-restore="${c.id}">Ripristina</button></div>`).join("")
         + `<p class="hint" id="u-sync">Il ripristino vale anche sugli altri dispositivi collegati.</p>` : `<p class="hint">Nessuna copia per ora.</p>`;
@@ -3410,6 +3447,24 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const n = c ? state.books.filter(x => !keep.has(x.id)).length : 0;
       b.classList.add("danger"); b.textContent = n ? `Conferma: toglie ${plural(n, "libro", "libri")}` : "Conferma ripristino";
     };
+  }
+  function openCopertine() {
+    const missing = state.books.filter(b => !b.cover && !b.noCover).length;
+    const noAuthor = state.books.filter(b => !b.author || (!b.cover && !b.noCover)).length;
+    const sheet = openSheet(`${indietro}<h2>Copertine e serie</h2>
+      <div class="strumenti">
+        ${missing ? `<div><button class="btn" id="i-covers">Cerca le copertine mancanti</button><p class="hint">${plural(missing, "libro", "libri")} senza copertina.</p></div>` : ""}
+        <div><button class="btn" id="i-redo">Rifai le copertine</button><p class="hint">Le cerca di nuovo per tutti i libri, preferendo le edizioni italiane.</p></div>
+        ${noAuthor ? `<div><button class="btn" id="i-authors">Completa autori e copertine</button><p class="hint">${plural(noAuthor, "libro", "libri")} senza autore o copertina: li cerco per ISBN, titolo e autore.</p></div>` : ""}
+        <div><button class="btn" id="i-series" type="button">Cerca le serie</button><p class="hint">Trova saghe e numeri dei volumi, e il volume successivo.</p></div>
+      </div>
+      <p class="hint">Le copertine che hai scelto a mano e i dorsi fotografati non vengono toccati. Serve la connessione.</p>
+      <div class="status-line" id="i-status" aria-live="polite"></div>
+      <div class="glabel">Se qualcosa non va</div>
+      <div><button class="btn" id="i-verify" type="button">Verifica le ricerche</button><p class="hint">Controlla che Google Books, Open Library, Apple Books e Wikidata rispondano.</p></div>
+      <div class="status-line" id="v-status" aria-live="polite"></div>
+      <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
     const st = $("#i-status", sheet);
     $("#i-close", sheet).onclick = closeSheet;
     const ic = $("#i-covers", sheet); if (ic) ic.onclick = () => { closeSheet(); toast("Cerco le copertine…"); runCoverJob(); };
@@ -3445,8 +3500,6 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (!navigator.onLine) { st.textContent = "Connettiti per cercare le serie."; return; }
       closeSheet(); seriesJob(); // in sottofondo: la scheda si chiude
     };
-    $("#i-export", sheet).onclick = () => state.books.length ? exportBackup(st) : (st.textContent = "La libreria è vuota: niente da esportare.");
-    collegaImport(sheet, { dopo: fillCopies }); // la copia appena fatta compare in Annulla
   }
 
   /* ---------- avvio ---------- */

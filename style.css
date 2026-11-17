@@ -293,8 +293,43 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .menu-list b { font-size: 15px; font-weight: 600; }
 .menu-list span { font-size: 12.5px; color: var(--muted); }
 .menu-list button::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-top: 2px solid var(--muted); transform: translateY(-50%) rotate(45deg); }
-.menu-list .due span { color: var(--accent); font-weight: 600; }
+.menu-list .due > span:not(.vt), .menu-list .due .vt > span { color: var(--accent); font-weight: 600; }
 .menu-list .soon { opacity: .55; }
+/* «Altro» riordinato (v96): righe con icona, riquadro del profilo, pagine interne con «‹ Altro» */
+.menu-list > .vr { flex-direction: row; align-items: center; gap: 12px; padding: 11px 36px 11px 12px; color: var(--ink); text-decoration: none; }
+.menu-list > div.vr { padding-right: 12px; }
+.vr .vt, .prof-main .vt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vr .vt > span { overflow-wrap: anywhere; }
+.menu-list .ic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--paper-off); color: var(--title); }
+.ic svg, .av svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.menu-list > a.vr::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-top: 2px solid var(--muted); transform: translateY(-50%) rotate(45deg); }
+.sheet .glabel { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-left: 4px; margin-bottom: -8px; }
+.profilo { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 1px solid var(--rule); border-radius: 16px; background: var(--bg); padding: 6px 8px 6px 6px; }
+.prof-main { display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: none; color: var(--ink); padding: 8px; border-radius: 12px; min-width: 0; min-height: 44px; }
+.prof-main .vt b { font-family: var(--display); font-weight: var(--dw); color: var(--title); font-size: 17px; }
+.prof-main .vt > span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.av { flex: none; width: 50px; height: 50px; border-radius: 50%; background: var(--title); color: var(--surface); display: grid; place-items: center; font-family: var(--display); font-style: normal; font-size: 22px; font-weight: var(--dw); }
+.av svg { width: 24px; height: 24px; }
+.ok { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; color: var(--title); margin-right: 5px; vertical-align: 1px; }
+.anello { border: 0; background: none; padding: 4px; border-radius: 50%; width: 72px; height: 72px; flex: none; }
+.anello svg { width: 64px; height: 64px; display: block; }
+.anello .r0 { fill: none; stroke: var(--rule); stroke-width: 5; }
+.anello .r0.vuoto { stroke-dasharray: 4 4; }
+.anello .r1 { fill: none; stroke: var(--coral); stroke-width: 5; stroke-linecap: round; }
+.anello text { fill: var(--ink); font-size: 15px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.anello text.lab { font-size: 9px; font-weight: 400; fill: var(--muted); }
+.anello text.piu { font-size: 22px; font-weight: 400; fill: var(--accent); }
+.goal-row { font-size: 13px; color: var(--muted); text-align: right; margin-top: -8px; }
+.sheet .link { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: inherit; padding: 6px 2px; min-height: 32px; }
+.indietro { align-self: flex-start; border: 0; background: none; color: var(--accent); font-size: 15px; padding: 6px 2px; margin: -6px 0 -8px; min-height: 36px; }
+.sheet .piede { text-align: center; }
+.sheet .piede a { color: var(--accent); }
+#i-ver:not(:empty)::before { content: " · "; }
+.strumenti { display: flex; flex-direction: column; gap: 12px; }
+.strumenti .hint, .strumenti + .status-line + .glabel + div .hint { margin-top: 4px; }
+.uscita { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
+.uscita .glabel { color: var(--accent); margin-bottom: 0; }
+.uscita .btn { align-self: flex-start; }
 
 /* Schede a comparsa */
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }

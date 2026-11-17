@@ -38,7 +38,7 @@ export default async function ({ browser }) {
     { id: 'b4', title: 'Libro inesistente', author: 'Nessuno', status: 'da-leggere', added: 4 }
   ]);
   await p.reload(); await p.waitForTimeout(500);
-  await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click();
+  await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click();
   await p.click('#i-authors');
   await p.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => /Informazioni aggiornate/.test(t.textContent)), null, { timeout: 60000 });
   await p.waitForTimeout(900);
@@ -78,7 +78,7 @@ export default async function ({ browser }) {
   ok('ISBN dopo un 503: si riprova sempre con la chiave', calls.length >= 4 && !calls.includes('senza'), calls.join(','));
 
   // 3. «Verifica ricerche»: esito visibile sotto il pulsante
-  await q.locator('.dock .more').click(); await q.locator('[data-m=backup]').click();
+  await q.locator('.dock .more').click(); await q.locator('[data-m=copertine]').click();
   await q.click('#i-verify');
   await q.waitForFunction(() => /Open Library/.test(document.querySelector('#v-status').textContent), null, { timeout: 15000 });
   const box = await q.locator('#v-status').boundingBox();

@@ -106,7 +106,7 @@ async function limiti(browser) {
   await p.route(/www\.googleapis\.com\/books/, async r => { await new Promise(x => setTimeout(x, 1500)); r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ volumeInfo: { title: 'Sparito', authors: ['Autore Vero'], language: 'it' } }] }) }); });
   const base = { added: 1, rating: 0, status: 'da-leggere' };
   await load(p, [{ ...base, id: 'e1', title: 'Sparito', author: '', isbn: '9788845299997' }, { ...base, id: 'e2', title: 'Resta', author: 'A' }]);
-  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-authors');
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click(); await p.waitForSelector('#i-authors');
   await p.locator('#i-authors').click(); await p.waitForTimeout(400);
   await p.evaluate(() => { window.libreriaHost.setLocal('e1', null); }); // eliminato mentre la ricerca è in corso
   await p.waitForFunction(() => document.querySelector('#enrich') && document.querySelector('#enrich').hidden, null, { timeout: 15000 }).catch(() => {});

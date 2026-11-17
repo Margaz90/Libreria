@@ -249,7 +249,7 @@ async function importAggiorna(browser) {
     { ...base, id: 'g2', title: 'Scaffale mio', status: 'in-lettura', rating: 0, started: '2025-10-01' },
   ]);
   await (async () => {
-    await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-file');
+    await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=carica]').click(); await p.waitForSelector('#i-file');
     await p.setInputFiles('#i-file', { name: 'goodreads.csv', mimeType: 'text/csv', buffer: Buffer.from('Title,Author,My Rating,Exclusive Shelf,Date Read\nVotato qui,Autore Uno,0,read,\nScaffale mio,Autore Uno,0,favorites,\n') });
     await p.locator('#i-upd').check();
     await p.waitForFunction(() => !document.querySelector('#i-go').disabled, null, { timeout: 5000 });

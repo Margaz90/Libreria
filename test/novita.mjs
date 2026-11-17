@@ -83,7 +83,7 @@ async function giro(browser) {
   // Durante «Completa autori e copertine» il giro non parte
   p = await apri(browser, { libri: LIB.concat([{ id: 'z', title: 'Senza copertina', author: '', isbn: '9788804000001', status: 'da-leggere', rating: 0, added: 1 }]), memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} }, cfg: { slowGoogle: true } });
   await riapri(p);
-  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-authors');
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click(); await p.waitForSelector('#i-authors');
   await p.locator('#i-authors').click(); await p.waitForTimeout(500);
   const fatto = await p.evaluate(async () => { const a = JSON.parse(localStorage.getItem('libreria-novita')).ultimoGiro; await window.libreriaNovita.giro({ forza: true }); return JSON.parse(localStorage.getItem('libreria-novita')).ultimoGiro === a; });
   ok('giro: non parte durante «Completa autori e copertine»', fatto === true);
@@ -120,7 +120,7 @@ async function lingue(browser) {
 async function verifica(browser) {
   const p = await apri(browser, { memoria: { ultimoGiro: Date.now(), proposte: [], uscite: [], viste: {}, mostrate: {} } });
   await riapri(p);
-  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-verify');
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click(); await p.waitForSelector('#i-verify');
   await p.locator('#i-verify').click();
   await p.waitForFunction(() => /Voti:/.test(document.querySelector('#v-status').textContent) && !document.querySelector('#v-status').textContent.includes('…'), null, { timeout: 20000 }).catch(() => {});
   const vs = await p.locator('#v-status').innerText();

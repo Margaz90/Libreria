@@ -23,7 +23,7 @@ export default async function ({ browser }) {
   const q = await newPage(browser);
   await q.goto(APP + '/'); await q.waitForTimeout(300);
   const importa = async (name, body) => {
-    await q.locator('.dock .more').click(); await q.locator('[data-m=backup]').click(); await q.waitForSelector('#i-file');
+    await q.locator('.dock .more').click(); await q.locator('[data-m=carica]').click(); await q.waitForSelector('#i-file');
     await q.setInputFiles('#i-file', { name, mimeType: name.endsWith('.json') ? 'application/json' : 'text/csv', buffer: Buffer.from(body) });
     await q.waitForFunction(() => !document.querySelector('#i-go').disabled, null, { timeout: 5000 });
     await q.locator('#i-go').click(); await q.waitForTimeout(800);
