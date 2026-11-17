@@ -44,6 +44,16 @@ async function carica(browser) {
   await p.waitForTimeout(600);
   ok('foglio senza le colonne Titolo e Autore: messaggio chiaro, niente import', /Non trovo le colonne Titolo e Autore: usa il modello\./.test(await p.locator('#i-status').innerText()) && await p.locator('#i-go').isDisabled(), await p.locator('#i-status').innerText());
   errs.push(...p.errs);
+  // v95: la privacy è raggiungibile dalla porta d'ingresso e da Altro, e la pagina risponde
+  const Pp = await newPage(browser, { init: { fn: () => { window.libreriaPorta = true; } } });
+  await Pp.goto(APP + '/'); await Pp.waitForSelector('#porta', { timeout: 8000 }).catch(() => {});
+  const daPorta = await Pp.locator('#porta a[href="privacy.html"]').count();
+  const risposta = await Pp.evaluate(() => fetch('privacy.html').then(r => r.status));
+  await Pp.close2();
+  const Pa = await newPage(browser); await Pa.goto(APP + '/'); await Pa.locator('.dock .more').click(); await Pa.waitForTimeout(300);
+  const daAltro = await Pa.locator('.sheet a[href="privacy.html"]').count();
+  await Pa.close2();
+  ok('privacy: collegata dalla porta d\'ingresso e da Altro, la pagina risponde', daPorta === 1 && daAltro === 1 && risposta === 200, JSON.stringify([daPorta, daAltro, risposta]));
   ok('«Carica i libri»: nessun errore in console', !errs.length, errs.join(' / '));
   await p.close2();
 }

@@ -2819,6 +2819,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         ${isAdmin(cloudInfo().uid) && cloud.email ? `<button type="button" data-m="inv"><b>Invitati</b><span>Chi può usare MyLibrary</span></button>` : ""}
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
       </div>
+      <p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy: cosa salva l'app e dove</a></p>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`);
     $("[data-m=goal]", sheet).onclick = openGoal;
     $("[data-m=backup]", sheet).onclick = openImport;
@@ -2966,7 +2967,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="status-line" id="porta-st" aria-live="polite"></div></div>`
       : `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
         <p class="hint">Questa libreria è su invito: entra con il tuo account.</p>
-        ${accessoHTML()}</div>`;
+        ${accessoHTML()}
+        <p class="hint porta-privacy"><a href="privacy.html">Cosa salva l'app e dove (privacy)</a></p></div>`;
     if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci({ soloAccount: true })).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
     else collegaAccesso(el, { primaVolta: true });
   }
