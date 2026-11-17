@@ -218,6 +218,7 @@ async function frase(browser) {
   ok('date storte: Salva bloccato con avviso', await vis(p, '.sheet') && await vis(p, '#f-date-err') && await p.getAttribute('#f-finished', 'aria-invalid') === 'true');
   await close();
   await p.keyboard.press('n'); await p.waitForSelector('.sheet');
+  await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.click('.seg [data-v="letto"]');
   ok('Nuovo libro: Letto mostra le date da scegliere', await txt(p, '.pline') === 'Iniziato il scegli la data e finito il scegli la data', await txt(p, '.pline'));
   await p.fill('#f-started', '2025-03-01');
