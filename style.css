@@ -287,7 +287,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 [data-shelf], #main .covers { scroll-margin-top: 150px; }
 
 /* Menu Altro */
-.menu-list { display: flex; flex-direction: column; flex: none; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; } /* flex: none: in una scheda alta più dello schermo la scheda scorre, l'elenco non si schiaccia */
+.menu-list { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
 .menu-list > * { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; border-bottom: 1px solid var(--rule); background: var(--bg); padding: 13px 16px; position: relative; }
 .menu-list > *:last-child { border-bottom: 0; }
 .menu-list b { font-size: 15px; font-weight: 600; }
@@ -337,6 +337,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 @media (min-width: 640px) { .scrim { align-items: center; } .sheet { border-radius: 18px; } }
 /* Su iPhone la scheda scorre solo in verticale: niente slittamenti di lato */
 .sheet { overflow-x: hidden; touch-action: pan-y pinch-zoom; }
+.sheet > * { flex-shrink: 0; } /* una scheda più alta dello schermo scorre: nessun elemento si schiaccia sotto il successivo */
 /* I campi data di Safari hanno una larghezza minima propria che può sforare la colonna */
 .field input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; min-height: 44px; display: block; }
 .field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
@@ -753,7 +754,6 @@ html { scroll-behavior: smooth; }
 .rf .quote textarea { border: 0; background: none; padding: 6px 0 6px 30px; font-family: var(--display); font-size: 19px; color: var(--title); field-sizing: content; min-height: 56px; resize: none; }
 .rf .notes textarea { border: 0; border-radius: 0; padding: 0 2px; line-height: 28px; min-height: 112px; color: var(--ink);
   background: repeating-linear-gradient(transparent 0 27px, var(--rule) 27px 28px); background-attachment: local; }
-.sheet.book > * { flex-shrink: 0; }
 .rf .period { display: flex; flex-direction: column; gap: 6px; }
 .rf .pline { margin: 0; font-family: var(--display); font-size: 16px; line-height: 1.5; color: var(--title); display: flex; flex-wrap: wrap; align-items: baseline; }
 .rf .pline .pl { flex-basis: 100%; }
