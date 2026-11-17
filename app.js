@@ -1352,11 +1352,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     setTimeout(() => $("#g-n", sheet).focus(), 50);
   }
 
+  // Suggerimenti già visti (v101): solo su questo dispositivo, mai nel cloud.
+  const SUGG_KEY = "libreria-suggerimenti";
+  const suggerimentoVisto = k => { try { return !!(JSON.parse(localStorage.getItem(SUGG_KEY) || "{}") || {})[k]; } catch { return false; } };
+  const segnaSuggerimento = k => { try { localStorage.setItem(SUGG_KEY, JSON.stringify({ ...(JSON.parse(localStorage.getItem(SUGG_KEY) || "{}") || {}), [k]: 1 })); } catch {} };
   function renderNotice() {
     const n = $("#notice");
     $("#archive-dot").hidden = !backupDue();
-    n.hidden = state.books.length > 0;
-    if (state.books.length) { n.innerHTML = ""; return; }
+    if (state.books.length) { // v101: una volta sola, il gesto che non si scopre da soli
+      const mostra = state.view === "libreria" && !suggerimentoVisto("pressione");
+      n.hidden = !mostra;
+      n.innerHTML = mostra ? `<div class="notice suggerimento"><span><strong>Suggerimento:</strong> tieni premuto su un libro per cambiarne lo stato al volo o per eliminarlo.</span><span class="actions"><button class="btn" id="sugg-ok" type="button">Ho capito</button></span></div>` : "";
+      if (mostra) $("#sugg-ok").onclick = () => { segnaSuggerimento("pressione"); renderNotice(); };
+      return;
+    }
+    n.hidden = false;
     // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud, quindi senza accesso «Accedi» viene prima.
     // v100: tre strade per chi parte da zero (un libro alla volta) o ha già una lista (Excel, CSV di Goodreads, backup).
     const email = cloudInfo().email;
@@ -2057,6 +2067,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     el.addEventListener("contextmenu", e => e.preventDefault());
   }
   function openQuick(b) {
+    if (!suggerimentoVisto("pressione")) { segnaSuggerimento("pressione"); renderNotice(); } // il gesto è stato scoperto
     const sheet = openSheet(`<div class="quick">
       <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
       <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
@@ -2182,7 +2193,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </div>
       <div class="grid2">
         <div class="field"><label for="d-genre">Genere</label><input id="d-genre" value="${esc(b.genre || "")}"></div>
-        <div class="field"><label for="d-call">Segnatura</label><input id="d-call" value="${esc(b.callNo || "")}" placeholder="853.914 LEV"></div>
+        <div class="field"><label for="d-call">Segnatura (facoltativa)</label><input id="d-call" value="${esc(b.callNo || "")}" placeholder="853.914 LEV"></div>
       </div>`;
   }
   // `esistente`: scheda di un libro già in libreria. Lì cambiare lo stato è un passaggio (regole di lettura): l'inizio
@@ -2880,7 +2891,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="goal-row">${goal ? `Obiettivo ${y} · <button type="button" class="link">Cambia</button>` : `<button type="button" class="link">Fissa un obiettivo per il ${y}</button>`}</div>
       <div class="glabel">I miei libri</div>
       <div class="menu-list">
-        ${voce("carica", "Carica libri", "Excel, CSV o backup")}
+        ${voce("carica", "Carica da un file", "Excel, CSV di Goodreads o backup")}
         ${voce("backup", "Backup", backupInfo(), backupDue() ? "due" : "")}
         ${voce("annulla", "Annulla una modifica", "Le copie salvate prima degli import")}
       </div>
@@ -3330,7 +3341,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return { righe, data1904 };
   }
   // </regole>
-  // «Carica i libri» (v92): un file scelto dalla persona → libri. Modello Excel (.xlsx), CSV (modello o Goodreads), backup JSON o acquisti.
+  // «Carica da un file» (v92, nome dalla v101): un file scelto dalla persona → libri. Modello Excel (.xlsx), CSV (modello o Goodreads), backup JSON o acquisti.
   async function leggiFileLibri(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (/\.xlsx$/i.test(file.name) || (bytes[0] === 0x50 && bytes[1] === 0x4B)) {
@@ -3350,7 +3361,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <label class="check"><input type="checkbox" id="i-upd"> Aggiorna i libri già presenti con i dati del file (per ripristinare un backup)</label>
         <p class="warn" id="i-avvisi" hidden></p>
         <div class="actions"><button class="btn primary" id="i-go" disabled>Importa</button></div>`;
-  // Flusso unico di import (scheda «Carica i libri», anche da Altro): lettura del file, conteggi, avvisi, copia di sicurezza, import.
+  // Flusso unico di import (scheda «Carica da un file», dalla libreria vuota e da Altro): lettura del file, conteggi, avvisi, copia di sicurezza, import.
   function collegaImport(sheet, { dopo = () => {} } = {}) {
     let pending = [], counts = { fresh: 0, dup: 0 }, purchases = false, tipo = "";
     const st = $("#i-status", sheet), go = $("#i-go", sheet), upd = $("#i-upd", sheet), av = $("#i-avvisi", sheet);
@@ -3412,7 +3423,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     };
   }
   function openCarica(o) {
-    const sheet = openSheet(`${indietroSe(o)}<h2>Carica i libri</h2>
+    const sheet = openSheet(`${indietroSe(o)}<h2>Carica da un file</h2>
       <p class="hint">Scegli un file: il modello Excel compilato, il CSV esportato da Goodreads o un backup di MyLibrary.</p>
       <p class="hint">Non hai ancora il modello? Scaricalo, scrivi un libro per riga (bastano titolo e autore) e poi caricalo qui.</p>
       <div class="actions"><a class="btn" href="modello-libri.xlsx" download="modello-libri.xlsx" target="_blank" rel="noopener">Scarica il modello Excel</a></div>
@@ -3448,7 +3459,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   function openBackup() {
     const sheet = openSheet(`${indietro}<h2>Backup</h2>
       <p class="${backupDue() ? "warn" : "hint"}">${backupInfo()}.</p>
-      <p class="hint">I dati stanno su questo dispositivo${cloud.email ? " e nel cloud" : ""}: il backup è un file con tutti i tuoi libri, da tenere al sicuro (per esempio in File o su Drive). Si ricarica da «Carica libri».</p>
+      <p class="hint">I dati stanno su questo dispositivo${cloud.email ? " e nel cloud" : ""}: il backup è un file con tutti i tuoi libri, da tenere al sicuro (per esempio in File o su Drive). Si ricarica da «Carica da un file».</p>
       <div class="actions"><button class="btn primary" id="i-export">Esporta backup</button></div>
       <div class="status-line" id="i-status" aria-live="polite"></div>
       <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);

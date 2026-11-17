@@ -33,7 +33,8 @@
   const fromDoc = ({ hasSpine, deleted, ...rest }) => rest;
   const toDoc = ({ id, spine, ...rest }) => plain({ ...rest, hasSpine: !!spine, deleted: false });
   const why = e => (e && (e.code || e.message)) || "errore";
-  const perche = e => (H.spiega ? H.spiega(e) : why(e)); // v100: frase per chi legge, il codice solo se sconosciuto
+  // v100: frase per chi legge, il codice solo se sconosciuto; v101: senza «riprova tra poco», qui il messaggio dice già quando riprovo
+  const perche = e => (H.spiega ? H.spiega(e) : why(e)).replace(/^riprova tra poco \(/, "errore imprevisto (");
 
   /* ---- dal dispositivo al cloud ---- */
   const later = (ms = 600) => { clearTimeout(timer); timer = setTimeout(flush, ms); };
