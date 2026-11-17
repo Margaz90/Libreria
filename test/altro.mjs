@@ -94,6 +94,15 @@ async function account(browser) {
     const z = document.querySelector('.sheet .uscita'), now = document.querySelector('#sy-now');
     return !!z && /Uscita/i.test(z.textContent) && z.contains(document.querySelector('#sy-out')) && z.contains(document.querySelector('#sy-del')) && !!(now.compareDocumentPosition(z) & Node.DOCUMENT_POSITION_FOLLOWING);
   }));
+  await p.setViewportSize({ width: 390, height: 600 });
+  await p.evaluate(() => { document.querySelector('#sy-info').textContent = 'Modifiche non ancora inviate: no · libri nel cloud: 171 · aggiornato alle 17:33 (copia locale: nessuna rete)'; });
+  await p.waitForTimeout(100);
+  ok('Account su schermo basso: lo stato su più righe non finisce sotto «Privacy»', await p.evaluate(() => {
+    const el = [...document.querySelector('.sheet').children].filter(e => e.offsetHeight);
+    return el.every(e => e.scrollHeight <= e.clientHeight + 1 || getComputedStyle(e).overflowY !== 'visible')
+      && el.every((e, i) => !i || e.getBoundingClientRect().top >= el[i - 1].getBoundingClientRect().top + el[i - 1].scrollHeight - 1);
+  }));
+  await p.setViewportSize({ width: 390, height: 844 });
   await p.locator('.sheet [data-m=nome]').click(); await p.waitForSelector('#nome-in');
   ok('Account → Il tuo nome apre la scheda del nome', true);
   ok('account: nessun errore in console', !p.errs.length, p.errs.join(' / '));
