@@ -62,7 +62,9 @@
   // v95: utente con data dell'ultimo accesso (fake-signin, ms; se manca: adesso) e delete()
   const conMetodi = u => u && Object.assign(u, {
     metadata: { lastSignInTime: new Date(Number(localStorage.getItem('fake-signin')) || Date.now()).toUTCString() },
-    delete: () => { localStorage.setItem('fake-deleted', u.uid); setUser(null); return Promise.resolve(); }
+    delete: () => { const err = localStorage.getItem('fake-delete-error'); if (err) return Promise.reject({ code: err }); localStorage.setItem('fake-deleted', u.uid); setUser(null); return Promise.resolve(); },
+    // orari del server: authTime (fake-authtime, altrimenti come fake-signin) ed emissione del token (adesso)
+    getIdTokenResult: () => Promise.resolve({ authTime: new Date(Number(localStorage.getItem('fake-authtime')) || Number(localStorage.getItem('fake-signin')) || Date.now()).toUTCString(), issuedAtTime: new Date().toUTCString() })
   });
   let cur = conMetodi(JSON.parse(localStorage.getItem('fake-auth') || 'null'));
   const setUser = u => { cur = conMetodi(u); if (u) localStorage.setItem('fake-auth', JSON.stringify({ uid: u.uid, email: u.email, displayName: u.displayName || null })); else localStorage.removeItem('fake-auth'); listeners.forEach(f => f(cur)); };

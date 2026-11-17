@@ -267,13 +267,15 @@ async function profilo(browser) {
   ok('nome: «Esci» lo toglie dal dispositivo', !(await G.evaluate(() => localStorage.getItem('libreria-nome'))) && (await testa(G)) === 'La mia libreria', await testa(G));
   await G.close2();
 
-  // Link via email (nessun nome dal profilo): «Come ti chiami?»
+  // Link via email (nessun nome dal profilo): «Come ti chiami?»; il nome di chi c'era prima non compare (v95, revisione)
   const E = await pagina({ porta: true });
+  await E.evaluate(() => localStorage.setItem('libreria-nome', 'Persona di prima')); await E.reload();
   await E.waitForFunction(() => !document.querySelector('#sy-link').disabled, null, { timeout: 10000 }).catch(() => {});
   await E.fill('#porta #sy-email', 'diego@test.it'); await E.click('#porta #sy-link');
   await E.fill('#porta #sy-paste', 'https://mylibrary-2ea05.firebaseapp.com/__/auth/action?mode=signIn&oobCode=abc'); await E.click('#porta #sy-paste-go');
   await E.waitForSelector('#nome-in', { timeout: 10000 }).catch(() => {});
   const chiesto = /Come ti chiami\?/.test(await E.locator('.sheet').innerText().catch(() => ''));
+  ok('nome: il nome di chi c\'era prima non compare né nell\'intestazione né nella domanda', !/Persona di prima/.test(await testa(E)) && (await E.inputValue('#nome-in').catch(() => 'x')) === '', await testa(E));
   if (chiesto) { await E.fill('#nome-in', 'Anna'); await E.click('#nome-ok'); }
   await E.waitForFunction(() => /Anna/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
   ok('nome: con il link via email l\'app chiede «Come ti chiami?» e lo salva', chiesto && (await testa(E)) === 'Libreria di Anna' && (await profiloCloud('u1')).data?.nome === 'Anna', await testa(E));
@@ -334,4 +336,36 @@ async function elimina(browser) {
   await apriSync(D);
   ok('Elimina: l\'amministratore non vede il pulsante', (await D.locator('#sy-del').count()) === 0);
   await D.close2();
+  await correzioniElimina({ prepara, pagina, apriSync, elimina2, col, doc, now });
+}
+
+// v95, correzioni dopo la revisione di «Elimina»
+async function correzioniElimina({ prepara, pagina, apriSync, elimina2, col, doc, now }) {
+  // I1: un salvataggio partito durante «Elimina» non ricrea niente nel cloud
+  prepara('el5');
+  const W = await pagina('el5', 'el5@example.com');
+  await W.route(/localhost:\d+\/doc\?/, async r => { if (r.request().method() === 'PUT') await new Promise(x => setTimeout(x, 800)); r.continue(); });
+  await apriSync(W); await W.click('#sy-del'); await W.click('#sy-del');
+  await W.waitForTimeout(250);
+  await W.evaluate(() => { const c = window.libreriaCloud; c.changed('e0'); c.goals(); });
+  await W.waitForSelector('#porta', { timeout: 15000 }).catch(() => {}); await W.waitForTimeout(2500);
+  ok('Elimina: un salvataggio partito durante la cancellazione non ricrea libri né obiettivo', (await col('users/el5/books')).length === 0 && !(await doc('users/el5/meta/goals')).exists, JSON.stringify(await col('users/el5/books')));
+  await W.close2();
+  // I2a: l'accesso recente si misura con gli orari del server (token), non con l'orologio del telefono
+  prepara('el6');
+  const K = await pagina('el6', 'el6@example.com', { 'fake-signin': String(now - 10 * 60e3), 'fake-authtime': String(Date.now()) });
+  await elimina2(K); await K.waitForSelector('#porta', { timeout: 10000 }).catch(() => {});
+  ok('Elimina: l\'accesso recente si misura con gli orari del server', (await K.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el6');
+  await K.close2();
+  // I2b: se Firebase rifiuta l'account dopo i dati, rientrando si può finire dalla schermata «non invitato»
+  prepara('el7');
+  const Q = await pagina('el7', 'el7@example.com', { 'fake-delete-error': 'auth/requires-recent-login' });
+  await elimina2(Q); await Q.waitForTimeout(1500);
+  ok('Elimina a metà: messaggio chiaro', /I tuoi libri sono stati cancellati/.test(await Q.locator('.sheet').innerText().catch(() => '')));
+  await Q.evaluate(() => localStorage.removeItem('fake-delete-error'));
+  await Q.reload(); await Q.waitForFunction(() => /su invito\./.test(document.querySelector('#porta')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+  const fine = Q.locator('#porta #porta-elimina');
+  if (await fine.count()) { await fine.click(); await fine.click(); await Q.waitForTimeout(1500); }
+  ok('Elimina a metà: dalla schermata «non invitato» si elimina l\'account', (await Q.evaluate(() => localStorage.getItem('fake-deleted'))) === 'el7', String(await fine.count()));
+  await Q.close2();
 }

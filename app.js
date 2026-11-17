@@ -2880,7 +2880,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     isAdmin,
     ammesso(si, email) { if (!PORTA) return; if (si) { if ($("#porta")) { chiudiPorta(); render(); } } else mostraPorta("invito", email); },
     pulisci: opz => pulisciDispositivo(opz),
-    nome(n) { try { localStorage.setItem(NOME_KEY, pulisciNome(n)); } catch {} mostraNome(); },
+    nome(n) { try { const v = pulisciNome(n); if (v) localStorage.setItem(NOME_KEY, v); else localStorage.removeItem(NOME_KEY); } catch {} mostraNome(); },
     chiediNome: () => apriNome({ primaVolta: true }),
     accountLink: () => ACCOUNT_LINK
   };
@@ -2964,11 +2964,23 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <h2>Questa libreria è su invito.</h2>
         <p>L'indirizzo ${esc(email)} non è tra gli invitati. Chiedi a Diego di aggiungerti.</p>
         <div class="actions"><button class="btn primary" id="porta-esci">Esci e usa un altro account</button></div>
+        <p class="hint">Avevi iniziato a eliminare il tuo account? Puoi finire qui: <button class="btn danger" type="button" id="porta-elimina">Elimina il mio account</button></p>
         <div class="status-line" id="porta-st" aria-live="polite"></div></div>`
       : `<div class="porta-box"><h1>My<span class="rib" aria-hidden="true"></span>Library</h1>
         <p class="hint">Questa libreria è su invito: entra con il tuo account.</p>
         ${accessoHTML()}
         <p class="hint porta-privacy"><a href="privacy.html">Cosa salva l'app e dove (privacy)</a></p></div>`;
+    if (tipo === "invito") { // v95: un'eliminazione a metà si finisce da qui (il cloud non risponde più, resta solo l'account)
+      const pe = $("#porta-elimina", el);
+      pe.onclick = () => {
+        if (!pe.classList.contains("conferma")) { pe.classList.add("conferma"); pe.textContent = "Conferma: elimina"; $("#porta-st", el).textContent = "Definitivo: cancella il tuo account e quello che resta su questo telefono."; return; }
+        pe.disabled = true;
+        loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato."), e => {
+          pe.disabled = false; pe.classList.remove("conferma"); pe.textContent = "Elimina il mio account";
+          $("#porta-st", el).textContent = e && e.code === "rientra" ? "Per sicurezza esci, accedi di nuovo e riprova." : e && e.code === "rete" ? "Serve la connessione per eliminare l'account." : "Non riesco a eliminare l'account (" + errText(e) + ").";
+        });
+      };
+    }
     if (tipo === "invito") $("#porta-esci", el).onclick = () => loadCloud().then(c => c.esci({ soloAccount: true })).catch(() => { $("#porta-st", el).textContent = "Non riesco a uscire: controlla la connessione e riprova."; });
     else collegaAccesso(el, { primaVolta: true });
   }
@@ -3052,9 +3064,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         del.classList.add("conferma"); del.textContent = "Conferma: elimina";
         sst.textContent = "Definitivo: cancella i tuoi libri, le foto e il tuo account dal cloud e da questo telefono."; return;
       }
-      del.disabled = true; sst.textContent = "Elimino…";
+      const altri = ["#sy-now", "#sy-re", "#sy-out"].map(s => $(s, sheet)).filter(Boolean);
+      del.disabled = true; altri.forEach(b => b.disabled = true); sst.textContent = "Elimino…"; // niente «Sincronizza ora» o «Esci» durante l'eliminazione
       loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato. Grazie di aver usato MyLibrary."), e => {
-        del.disabled = false; del.classList.remove("conferma"); del.textContent = "Elimina il mio account";
+        del.disabled = false; altri.forEach(b => b.disabled = false); del.classList.remove("conferma"); del.textContent = "Elimina il mio account";
         const c = e && e.code;
         sst.textContent = c === "rientra" ? "Per sicurezza, prima di eliminare l'account rientra: tocca «Esci», accedi di nuovo e torna qui."
           : c === "rete" ? "Serve la connessione per eliminare l'account."

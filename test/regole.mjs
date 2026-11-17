@@ -326,7 +326,7 @@ export default async function run() {
 
   { // ---- v95: pagina sulla privacy ----
     const pv = leggi('privacy.html');
-    const servono = ['Diego Margaira', 'contatta direttamente Diego', 'eur3', 'Google Books', 'Apple Books', 'Open Library', 'Wikidata', 'Google Fonts', "Torna all'app", 'Elimina il mio account', 'Esci', 'nessuna pubblicità'];
+    const servono = ['Diego Margaira', 'contatta direttamente Diego', 'eur3', 'Google Books', 'Apple Books', 'Open Library', 'Wikidata', 'Google Fonts', "Torna all'app", 'Elimina il mio account', 'Esci', 'nessuna pubblicità', 'cdn.jsdelivr.net', 'copia tecnica', 'in automatico'];
     ok('privacy.html: responsabile, contatto, dove stanno i dati, servizi esterni, come cancellare', servono.every(x => pv.toLowerCase().includes(x.toLowerCase())), servono.filter(x => !pv.toLowerCase().includes(x.toLowerCase())).join(', '));
   }
 
