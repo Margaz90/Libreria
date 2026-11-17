@@ -10,7 +10,7 @@ const load = async (p, books) => {
 };
 const toasts = p => p.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
 const waitToast = (p, re, ms = 10000) => p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll('.toast')].map(t => t.textContent).join(' ')), re.source, { timeout: ms }).catch(() => {});
-const backup = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-series'); };
+const backup = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click(); await p.waitForSelector('#i-series'); };
 
 async function apri(browser) {
   const p = await newPage(browser, { external: 'allow' });

@@ -22,7 +22,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 async function pulizia(browser) {
   const q = await newPage(browser);
   await q.goto(APP + '/'); await q.waitForSelector('#main');
-  await q.locator('.dock .more').click(); await q.locator('[data-m=backup]').click(); await q.waitForSelector('#i-file');
+  await q.locator('.dock .more').click(); await q.locator('[data-m=carica]').click(); await q.waitForSelector('#i-file');
   const body = JSON.stringify([
     { title: 'C1', author: 'A', series: '  Serie   X ', seriesNo: '0,5' },
     { title: 'C2', author: 'A', series: 'Serie X', seriesNo: 'abc' },
@@ -476,7 +476,7 @@ async function cercaSerie(browser) {
   const p = await fonti(browser);
   const base = { added: 1, rating: 0, status: 'da-leggere', author: 'Mick Herron' };
   const toasts = () => p.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
-  const backup = async () => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-series'); };
+  const backup = async (m = 'copertine') => { await p.evaluate(() => window.scrollTo(0, 0)); await p.locator('.dock .more').click(); await p.locator(`[data-m=${m}]`).click(); await p.waitForSelector(m === 'copertine' ? '#i-series' : '#u-list, #u-none'); };
   const waitToast = (re, ms = 10000) => p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll('.toast')].map(t => t.textContent).join(' ')), re.source, { timeout: ms }).catch(() => {});
   const run = async () => { await backup(); await p.locator('#i-series').click(); };
   const lib = [
@@ -500,7 +500,7 @@ async function cercaSerie(browser) {
   ok('trova la serie del libro senza serie', b1.series === 'Slough House' && b1.seriesNo === '3' && b1.seriesManual === undefined, JSON.stringify(b1));
   ok('controlla il seguito dei letti senza seriesNext', b3.seriesNext === 'La strada degli spettri' && b3.series === 'Slough House', JSON.stringify(b3));
   ok('riga di avanzamento nascosta alla fine', await p.locator('#enrich').isHidden());
-  await backup();
+  await backup('annulla');
   ok('Cerca le serie crea una copia «Prima di «Cerca le serie»»', /Prima di «Cerca le serie»/.test(await p.locator('#u-list .urow').first().innerText().catch(() => '')));
   await p.locator('#i-close').click();
   // niente da fare: nessuna copia nuova
@@ -606,7 +606,7 @@ async function cercaSerie(browser) {
   await p.route(/query\.wikidata\.org/, async r => { await new Promise(x => setTimeout(x, 400)); r.fallback(); });
   await run();
   await p.waitForFunction(() => /Ricerca delle serie: 1 di 8/.test(document.querySelector('#enrich').textContent), null, { timeout: 5000 }).catch(() => {});
-  await backup();
+  await backup('annulla');
   await p.locator('#u-list button[data-restore]').first().click(); await p.locator('#u-list button[data-restore]').first().click();
   await p.waitForFunction(() => document.querySelector('#enrich').hidden, null, { timeout: 4000 }).catch(() => {});
   await p.waitForTimeout(2500);

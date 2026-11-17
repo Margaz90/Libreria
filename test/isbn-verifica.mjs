@@ -38,7 +38,7 @@ export default async function ({ browser }) {
   // B. «Verifica ricerche» interroga Google senza filtro sulla lingua (altrimenti dice «OK, 0 risultati» per Ubik)
   p = await apri(browser, { google: u => ({ body: /langRestrict/.test(u) ? VUOTO : { items: [{ volumeInfo: { title: 'Ubik', industryIdentifiers: [{ type: 'ISBN_13', identifier: '9788804731481' }] } }] } }) });
   await p.goto(APP + '/'); await p.waitForTimeout(300);
-  await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-verify');
+  await p.locator('.dock .more').click(); await p.locator('[data-m=copertine]').click(); await p.waitForSelector('#i-verify');
   await p.locator('#i-verify').click(); await p.waitForTimeout(1500);
   const verifica = await p.locator('#v-status').innerText();
   ok('verifica ricerche: Google interrogato senza filtro sulla lingua', p.gUrls.some(u => /isbn:9788804731481/.test(u) && !/langRestrict/.test(u)), p.gUrls.join(' ; ').slice(0, 200));

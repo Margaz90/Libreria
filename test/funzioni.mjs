@@ -104,8 +104,9 @@ async function paginaRapida(browser) {
   await p.close2();
 }
 
-// Apre Altro → Backup (prima torno in cima: scorrendo in giù la barra in basso si nasconde).
-const backup = async p => { await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(150); await p.locator('.dock .more').click(); await p.locator('[data-m=backup]').click(); await p.waitForSelector('#i-file'); await p.waitForTimeout(300); };
+// Apre una pagina di Altro (v96: carica, annulla, copertine); prima torno in cima: scorrendo in giù la barra in basso si nasconde.
+const PRONTO = { carica: '#i-file', annulla: '#u-list, #u-none', copertine: '#i-redo' };
+const backup = async (p, m = 'carica') => { await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(150); await p.locator('.dock .more').click(); await p.locator(`[data-m=${m}]`).click(); await p.waitForSelector(PRONTO[m]); await p.waitForTimeout(300); };
 // Import di un file dalla scheda Backup (come in sicurezza.mjs), con «aggiorna i libri già presenti» se richiesto.
 const K = 'libreria-diego-v1';
 const stored = p => p.evaluate(k => localStorage.getItem(k), K);
@@ -126,7 +127,7 @@ export async function importa(p, books, upd = false) {
 }
 // Ripristina la copia più recente (due tocchi); restituisce testo della riga e del primo tocco.
 export async function ripristina(p) {
-  await backup(p);
+  await backup(p, 'annulla');
   const b = p.locator('#u-list button[data-restore]').first();
   await b.waitFor({ timeout: 3000 });
   const row = await p.locator('#u-list .urow').first().innerText();
@@ -146,7 +147,7 @@ async function copie(browser) {
   let bs = await localBooks(p);
   const nuovo = bs.find(b => b.title === 'Nuovo dal file');
   ok('import con aggiorna eseguito', (await book(p, 'c1')).title === 'ORIGINALE' && !!nuovo && bs.length === 4);
-  await backup(p);
+  await backup(p, 'annulla');
   ok('avviso: il ripristino vale anche sugli altri dispositivi (una volta, sotto l\'elenco)', await p.locator('#u-sync').count() === 1
     && /Il ripristino vale anche sugli altri dispositivi collegati\./.test(await p.locator('#u-sync').innerText().catch(() => '')));
   await p.locator('#i-close').click(); await closed(p);
@@ -162,13 +163,13 @@ async function copie(browser) {
   ok('il ripristino è annullabile (copia «Prima del ripristino»)', /Prima del ripristino/.test(r.row) && (await book(p, 'c1')).title === 'ORIGINALE' && bs.length === 4, r.row);
   ok('nessun libro da togliere: «Conferma ripristino»', r.first === 'Conferma ripristino', r.first);
 
-  await backup(p); await p.locator('#i-authors').click();
+  await backup(p, 'copertine'); await p.locator('#i-authors').click();
   await p.waitForFunction(() => /Informazioni aggiornate/.test([...document.querySelectorAll('.toast')].map(t => t.textContent).join(' ')), null, { timeout: 8000 }).catch(() => {});
-  await backup(p);
+  await backup(p, 'annulla');
   ok('Completa autori e copertine crea una copia', /Completa autori e copertine/.test(await p.locator('#u-list .urow').first().innerText()));
   await p.locator('#i-close').click();
   for (let i = 0; i < 4; i++) await importa(p, [{ title: 'Giro ' + i, author: 'G' }]);
-  await backup(p);
+  await backup(p, 'annulla');
   const count = await p.locator('#u-list button[data-restore]').count();
   ok('al massimo 3 copie', count === 3, count);
   await p.locator('#i-close').click();
@@ -192,7 +193,7 @@ async function copie(browser) {
   const q = await newPage(browser, { init: { fn: () => { IDBFactory.prototype.open = function () { throw new DOMException('no', 'InvalidStateError'); }; } } });
   await load(q, [{ ...base, id: 'c1', title: 'Originale', author: 'A' }]);
   await importa(q, [{ title: 'Senza copie', author: 'S' }]);
-  await backup(q);
+  await backup(q, 'annulla');
   const none = q.locator('#u-none');
   ok('senza IndexedDB: import riuscito e #u-none visibile', (await localBooks(q)).length === 2 && await none.isVisible().catch(() => false)
     && /L'annullamento non è disponibile su questo dispositivo/.test(await none.innerText().catch(() => '')) && !q.errs.length, q.errs.join(' / '));
@@ -478,7 +479,7 @@ async function revisione(browser) {
   // I-1: ripristino mentre «Completa autori e copertine» è ancora in corso.
   let p = await newPage(browser); await slow(p);
   await load(p, libri); await toasts(p);
-  await backup(p); await p.locator('#i-authors').click();
+  await backup(p, 'copertine'); await p.locator('#i-authors').click();
   await p.waitForFunction(() => /2 di 6/.test(document.querySelector('#enrich')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
   await ripristina(p);
   await p.waitForFunction(() => document.querySelector('#enrich').hidden, null, { timeout: 10000 }).catch(() => {});
@@ -486,7 +487,7 @@ async function revisione(browser) {
   let bs = await localBooks(p);
   ok('ripristino durante «Completa autori e copertine»: i libri restano come nella copia', bs.length === 6 && bs.every(b => !b.cover), bs.map(b => b.cover ? 'copertina' : '-').join());
   ok('lavoro interrotto: niente messaggio finale', !(await seen(p, 'Informazioni aggiornate')), (await p.evaluate(() => window.__toasts)).join(' | '));
-  ok('dopo l\'interruzione si può rilanciare', await (async () => { await backup(p); await p.locator('#i-authors').click(); return poll(async () => seen(p, 'Informazioni aggiornate per 6'), 15000).then(() => true, () => false); })());
+  ok('dopo l\'interruzione si può rilanciare', await (async () => { await backup(p, 'copertine'); await p.locator('#i-authors').click(); return poll(async () => seen(p, 'Informazioni aggiornate per 6'), 15000).then(() => true, () => false); })());
   ok('ripristino e lavori in sottofondo: nessun errore', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 
@@ -495,7 +496,7 @@ async function revisione(browser) {
   await load(p, libri);
   await importa(p, [{ title: 'Libro 7', author: 'Mario Rossi' }]);
   await toasts(p);
-  await backup(p); await p.locator('#i-covers').click();
+  await backup(p, 'copertine'); await p.locator('#i-covers').click();
   await poll(async () => p.served >= 2, 8000).catch(() => {});
   await ripristina(p);
   await p.waitForFunction(() => (window.__toasts || []).some(t => /Copertine trovate/.test(t)), null, { timeout: 8000 }).catch(() => {});
@@ -509,7 +510,7 @@ async function revisione(browser) {
   p = await newPage(browser);
   await load(p, [{ ...base, id: 'r1', title: 'Uno', author: 'A' }]);
   await importa(p, [{ title: 'Due', author: 'B' }]);
-  await backup(p);
+  await backup(p, 'annulla');
   const rb = p.locator('#u-list button[data-restore]').first(); await rb.waitFor({ timeout: 3000 });
   await rb.click();
   await p.evaluate(() => new Promise(res => { const r = indexedDB.open('libreria-copie', 1); r.onsuccess = () => { const db = r.result, t = db.transaction('copie', 'readwrite'); t.objectStore('copie').clear(); t.oncomplete = () => { db.close(); res(); }; }; }));
@@ -518,16 +519,19 @@ async function revisione(browser) {
   ok('copia non trovata: «Copia non trovata: ripristino non riuscito»', fail && (await localBooks(p)).length === 2, await toastText(p));
   await p.close2();
 
-  // m-3 e m-6: dopo un import con la scheda aperta l'elenco mostra la nuova copia, al singolare.
+  // m-3 e m-6: dopo un import la nuova copia compare in «Annulla una modifica», al singolare.
   p = await newPage(browser);
   await load(p, [{ ...base, id: 'r1', title: 'Uno', author: 'A' }]);
-  await backup(p);
+  await backup(p, 'annulla');
   await p.waitForFunction(() => /Nessuna copia per ora/.test(document.querySelector('#u-list')?.textContent || ''), null, { timeout: 3000 }).catch(() => {});
+  await p.click('#i-close'); await closed(p);
+  await backup(p);
   await p.setInputFiles('#i-file', { name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify([{ title: 'Due', author: 'B' }])) });
   await p.waitForFunction(() => !document.querySelector('#i-go').disabled, null, { timeout: 5000 });
-  await p.locator('#i-go').click();
+  await p.locator('#i-go').click(); await closed(p);
+  await backup(p, 'annulla');
   const row = await p.locator('#u-list .urow').first().innerText({ timeout: 3000 }).catch(() => '');
-  ok('import con la scheda aperta: la nuova copia compare in Annulla', /Prima dell'import del backup/.test(row), row);
+  ok('dopo un import la nuova copia compare in Annulla', /Prima dell'import del backup/.test(row), row);
   ok('copia di un solo libro: «1 libro»', /· 1 libro\s/.test(row), row);
   await p.close2();
 

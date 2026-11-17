@@ -256,8 +256,8 @@ async function profilo(browser) {
   await entraGoogle(G);
   await G.waitForFunction(() => /Mario Rossi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
   ok('nome: con Google il nome del profilo, anche nel cloud', (await testa(G)) === 'Libreria di Mario Rossi' && (await profiloCloud('nome1')).data?.nome === 'Mario Rossi', await testa(G));
-  // Altro → «Il tuo nome»; un nome con caratteri HTML resta testo
-  await G.locator('.dock .more').click(); await G.locator('[data-m=nome]').click(); await G.waitForSelector('#nome-in');
+  // Altro → Account → «Il tuo nome»; un nome con caratteri HTML resta testo
+  await G.locator('.dock .more').click(); await G.locator('[data-m=sync]').click(); await G.locator('[data-m=nome]').click(); await G.waitForSelector('#nome-in');
   await G.fill('#nome-in', '  <b>Mario</b>   Bianchi  '); await G.click('#nome-ok');
   await G.waitForFunction(() => /Bianchi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
   ok('nome: si cambia da Altro, spazi ripuliti, caratteri HTML come testo', (await testa(G)) === 'Libreria di <b>Mario</b> Bianchi' && !(await G.locator('.exlibris b').count()) && (await profiloCloud('nome1')).data?.nome === '<b>Mario</b> Bianchi', await testa(G));

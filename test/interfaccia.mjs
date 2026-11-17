@@ -87,7 +87,7 @@ export default async function ({ browser }) {
     ok(`${tag}: titoli in Fraunces`, /Fraunces/.test(await p.evaluate(() => getComputedStyle(document.querySelector('h1')).fontFamily)));
     if (width < 1024) {
       await p.locator('.dock .more').click();
-      ok(`${tag}: «Accedi e sincronizza» è la prima voce di Altro`, (await p.locator('.menu-list button').first().getAttribute('data-m')) === 'sync');
+      ok(`${tag}: «Accedi e sincronizza» è la prima voce di Altro`, (await p.locator('.sheet [data-m]').first().getAttribute('data-m')) === 'sync');
       await p.keyboard.press('Escape');
     }
     ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));

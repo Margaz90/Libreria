@@ -252,7 +252,7 @@
         choice = await H.askMerge(live);
         if (!choice) { await auth.signOut(); return; }
       }
-      if (first && H.books().length && H.snapshot) await H.snapshot("Prima dell'unione con il cloud"); // si può annullare da Backup
+      if (first && H.books().length && H.snapshot) await H.snapshot("Prima dell'unione con il cloud"); // si può annullare da Altro → Annulla una modifica
       await reconcile(choice, snap);
       if (g !== gen) return; // nel frattempo si è usciti o è cambiato account
       listen();
@@ -385,7 +385,7 @@
   // Ritorno da un accesso con redirect: se non ha funzionato lo dico, invece di lasciare l'app scollegata e vuota.
   const fromRedirect = (() => { try { return !!sessionStorage.getItem("libreria-auth-pending"); } catch { return false; } })();
   auth.getRedirectResult()
-    .then(r => { if (fromRedirect && !(r && r.user) && !auth.currentUser) H.notice("L'accesso con Google non si è completato. Riprova da Altro → Accedi e sincronizza, oppure usa il link via email."); })
+    .then(r => { if (fromRedirect && !(r && r.user) && !auth.currentUser) H.notice("L'accesso con Google non si è completato. Riprova da Altro → Account (il riquadro in alto), oppure usa il link via email."); })
     .catch(e => { if (fromRedirect) H.notice(/account-exists-with-different-credential/.test(why(e)) && H.accountLink ? H.accountLink() : "Accesso con Google non riuscito (" + why(e) + "). Riprova, oppure usa il link via email."); })
     .finally(() => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} });
 })();
