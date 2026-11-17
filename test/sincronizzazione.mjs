@@ -74,6 +74,7 @@ export default async function ({ browser }) {
   // 7. Terzo dispositivo con un libro suo: chiede come unire
   const D = await device();
   await D.locator('.dock .add').first().click();
+  await D.locator('#a-mano').click(); // v100: Nuovo libro parte dalla sola ricerca
   await D.locator('#d-title').fill('Solo sul telefono'); await D.locator('#d-author').fill('Test');
   await D.locator('#a-save').click(); await D.waitForTimeout(300);
   await signIn(D).catch(() => {});

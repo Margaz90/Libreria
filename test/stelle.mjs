@@ -69,6 +69,7 @@ async function salva(browser) {
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q');
   await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+  await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.fill('#d-title', 'Nuovo letto'); await p.fill('#d-author', 'Z');
   await p.locator('.seg [data-v="letto"]').click();
   await p.locator('#a-save').click(); await p.waitForTimeout(400);

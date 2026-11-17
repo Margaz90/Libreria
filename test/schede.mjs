@@ -176,6 +176,7 @@ export default async function ({ browser }) {
   await p2.goto(APP + '/'); await p2.waitForTimeout(300);
   await p2.locator('.dock .add').first().click(); await p2.waitForSelector('.sheet');
   await p2.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q'); // la scheda ha finito di aprirsi
+  await p2.click('#a-mano'); // v100
   await p2.fill('#d-title', 'Nuovo'); await p2.fill('#d-author', 'Z'); await p2.fill('#d-pages', '250');
   await p2.locator('.seg [data-v="letto"]').click();
   ok('Nuovo libro: Letto con 250 pagine → pagina attuale 250', (await val(p2, '#f-page')) === '250');

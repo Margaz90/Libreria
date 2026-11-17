@@ -197,6 +197,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   .pill[aria-checked="true"] { background: var(--ink); color: var(--bg); font-weight: 600; }
 }
 @media (max-width: 699px) { .pill b { display: none; } }
+.cerca-apri { display: none; }
 .viewsw { display: flex; flex: none; padding: 2px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
 .viewsw button { border: 0; background: none; padding: 5px 8px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
 .viewsw button[aria-checked="true"] { background: var(--bg); color: var(--ink); }
@@ -231,6 +232,11 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   .sumrow .tally { flex: 1; min-width: 0; margin-top: 0; }
   .sumrow .tally .goal { width: auto; }
   .sumrow .viewsw-m { display: flex; flex: none; }
+  /* v100: ricerca e «Ordina» dietro la lente, aperti solo quando servono */
+  #searchbar { display: none; }
+  body.cerca-aperta #searchbar { display: flex; }
+  .cerca-apri { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -4px -6px 0; border: 0; background: none; color: var(--muted); border-radius: 10px; }
+  .cerca-apri[aria-expanded="true"] { color: var(--ink); background: var(--surface); }
   .tally .goal-txt em { display: none; } /* sul telefono niente "ne mancano": resta il conteggio */
   .goal svg { width: 30px; height: 30px; }
   .tally .goal { width: 100%; justify-content: flex-start; }
@@ -322,6 +328,8 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .goal-row { font-size: 13px; color: var(--muted); text-align: right; margin-top: -8px; }
 .sheet .link { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: inherit; padding: 0 2px; margin: -6px 0; min-height: 44px; }
 .ico-scan { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; vertical-align: -4px; margin-right: 6px; }
+.a-mano-riga { margin: -6px 0 0; }
+.a-corpo { display: flex; flex-direction: column; gap: 14px; }
 .indietro { align-self: flex-start; border: 0; background: none; color: var(--accent); font-size: 15px; padding: 0 2px; margin: -10px 0 -12px; min-height: 44px; }
 .sheet .piede { text-align: center; }
 .sheet .piede a, #porta .porta-privacy a { color: var(--accent); }
