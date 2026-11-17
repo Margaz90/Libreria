@@ -84,6 +84,24 @@
   // <regole>
   const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "mylibrary-2ea05--anteprima-roidf2ds.web.app": "firebase", "margaz90.github.io": "vecchio" }; // l'anteprima (docs/anteprima-passi.md) si comporta come il sito vero
   const sitoDi = h => { const k = String(h || "").toLowerCase(); return Object.hasOwn(SITI, k) ? SITI[k] : "altro"; };
+  // v100: un errore (codice di Firebase, del browser o nostro) diventa una frase con la soluzione; il codice resta solo se sconosciuto.
+  const SPIEGA = [
+    [/^rete$|network-request-failed|unavailable|deadline-exceeded|failed to fetch|offline/i, "manca la connessione: riprova quando sei online"],
+    [/requests-from-referer|unauthorized-domain|unauthorized-continue-uri|api-key-not-valid|operation-not-allowed/i, "l'accesso non è abilitato da questo indirizzo: apri l'app dal link che ti ha mandato Diego"],
+    [/invalid-action-code|expired-action-code/i, "il link è scaduto o è già stato usato: chiedine uno nuovo"],
+    [/invalid-email|missing-email/i, "l'indirizzo email non sembra corretto"],
+    [/too-many-requests|quota-exceeded|resource-exhausted/i, "troppe richieste: aspetta qualche minuto e riprova"],
+    [/popup-closed-by-user|cancelled-popup-request|user-cancelled/i, "l'accesso è stato annullato"],
+    [/popup-blocked/i, "il browser ha bloccato la finestra di Google: riprova o usa il link via email"],
+    [/permission-denied|non-invitato/i, "non hai il permesso: forse l'invito è stato tolto, chiedi a Diego"],
+    [/requires-recent-login|^rientra$/i, "per sicurezza esci, rientra e riprova"],
+    [/missing initial state|web-storage-unsupported/i, "il browser blocca i dati dell'accesso: usa il link via email"],
+  ];
+  const spiega = e => {
+    const c = String((e && typeof e === "object" ? e.code || e.message : e) || "").trim();
+    const hit = c && SPIEGA.find(([re]) => re.test(c));
+    return hit ? hit[1] : `riprova tra poco (codice: ${c.length > 60 ? c.slice(0, 60) + "…" : c || "sconosciuto"})`;
+  };
   // </regole>
   const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test
   // Su invito (v94): l'amministratore (Diego) per uid; stesso elenco in firestore.rules.
@@ -1339,14 +1357,17 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#archive-dot").hidden = !backupDue();
     n.hidden = state.books.length > 0;
     if (state.books.length) { n.innerHTML = ""; return; }
-    // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud; prima l'accesso, poi «Carica i libri» (v92: modello Excel, CSV o backup).
+    // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud, quindi senza accesso «Accedi» viene prima.
+    // v100: tre strade per chi parte da zero (un libro alla volta) o ha già una lista (Excel, CSV di Goodreads, backup).
     const email = cloudInfo().email;
+    const aggiungi = `<button class="btn${email ? " primary" : ""}" id="vuota-add">Aggiungi il primo libro</button>`, file = `<button class="btn" id="carica-go">Carica da un file</button>`;
     n.innerHTML = email
-      ? `<div class="notice"><span><strong>La libreria è vuota.</strong> Sei collegato come ${esc(email)}: i libri del cloud arrivano da soli. Se l'account è vuoto, carica i tuoi libri: da un foglio Excel, dal CSV di Goodreads o da un backup.</span>
-      <span class="actions"><button class="btn primary" id="carica-go">Carica i libri</button></span></div>`
-      : `<div class="notice"><span><strong>La libreria è vuota.</strong> Hai già usato MyLibrary? Accedi con la stessa email e i tuoi libri tornano dal cloud. Altrimenti carica i tuoi libri: da un foglio Excel, dal CSV di Goodreads o da un backup.</span>
-      <span class="actions"><button class="btn primary" id="vuota-sync">Accedi e riprendi i libri</button><button class="btn" id="carica-go">Carica i libri</button></span></div>`;
+      ? `<div class="notice"><span><strong>La tua libreria è vuota.</strong> Sei collegato come ${esc(email)}: se avevi già dei libri nel cloud arrivano da soli. Altrimenti comincia dal primo: cercalo per titolo o inquadra il codice a barre. Hai già una lista? Caricala da un foglio Excel, dal CSV di Goodreads o da un backup.</span>
+      <span class="actions">${aggiungi}${file}</span></div>`
+      : `<div class="notice"><span><strong>La tua libreria è vuota.</strong> Hai già usato MyLibrary? Accedi con la stessa email e i tuoi libri tornano dal cloud. Altrimenti comincia dal primo libro o carica la tua lista da un file.</span>
+      <span class="actions"><button class="btn primary" id="vuota-sync">Accedi e riprendi i libri</button>${aggiungi}${file}</span></div>`;
     $("#carica-go").onclick = openCarica;
+    $("#vuota-add").onclick = () => openAdd();
     const sy = $("#vuota-sync"); if (sy) sy.onclick = openSync;
   }
   function backupDue() {
@@ -1892,6 +1913,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     $("#toolbar").hidden = state.view === "stats" || state.view === "novita";
     $(".viewsw-m").hidden = state.view !== "libreria"; // v99: Dorsi/Copertine vale solo per la libreria
+    $("#cerca-apri").hidden = state.view !== "libreria";
+    if (cercaInUso()) apriCerca(true);
     aggiornaPallinoNovita();
     wireMain(main);
     if (sk) statsFocusRestore(sk);
@@ -2439,7 +2462,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         }
       } catch (e) {
         if (mine !== seq) return;
-        status.textContent = "Ricerca non riuscita (" + ((e && e.code) || "errore") + "). Controlla la connessione o compila a mano.";
+        status.textContent = "Ricerca non riuscita: " + spiega(e) + ". Puoi anche inserire il libro a mano.";
       }
     };
     $("#s-go", sheet).onclick = go;
@@ -2751,11 +2774,18 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         <div class="status-line" id="a-cv-status" aria-live="polite"></div>
         <div class="cover-picks" id="a-cv-picks" hidden></div>
       </div>
+      <p class="a-mano-riga"><button class="link" id="a-mano" type="button">Inserisci a mano</button></p>
+      <div class="a-corpo" id="a-corpo" hidden>
       ${dataFields(b)}
       ${readingHead(b)}${readingMemo(b)}
-      <div class="actions"><button class="btn primary" id="a-save">Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button">Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
+      </div>
+      <div class="actions"><button class="btn primary" id="a-save" hidden>Aggiungi alla libreria</button><button class="btn" id="a-wish" type="button" hidden>Lista dei desideri</button><button class="btn ghost" id="a-cancel">Annulla</button></div>`);
     wireRating(sheet, b); wirePageCtl(sheet);
+    // v100: all'inizio solo la ricerca; campi e pulsanti per salvare dopo il primo risultato o con «Inserisci a mano».
+    const mostraCorpo = () => { ["#a-corpo", "#a-save", "#a-wish"].forEach(x => { $(x, sheet).hidden = false; }); $(".a-mano-riga", sheet).hidden = true; };
+    $("#a-mano", sheet).onclick = () => { mostraCorpo(); $("#d-title", sheet).focus(); };
     wireSearch(sheet, hit => {
+      mostraCorpo();
       const prev = $("#a-prev", sheet); prev.hidden = false; $("#a-cov", sheet).hidden = false; // v99: la scelta della copertina compare dopo il primo risultato
       prev.innerHTML = `${coverHTML({ ...hit })}<div><p class="synopsis">${esc(hit.synopsis || "")}</p></div>`;
       fillData(sheet, hit, b);
@@ -2889,9 +2919,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     })), Promise.resolve()).then(() => window.libreriaCloud, e => { cloudLoading = null; throw e; });
     return cloudLoading;
   }
-  const errText = e => (e && (e.message || e.code)) || String(e);
   // Ponte con cloud.js: lo strato di sincronizzazione legge e scrive i libri solo tramite queste funzioni.
   window.libreriaHost = {
+    spiega, // v100: errori in italiano semplice anche in cloud.js
     books: () => state.books,
     keyOf,
     moved: sposta, // stesso elenco di salvaLibro per decidere se un libro arrivato dal cloud si sposta
@@ -2967,7 +2997,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         st(/account-exists-with-different-credential/.test(c) ? ACCOUNT_LINK
           : /popup-closed-by-user|cancelled-popup-request/.test(c) ? "Accesso annullato."
           : /network-request-failed/.test(c) ? "Nessuna connessione: riprova quando sei online."
-          : "Accesso non riuscito (" + c + "). Puoi usare il link via email qui sotto.");
+          : "Accesso non riuscito: " + spiega(e) + ". Puoi usare il link via email qui sotto.");
       });
     };
     $("#sy-link", root).onclick = () => {
@@ -2976,7 +3006,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       st("Invio il link…");
       window.libreriaCloud.sendLink(email)
         .then(() => { setCloudInfo({ lastEmail: email }); st("Link inviato a " + email + ". Copialo dall'email e incollalo qui sopra, senza aprirlo."); })
-        .catch(e => st("Non riesco a inviare il link (" + ((e && e.code) || "errore") + ")."));
+        .catch(e => st("Non riesco a inviare il link: " + spiega(e) + "."));
     };
     $("#sy-paste-go", root).onclick = () => {
       const link = $("#sy-paste", root).value.trim(), email = $("#sy-email", root).value.trim() || cloudInfo().lastEmail || "";
@@ -3022,7 +3052,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         pe.disabled = true;
         loadCloud().then(c => c.eliminaAccount()).then(() => toast("Account eliminato."), e => {
           pe.disabled = false; pe.classList.remove("conferma"); pe.textContent = "Elimina il mio account";
-          $("#porta-st", el).textContent = e && e.code === "rientra" ? "Per sicurezza esci, accedi di nuovo e riprova." : e && e.code === "rete" ? "Serve la connessione per eliminare l'account." : "Non riesco a eliminare l'account (" + errText(e) + ").";
+          $("#porta-st", el).textContent = e && e.code === "rientra" ? "Per sicurezza esci, accedi di nuovo e riprova." : e && e.code === "rete" ? "Serve la connessione per eliminare l'account." : "Non riesco a eliminare l'account: " + spiega(e) + ".";
         });
       };
     }
@@ -3056,7 +3086,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       const n = pulisciNome($("#nome-in", sheet).value);
       if (!n) { $("#nome-st", sheet).textContent = "Scrivi un nome."; return; }
       $("#nome-st", sheet).textContent = "Salvo…";
-      loadCloud().then(c => c.salvaNome(n)).then(closeSheet, e => { $("#nome-st", sheet).textContent = "Non riesco a salvarlo (" + errText(e) + ")."; });
+      loadCloud().then(c => c.salvaNome(n)).then(closeSheet, e => { $("#nome-st", sheet).textContent = "Non riesco a salvarlo: " + spiega(e) + "."; });
     };
     setTimeout(() => $("#nome-in", sheet).focus(), 50);
   }
@@ -3074,19 +3104,19 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const carica = () => loadCloud().then(c => c.invitati()).then(l => {
       st.textContent = l.length ? `${l.length} ${l.length === 1 ? "persona invitata" : "persone invitate"}.` : "Nessuno ancora.";
       list.innerHTML = l.map(e => `<div class="urow"><span>${esc(e)}</span><button class="btn" type="button" data-togli="${esc(e)}">Togli</button></div>`).join("");
-    }, e => { st.textContent = "Non riesco a leggere l'elenco (" + errText(e) + ")."; });
+    }, e => { st.textContent = "Non riesco a leggere l'elenco: " + spiega(e) + "."; });
     carica();
     $("#inv-close", sheet).onclick = closeSheet;
     $("#inv-add", sheet).onclick = () => {
       const email = $("#inv-email", sheet).value.trim().toLowerCase();
       if (!/^\S+@\S+\.\S+$/.test(email)) { st.textContent = "Scrivi un indirizzo email valido."; return; }
       st.textContent = "Aggiungo…";
-      loadCloud().then(c => c.invita(email)).then(() => { $("#inv-email", sheet).value = ""; carica(); }, e => { st.textContent = "Non riesco ad aggiungerla (" + errText(e) + ")."; });
+      loadCloud().then(c => c.invita(email)).then(() => { $("#inv-email", sheet).value = ""; carica(); }, e => { st.textContent = "Non riesco ad aggiungerla: " + spiega(e) + "."; });
     };
     list.onclick = e => { // togliere: due tocchi
       const b = e.target.closest("[data-togli]"); if (!b) return;
       if (!b.classList.contains("danger")) { list.querySelectorAll(".danger").forEach(x => { x.classList.remove("danger"); x.textContent = "Togli"; }); b.classList.add("danger"); b.textContent = "Conferma"; return; }
-      loadCloud().then(c => c.togliInvito(b.dataset.togli)).then(carica, err => { st.textContent = "Non riesco a toglierla (" + errText(err) + ")."; });
+      loadCloud().then(c => c.togliInvito(b.dataset.togli)).then(carica, err => { st.textContent = "Non riesco a toglierla: " + spiega(err) + "."; });
     };
   }
   function openSyncDone() {
@@ -3112,9 +3142,9 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     collegaIndietro(sheet);
     $("[data-m=nome]", sheet).onclick = () => apriNome();
     $("#sy-close", sheet).onclick = closeSheet;
-    loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Errore di caricamento: " + errText(e));
-    $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
-    $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Errore: " + errText(e); });
+    loadCloud().then(c => c.refreshInfo()).catch(e => $("#sy-info", sheet).textContent = "Non riesco a controllare lo stato: " + spiega(e) + ".");
+    $("#sy-now", sheet).onclick = () => loadCloud().then(c => c.syncNow()).catch(e => { $("#sy-info", sheet).textContent = "Sincronizzazione non riuscita: " + spiega(e) + "."; });
+    $("#sy-re", sheet).onclick = () => loadCloud().then(c => c.reconnect()).catch(e => { $("#sy-info", sheet).textContent = "Riconnessione non riuscita: " + spiega(e) + "."; });
     const out = $("#sy-out", sheet), sst = $("#sy-status", sheet), del = $("#sy-del", sheet);
     if (del) del.onclick = () => { // v95: due tocchi, poi tutto via dal cloud e dal telefono
       if (!del.classList.contains("conferma")) {
@@ -3129,7 +3159,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         sst.textContent = c === "rientra" ? "Per sicurezza, prima di eliminare l'account rientra: tocca «Esci», accedi di nuovo e torna qui."
           : c === "rete" ? "Serve la connessione per eliminare l'account."
           : c === "parziale" ? "I tuoi libri sono stati cancellati; per eliminare anche l'account esci, rientra e riprova."
-          : "Non riesco a eliminare l'account (" + errText(e) + ").";
+          : "Non riesco a eliminare l'account: " + spiega(e) + ".";
       });
     };
     out.onclick = () => {
@@ -3139,7 +3169,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       }
       loadCloud().then(c => c.esci()).then(() => toast("Sei uscito: i tuoi libri sono al sicuro nel cloud."), e => {
         out.classList.remove("conferma"); out.textContent = "Esci da questo dispositivo";
-        sst.textContent = e && e.code === "sospeso" ? "Ci sono modifiche non ancora salvate nel cloud: collegati alla rete e riprova." : "Non riesco a uscire (" + errText(e) + ").";
+        sst.textContent = e && e.code === "sospeso" ? "Ci sono modifiche non ancora salvate nel cloud: collegati alla rete e riprova." : "Non riesco a uscire: " + spiega(e) + ".";
       });
     };
   }
@@ -3515,7 +3545,20 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#q").value = s; state.q = s; state.filter = "tutti"; resetLimits();
     if (state.view !== "libreria") setView("libreria"); else { render(); window.scrollTo({ top: 0 }); }
   }
+  // v100: sul telefono ricerca e «Ordina» stanno dietro la lente; restano aperti se c'è un testo cercato o un ordinamento scelto.
+  function cercaInUso() { return !!(state.q || $("#q").value) || state.sort !== "recenti"; }
+  function apriCerca(aperta) {
+    const on = aperta || cercaInUso();
+    document.body.classList.toggle("cerca-aperta", on);
+    $("#cerca-apri").setAttribute("aria-expanded", String(on));
+  }
+  $("#cerca-apri").onclick = () => {
+    const ora = document.body.classList.contains("cerca-aperta");
+    if (ora && !cercaInUso()) { apriCerca(false); return; }
+    apriCerca(true); $("#q").focus({ preventScroll: true });
+  };
   function goSearch() {
+    apriCerca(true);
     if (state.view !== "libreria") setView("libreria");
     document.body.classList.remove("bars-off");
     $("#q").focus({ preventScroll: true }); window.scrollTo({ top: 0 });

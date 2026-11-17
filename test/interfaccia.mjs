@@ -102,7 +102,7 @@ export default async function ({ browser }) {
       await p.evaluate(() => localStorage.setItem('libreria-cloud', JSON.stringify({ email: 'diego@example.com' })));
       await p.reload(); await p.waitForSelector('#notice');
       const coll = await p.locator('#notice').innerText();
-      ok(`${tag}: già collegato, niente invito all'accesso`, !(await p.locator('#vuota-sync').count()) && /diego@example\.com/.test(coll) && (await p.locator('#notice #carica-go.primary').count()) === 1, coll);
+      ok(`${tag}: già collegato, niente invito all'accesso`, !(await p.locator('#vuota-sync').count()) && /diego@example\.com/.test(coll) && (await p.locator('#notice #vuota-add.primary').count()) === 1 && (await p.locator('#notice #carica-go').count()) === 1, coll);
       await p.evaluate(() => localStorage.removeItem('libreria-cloud'));
     }
     await p.evaluate(b => localStorage.setItem('libreria-diego-v1', JSON.stringify(b)), libri108());

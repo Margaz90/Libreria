@@ -90,6 +90,7 @@ async function sposta(browser) {
   ok('sposta: vuoto e assente sono uguali', r.vuoto === false, JSON.stringify(r));
   ok('sposta: la serie conta solo nell\'ordine Autore (qui Recenti)', r.serie === false, JSON.stringify(r));
   ok('sposta: è la stessa funzione che usa il cloud (libreriaHost.moved)', r.host === true);
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.click('#cerca-apri'); // v100: «Ordina» dietro la lente
   await p.locator('#sort-btn').click(); await p.locator('#sort-menu [data-v="autore"]').click();
   const autore = await p.evaluate(() => {
     const a = { title: 'T', author: 'A', status: 'letto', series: 'S', seriesNo: '1' };
@@ -125,6 +126,7 @@ async function limiti(browser) {
   const q1 = await book(m, 'q1');
   ok('menu rapido: il cambio di stato tiene quanto salvato in sottofondo nel frattempo', q1.status === 'in-lettura' && q1.cover === 'https://example.org/c.jpg' && q1.author === 'Autore Trovato', JSON.stringify(q1));
   // Con una ricerca attiva anche la serie sposta un libro (la ricerca guarda la serie)
+  await m.evaluate(() => window.scrollTo(0, 0)); await m.click('#cerca-apri'); // v100: ricerca dietro la lente
   await m.fill('#q', 'Senza'); await m.waitForTimeout(450);
   const conRicerca = await m.evaluate(() => { const a = { title: 'T', series: 'S', seriesNo: '1' }; return window.libreriaSalva.sposta(a, { ...a, series: 'Altra' }); });
   ok('sposta: con una ricerca attiva la serie conta', conRicerca === true, String(conRicerca));

@@ -182,6 +182,7 @@ async function nuovo(browser) {
   await p.goto(APP + '/'); await p.waitForSelector('#main');
   await p.locator('.dock .add').first().click(); await p.waitForSelector('.sheet');
   await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+  await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.fill('#d-title', 'Nuovo in lettura'); await p.fill('#d-author', 'Z');
   await p.locator('.seg [data-v="in-lettura"]').click();
   ok('Nuovo libro In lettura: l\'inizio non si riempie da solo', (await p.inputValue('#f-started')) === '');

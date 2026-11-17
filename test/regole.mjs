@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT, libri108 } from './lib.mjs';
 import { creaXlsx, creaZip } from './xlsx.mjs';
 
-const EXPORTS = ['STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
+const EXPORTS = ['spiega', 'STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
   'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'leggiZip', 'righeXlsx'];
 
 export function caricaRegole() {
@@ -102,6 +102,16 @@ export default async function run() {
     ['mylibrary-2ea05--altro-abc.web.app', 'altro'],
     ['margaz90.github.io', 'vecchio'], ['localhost', 'altro'], ['evil-mylibrary-2ea05.web.app', 'altro'], ['constructor', 'altro'], ['mylibrary-2ea05.web.app.evil.com', 'altro'], ['', 'altro'], [undefined, 'altro']];
   ok('sitoDi: dove gira l\'app (somiglianze non contano)', casiSito.every(([h, s]) => R.sitoDi(h) === s), j(casiSito.map(([h]) => R.sitoDi && R.sitoDi(h))));
+  // v100: codici d'errore tradotti in una frase con la soluzione; per i codici sconosciuti resta il codice.
+  const casiErr = [[{ code: 'rete' }, /connessione/], [{ code: 'auth/network-request-failed' }, /connessione/], [{ code: 'unavailable' }, /connessione/],
+    [{ message: 'Firebase: Error (auth/requests-from-referer-https://x.web.app-are-blocked.).' }, /non è abilitato da questo indirizzo/], [{ code: 'auth/unauthorized-domain' }, /non è abilitato/],
+    [{ code: 'auth/invalid-action-code' }, /scaduto o è già stato usato/], [{ code: 'auth/expired-action-code' }, /scaduto/], [{ code: 'auth/invalid-email' }, /email non sembra corretto/],
+    [{ code: 'auth/too-many-requests' }, /troppe richieste/], [{ code: 'resource-exhausted' }, /troppe richieste/], [{ code: 'auth/popup-closed-by-user' }, /annullato/],
+    [{ code: 'auth/popup-blocked' }, /bloccato la finestra/], [{ code: 'permission-denied' }, /permesso/], [{ code: 'auth/requires-recent-login' }, /esci, rientra/],
+    [{ message: 'Unable to process request due to missing initial state.' }, /link via email/], [{ code: 'strano/codice' }, /riprova tra poco \(codice: strano\/codice\)/],
+    [null, /riprova tra poco/], ['auth/invalid-email', /email non sembra corretto/]];
+  ok('spiega: codici d\'errore in italiano semplice, il codice solo se sconosciuto', casiErr.every(([e, re]) => re.test(R.spiega(e)) && !/auth\//.test(R.spiega(e).replace(/codice: .*/, ''))), j(casiErr.map(([e]) => R.spiega(e))));
+  ok('spiega: un messaggio lungo sconosciuto non diventa un muro di testo', R.spiega({ message: 'x'.repeat(500) }).length < 140);
 
   // ---- Regole della lettura: invarianti su 2000 libri e passaggi generati a caso ----
   const r = rng(42), ST = ['da-leggere', 'in-lettura', 'letto', 'desiderato'];

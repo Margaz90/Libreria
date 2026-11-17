@@ -409,8 +409,9 @@ async function usoRicerca(browser) {
 
   // Nuovo libro: ricerca in sottofondo dopo il salvataggio
   await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
-  await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#a-mano');
   await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q'); // la scheda ha finito di aprirsi
+  await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.fill('#d-title', 'La strada degli spettri'); await p.fill('#d-author', 'Mick Herron');
   await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'La strada degli spettri' && x.series), null, { timeout: 12000 }).catch(() => {});
@@ -419,8 +420,9 @@ async function usoRicerca(browser) {
   // Nuovo libro aperto prima che arrivi la serie: Salva non la cancella
   p.cfg.delay = 1500;
   await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
-  await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#a-mano');
   await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+  await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.fill('#d-title', 'Dead Lions'); await p.fill('#d-author', 'Mick Herron');
   await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('libreria-diego-v1') || '[]').some(x => x.title === 'Dead Lions'), null, { timeout: 4000 }).catch(() => {});
@@ -449,8 +451,9 @@ async function nomeGiaUsato(browser) {
     W('Q22', 'Dune|Dune', 'Le cronache di Dune', '1')];
   const nuovo = async (title, author, serie) => {
     await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
-    await p.locator('.dock .add').first().click(); await p.waitForSelector('#d-title');
+    await p.locator('.dock .add').first().click(); await p.waitForSelector('#a-mano');
     await p.waitForFunction(() => document.activeElement && document.activeElement.id === 's-q');
+    await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
     await p.fill('#d-title', title); await p.fill('#d-author', author);
     if (serie) await p.fill('#d-series', serie);
     await p.locator('#a-save').click(); await p.waitForSelector('.sheet', { state: 'detached' });

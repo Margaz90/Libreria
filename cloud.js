@@ -33,6 +33,7 @@
   const fromDoc = ({ hasSpine, deleted, ...rest }) => rest;
   const toDoc = ({ id, spine, ...rest }) => plain({ ...rest, hasSpine: !!spine, deleted: false });
   const why = e => (e && (e.code || e.message)) || "errore";
+  const perche = e => (H.spiega ? H.spiega(e) : why(e)); // v100: frase per chi legge, il codice solo se sconosciuto
 
   /* ---- dal dispositivo al cloud ---- */
   const later = (ms = 600) => { clearTimeout(timer); timer = setTimeout(flush, ms); };
@@ -80,7 +81,7 @@
       // Riprovo più tardi: le modifiche restano in coda.
       up.forEach(id => pending.add(id)); down.forEach(id => gone.add(id));
       later(15000);
-      H.error("Sincronizzazione non riuscita (" + why(e) + "). Riprovo tra poco.");
+      H.error("Sincronizzazione non riuscita: " + perche(e) + ". Riprovo tra poco.");
     }
   }
 
@@ -178,8 +179,8 @@
         list.push({ id, from: lb ? lb.status : null, to: r.status, moved, added: !lb });
         jobs.push(adopt(id, r));
       });
-      Promise.all(jobs).then(() => { if (list.length) H.refreshChanged(list); }).catch(e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
-    }, e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
+      Promise.all(jobs).then(() => { if (list.length) H.refreshChanged(list); }).catch(e => H.error("Sincronizzazione non riuscita: " + perche(e) + "."));
+    }, e => H.error("Sincronizzazione non riuscita: " + perche(e) + "."));
     if (goalsUnsub) goalsUnsub();
     goalsUnsub = goalsDoc().onSnapshot(d => {
       if (!d.exists) return;
@@ -263,7 +264,7 @@
     } catch (e) {
       if (g !== gen) return;
       listen();
-      H.error("Sincronizzazione non riuscita (" + why(e) + "). Riprovo quando torna la connessione.");
+      H.error("Sincronizzazione non riuscita: " + perche(e) + ". Riprovo quando torna la connessione.");
     } finally { if (g === gen) sincronizzo = false; }
   }
 
@@ -352,19 +353,19 @@
     invitati() { return db.collection("invitati").get().then(s => s.docs.map(d => d.id).sort()); },
     invita(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).set({ aggiunto: Date.now(), da: user ? user.uid : "" }); },
     togliInvito(email) { return db.doc(`invitati/${String(email).trim().toLowerCase()}`).delete(); },
-    goals() { if (user && !fermo) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato (" + why(e) + ")."));
+    goals() { if (user && !fermo) goalsDoc().set(H.goals()).catch(e => H.error("Obiettivo non inviato: " + perche(e) + "."));
     },
     reconnect() {
       if (fermo) return Promise.resolve();
       H.info("Riconnessione in corso…");
       return db.disableNetwork().then(() => db.enableNetwork()).then(() => { if (user) return reconcile("merge"); })
-        .then(() => showInfo(), e => H.info("Riconnessione non riuscita (" + why(e) + ")."));
+        .then(() => showInfo(), e => H.info("Riconnessione non riuscita: " + perche(e) + "."));
     },
     refreshInfo() { showInfo(); },
     syncNow() {
       if (!user || fermo) return Promise.resolve();
       H.status("Sincronizzo i libri…");
-      return reconcile("merge").then(() => H.done("Libreria sincronizzata."), e => H.error("Sincronizzazione non riuscita (" + why(e) + ")."));
+      return reconcile("merge").then(() => H.done("Libreria sincronizzata."), e => H.error("Sincronizzazione non riuscita: " + perche(e) + "."));
     }
   };
 
@@ -386,6 +387,6 @@
   const fromRedirect = (() => { try { return !!sessionStorage.getItem("libreria-auth-pending"); } catch { return false; } })();
   auth.getRedirectResult()
     .then(r => { if (fromRedirect && !(r && r.user) && !auth.currentUser) H.notice("L'accesso con Google non si è completato. Riprova da Altro → Account (il riquadro in alto), oppure usa il link via email."); })
-    .catch(e => { if (fromRedirect) H.notice(/account-exists-with-different-credential/.test(why(e)) && H.accountLink ? H.accountLink() : "Accesso con Google non riuscito (" + why(e) + "). Riprova, oppure usa il link via email."); })
+    .catch(e => { if (fromRedirect) H.notice(/account-exists-with-different-credential/.test(why(e)) && H.accountLink ? H.accountLink() : "Accesso con Google non riuscito: " + perche(e) + ". Riprova, oppure usa il link via email."); })
     .finally(() => { try { sessionStorage.removeItem("libreria-auth-pending"); } catch {} });
 })();
