@@ -102,13 +102,14 @@ export default async function ({ browser }) {
   ok('accesso: nessun errore in console', !errs.length, errs.join(' / '));
   for (const p of [A, C, B, P, D]) await p.close2();
   await porta(browser);
+  await profilo(browser);
 }
 
 // v94: porta d'ingresso (accesa nei test con window.libreriaPorta), «Esci» che pulisce, «Invitati» per l'amministratore
 async function porta(browser) {
   const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3', now = Date.now();
   const nuova = async (email = 'diego@test.it', uid = 'porta1') => {
-    const p = await newPage(browser, { init: { fn: ([e, u]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); } }, arg: [email, uid] } });
+    const p = await newPage(browser, { init: { fn: ([e, u]) => { window.libreriaPorta = true; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); localStorage.setItem('fake-name', 'Persona di prova'); } }, arg: [email, uid] } });
     await p.goto(APP + '/'); return p;
   };
   const cloudDoc = p => fetch(`${API}/doc?path=${encodeURIComponent(p)}`).then(r => r.json());
@@ -235,3 +236,51 @@ async function porta(browser) {
   await N.close2();
 }
 
+// v95: il nome di ciascuno nell'intestazione
+async function profilo(browser) {
+  const ADMIN = '46AtxF1piJQGsWcqm665Wjf6nFA3';
+  const pagina = async ({ email = 'diego@test.it', uid = 'nome1', nome = '', porta = true } = {}) => {
+    const p = await newPage(browser, { init: { fn: ([e, u, n, pt]) => { window.libreriaPorta = pt; if (!localStorage.getItem('fake-init')) { localStorage.setItem('fake-init', '1'); localStorage.setItem('fake-popup', 'ok'); localStorage.setItem('fake-uid', u); localStorage.setItem('fake-email', e); if (n) localStorage.setItem('fake-name', n); } }, arg: [email, uid, nome, porta] } });
+    await p.goto(APP + '/'); return p;
+  };
+  const entraGoogle = async p => { await p.waitForFunction(() => document.querySelector('#sy-google') && !document.querySelector('#sy-google').disabled, null, { timeout: 10000 }).catch(() => {}); await p.click('#porta #sy-google'); await p.waitForFunction(() => !document.querySelector('#porta'), null, { timeout: 8000 }).catch(() => {}); };
+  const testa = p => p.evaluate(() => document.querySelector('.exlibris').textContent.trim());
+  const profiloCloud = uid => fetch(`${API}/doc?path=${encodeURIComponent(`users/${uid}/meta/profilo`)}`).then(r => r.json());
+
+  const Z = await pagina({ porta: false });
+  ok('nome: senza nessuno collegato l\'intestazione è «La mia libreria»', (await testa(Z)) === 'La mia libreria', await testa(Z));
+  await Z.close2();
+
+  const G = await pagina({ nome: 'Mario Rossi' });
+  await entraGoogle(G);
+  await G.waitForFunction(() => /Mario Rossi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: con Google il nome del profilo, anche nel cloud', (await testa(G)) === 'Libreria di Mario Rossi' && (await profiloCloud('nome1')).data?.nome === 'Mario Rossi', await testa(G));
+  // Altro → «Il tuo nome»; un nome con caratteri HTML resta testo
+  await G.locator('.dock .more').click(); await G.locator('[data-m=nome]').click(); await G.waitForSelector('#nome-in');
+  await G.fill('#nome-in', '  <b>Mario</b>   Bianchi  '); await G.click('#nome-ok');
+  await G.waitForFunction(() => /Bianchi/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: si cambia da Altro, spazi ripuliti, caratteri HTML come testo', (await testa(G)) === 'Libreria di <b>Mario</b> Bianchi' && !(await G.locator('.exlibris b').count()) && (await profiloCloud('nome1')).data?.nome === '<b>Mario</b> Bianchi', await testa(G));
+  // «Esci» toglie il nome dal dispositivo
+  await G.locator('.dock .more').click(); await G.locator('[data-m=sync]').click(); await G.waitForSelector('#sy-out'); await G.click('#sy-out'); await G.click('#sy-out');
+  await G.waitForSelector('#porta', { timeout: 5000 }).catch(() => {});
+  ok('nome: «Esci» lo toglie dal dispositivo', !(await G.evaluate(() => localStorage.getItem('libreria-nome'))) && (await testa(G)) === 'La mia libreria', await testa(G));
+  await G.close2();
+
+  // Link via email (nessun nome dal profilo): «Come ti chiami?»
+  const E = await pagina({ porta: true });
+  await E.waitForFunction(() => !document.querySelector('#sy-link').disabled, null, { timeout: 10000 }).catch(() => {});
+  await E.fill('#porta #sy-email', 'diego@test.it'); await E.click('#porta #sy-link');
+  await E.fill('#porta #sy-paste', 'https://mylibrary-2ea05.firebaseapp.com/__/auth/action?mode=signIn&oobCode=abc'); await E.click('#porta #sy-paste-go');
+  await E.waitForSelector('#nome-in', { timeout: 10000 }).catch(() => {});
+  const chiesto = /Come ti chiami\?/.test(await E.locator('.sheet').innerText().catch(() => ''));
+  if (chiesto) { await E.fill('#nome-in', 'Anna'); await E.click('#nome-ok'); }
+  await E.waitForFunction(() => /Anna/.test(document.querySelector('.exlibris').textContent), null, { timeout: 8000 }).catch(() => {});
+  ok('nome: con il link via email l\'app chiede «Come ti chiami?» e lo salva', chiesto && (await testa(E)) === 'Libreria di Anna' && (await profiloCloud('u1')).data?.nome === 'Anna', await testa(E));
+  await E.close2();
+
+  // Amministratore senza profilo: resta «Margaira Diego», niente scritto nel cloud
+  const D = await pagina({ uid: ADMIN, email: 'diego.vero@example.com', nome: 'Diego Margaira' });
+  await entraGoogle(D); await D.waitForTimeout(1500);
+  ok('nome: l\'amministratore senza profilo resta «Margaira Diego»', (await testa(D)) === 'Libreria di Margaira Diego' && !(await profiloCloud(ADMIN)).exists, await testa(D));
+  await D.close2();
+}

@@ -11,7 +11,7 @@ export default async function ({ browser }) {
   resetCloud();
   let cdn = 0;
   const device = async () => {
-    const p = await newPage(browser);
+    const p = await newPage(browser, { init: { fn: () => localStorage.setItem('fake-name', 'Diego di prova') } }); // v95: con un nome dal profilo l'app non chiede «Come ti chiami?»
     p.on('request', r => { if (/cdn\.jsdelivr\.net/.test(r.url())) cdn++; });
     await p.goto(APP + '/'); await p.waitForTimeout(300);
     return p;

@@ -203,6 +203,28 @@
     if (esito === true) { ck.ammesso = true; saveCk(); }
     if (H.ammesso) H.ammesso(true, u.email); // anche se il controllo non ha risposto: il cloud resta protetto dalle regole
     start();
+    profilo(u);
+  }
+
+  // Nome nell'intestazione (v95): dal profilo nel cloud; se manca, da Google; se manca anche quello, l'app lo chiede.
+  // L'amministratore senza profilo resta «Margaira Diego» (niente scritto nel cloud).
+  const profiloDoc = uid => db.doc(`users/${uid}/meta/profilo`);
+  async function salvaNome(n) {
+    const nome = String(n || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!user || !nome) return;
+    await profiloDoc(user.uid).set({ nome, updated: Date.now() });
+    if (H.nome) H.nome(nome);
+  }
+  async function profilo(u) {
+    try {
+      const d = await profiloDoc(u.uid).get();
+      if (user !== u) return;
+      const nome = d.exists && d.data() && d.data().nome;
+      if (nome) { if (H.nome) H.nome(nome); return; }
+      if (H.isAdmin && H.isAdmin(u.uid)) return;
+      if (u.displayName && String(u.displayName).trim()) await salvaNome(u.displayName);
+      else if (H.chiediNome) H.chiediNome();
+    } catch {} // senza rete: resta il nome salvato sul dispositivo
   }
 
   async function start() {
@@ -270,6 +292,7 @@
       return auth.signInWithEmailLink(email, link).then(() => history.replaceState(null, "", location.pathname));
     },
     signOut() { return auth.signOut(); },
+    salvaNome,
     // Modifiche non ancora arrivate al cloud (v94: «Esci» le aspetta)
     inSospeso() { return !!(sincronizzo || timer || pending.size || gone.size || (info && info.pending)); },
     // «Esci» (v94): fuori dall'account e via i libri da questo dispositivo (restano nel cloud)

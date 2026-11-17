@@ -66,7 +66,7 @@
       const m = localStorage.getItem('fake-popup') || 'ok'; localStorage.setItem('fake-popup-called', '1');
       if (m === 'blocked') return Promise.reject({ code: 'auth/popup-blocked' });
       if (m === 'closed') return Promise.reject({ code: 'auth/popup-closed-by-user' });
-      setUser({ uid: localStorage.getItem('fake-uid') || 'u1', email: localStorage.getItem('fake-email') || 'diego@test.it' }); return Promise.resolve({});
+      setUser({ uid: localStorage.getItem('fake-uid') || 'u1', email: localStorage.getItem('fake-email') || 'diego@test.it', displayName: localStorage.getItem('fake-name') || null }); return Promise.resolve({});
     },
     signInWithRedirect: () => { const err = localStorage.getItem('fake-redirect-error'); if (err) return Promise.reject({ code: err }); localStorage.setItem('fake-redirect-called', '1'); setTimeout(() => location.reload(), 50); return new Promise(() => {}); },
     signOut: () => { setUser(null); return Promise.resolve(); },

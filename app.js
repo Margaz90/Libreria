@@ -89,6 +89,14 @@
   // Su invito (v94): l'amministratore (Diego) per uid; stesso elenco in firestore.rules.
   const ADMIN_UIDS = ["46AtxF1piJQGsWcqm665Wjf6nFA3"];
   const isAdmin = uid => ADMIN_UIDS.includes(uid);
+  // Nome nell'intestazione (v95): «Libreria di {nome}». Copia locale per disegnarlo subito; il nome vero sta nel cloud (users/{uid}/meta/profilo).
+  const NOME_KEY = "libreria-nome";
+  const pulisciNome = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  function mostraNome() {
+    let n = ""; try { n = localStorage.getItem(NOME_KEY) || ""; } catch {}
+    const el = document.querySelector(".exlibris"); if (!el) return;
+    el.textContent = n ? "Libreria di " + n : isAdmin(cloudInfo().uid) ? "Libreria di Margaira Diego" : "La mia libreria";
+  }
   // Chi è connesso e l'ultima email usata (solo per riconoscere il dispositivo, nessun dato dei libri).
   const CLOUD_KEY = "libreria-cloud";
   const cloudInfo = () => { try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; } };
@@ -1864,6 +1872,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     document.querySelectorAll(".viewsw [data-mode]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.mode === state.mode)));
   }
   function render() {
+    mostraNome();
     renderTally(); renderNotice(); renderNav(); renderHero();
     const main = $("#main");
     const sk = state.view === "stats" ? statsFocusKey() : null;
@@ -2806,6 +2815,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       <div class="menu-list">
         <button type="button" data-m="sync"><b>Accedi e sincronizza</b><span>${cloud.email ? "Collegato come " + esc(cloud.email) : "La stessa libreria su iPhone, iPad e computer"}</span></button>
         <button type="button" data-m="goal"><b>Obiettivo ${y}</b><span>${goal ? `${done} di ${goal} libri` : "Non ancora fissato"}</span></button>
+        ${cloud.email ? `<button type="button" data-m="nome"><b>Il tuo nome</b><span>${esc((() => { try { return localStorage.getItem(NOME_KEY) || ""; } catch { return ""; } })() || "Come compare in alto")}</span></button>` : ""}
         ${isAdmin(cloudInfo().uid) && cloud.email ? `<button type="button" data-m="inv"><b>Invitati</b><span>Chi può usare MyLibrary</span></button>` : ""}
         <button type="button" data-m="backup" class="${backupDue() ? "due" : ""}"><b>Backup, importa e copertine</b><span>${days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`}${missing ? ` · ${missing} senza copertina` : ""}</span></button>
       </div>
@@ -2814,6 +2824,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("[data-m=backup]", sheet).onclick = openImport;
     $("[data-m=sync]", sheet).onclick = openSync;
     const inv = $("[data-m=inv]", sheet); if (inv) inv.onclick = openInvitati;
+    const nm = $("[data-m=nome]", sheet); if (nm) nm.onclick = () => apriNome();
     $("#m-close", sheet).onclick = closeSheet;
   }
 
@@ -2868,6 +2879,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     isAdmin,
     ammesso(si, email) { if (!PORTA) return; if (si) { if ($("#porta")) { chiudiPorta(); render(); } } else mostraPorta("invito", email); },
     pulisci: opz => pulisciDispositivo(opz),
+    nome(n) { try { localStorage.setItem(NOME_KEY, pulisciNome(n)); } catch {} mostraNome(); },
+    chiediNome: () => apriNome({ primaVolta: true }),
     accountLink: () => ACCOUNT_LINK
   };
   const ACCOUNT_LINK = "Questo indirizzo è già collegato con il link via email: accedi con il link qui sotto.";
@@ -2961,14 +2974,32 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   // «Esci» (v94): via dal dispositivo i dati di questo account (restano nel cloud), così un'altra persona non li vede né li riceve.
   function pulisciDispositivo({ soloAccount = false } = {}) {
     dataGen++; novita.busy = false; // i lavori in sottofondo dell'account che esce (Novità, copertine) non scrivono più
-    if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); } catch {} cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
+    if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); localStorage.removeItem(NOME_KEY); } catch {} mostraNome(); cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
     try {
-      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY].includes(k)) localStorage.removeItem(k);
+      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY, NOME_KEY].includes(k)) localStorage.removeItem(k);
     } catch {}
     try { indexedDB.deleteDatabase("libreria-copie"); } catch {} // le copie di «Annulla» contengono i libri di questo account
     try { const s = getSet(); delete s.goals; delete s.goalsAt; delete s.lastBackup; localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch {} // l'obiettivo è dell'account (va nel cloud): non deve passare al prossimo
-    state.books = []; novitaMem = null; cloud.email = "";
+    state.books = []; novitaMem = null; cloud.email = ""; mostraNome();
     if (PORTA) mostraPorta("accesso"); else render();
+  }
+  // «Come ti chiami?» (v95): al primo ingresso senza nome (link via email) e da Altro → «Il tuo nome».
+  function apriNome({ primaVolta = false } = {}) {
+    if (primaVolta && (sheetOpen() || $("#porta"))) { setTimeout(() => apriNome({ primaVolta }), 1500); return; } // dopo l'unione o la porta
+    let att = ""; try { att = localStorage.getItem(NOME_KEY) || ""; } catch {}
+    const sheet = openSheet(`<h2>${primaVolta ? "Come ti chiami?" : "Il tuo nome"}</h2>
+      <p class="hint">Compare in alto: «Libreria di …». Lo vedi solo tu, su tutti i tuoi dispositivi.</p>
+      <div class="field"><label for="nome-in">Nome</label><input id="nome-in" type="text" autocomplete="name" maxlength="60" value="${esc(att)}"></div>
+      <div class="actions"><button class="btn primary" id="nome-ok">Salva</button><button class="btn ghost" id="nome-no">${primaVolta ? "Più tardi" : "Chiudi"}</button></div>
+      <div class="status-line" id="nome-st" aria-live="polite"></div>`);
+    $("#nome-no", sheet).onclick = closeSheet;
+    $("#nome-ok", sheet).onclick = () => {
+      const n = pulisciNome($("#nome-in", sheet).value);
+      if (!n) { $("#nome-st", sheet).textContent = "Scrivi un nome."; return; }
+      $("#nome-st", sheet).textContent = "Salvo…";
+      loadCloud().then(c => c.salvaNome(n)).then(closeSheet, e => { $("#nome-st", sheet).textContent = "Non riesco a salvarlo (" + errText(e) + ")."; });
+    };
+    setTimeout(() => $("#nome-in", sheet).focus(), 50);
   }
   // Invitati (v94, solo l'amministratore): elenco delle email che possono usare l'app; le regole di Firestore lo impongono.
   function openInvitati() {
