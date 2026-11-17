@@ -82,7 +82,7 @@
   // </regole>
   // Dove gira l'app (v90): sul sito Firebase l'accesso con Google funziona anche nell'app installata su iPhone.
   // <regole>
-  const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "margaz90.github.io": "vecchio" };
+  const SITI = { "mylibrary-2ea05.web.app": "firebase", "mylibrary-2ea05.firebaseapp.com": "firebase", "mylibrary-2ea05--anteprima-roidf2ds.web.app": "firebase", "margaz90.github.io": "vecchio" }; // l'anteprima (docs/anteprima-passi.md) si comporta come il sito vero
   const sitoDi = h => { const k = String(h || "").toLowerCase(); return Object.hasOwn(SITI, k) ? SITI[k] : "altro"; };
   // </regole>
   const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test

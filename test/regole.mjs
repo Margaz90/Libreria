@@ -98,7 +98,8 @@ export default async function run() {
   }
 
   // ---- v90: dove gira l'app (sito Firebase, vecchio sito, altro) ----
-  const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'],
+  const casiSito = [['mylibrary-2ea05.web.app', 'firebase'], ['MYLIBRARY-2EA05.WEB.APP', 'firebase'], ['mylibrary-2ea05.firebaseapp.com', 'firebase'], ['mylibrary-2ea05--anteprima-roidf2ds.web.app', 'firebase'],
+    ['mylibrary-2ea05--altro-abc.web.app', 'altro'],
     ['margaz90.github.io', 'vecchio'], ['localhost', 'altro'], ['evil-mylibrary-2ea05.web.app', 'altro'], ['constructor', 'altro'], ['mylibrary-2ea05.web.app.evil.com', 'altro'], ['', 'altro'], [undefined, 'altro']];
   ok('sitoDi: dove gira l\'app (somiglianze non contano)', casiSito.every(([h, s]) => R.sitoDi(h) === s), j(casiSito.map(([h]) => R.sitoDi && R.sitoDi(h))));
 
