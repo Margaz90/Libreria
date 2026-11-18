@@ -33,6 +33,15 @@ async function suggerimento(browser) {
   await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti'));
   await p.reload(); await p.waitForSelector('#main [data-id]'); await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(2500);
   ok('in Statistiche il suggerimento non compare', !/tieni premuto/i.test(await p.evaluate(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '))));
+  // Un altro avviso al momento giusto: il suggerimento aspetta e riprova
+  await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti'));
+  await p.reload(); await p.waitForSelector('#main [data-id]');
+  await p.evaluate(() => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = 'Arrivati 3 libri'; document.body.append(t); setTimeout(() => t.remove(), 3000); });
+  const dopo = await p.waitForFunction(() => /tieni premuto/i.test([...document.querySelectorAll('.toast')].map(x => x.textContent).join(' ')), null, { timeout: 12000 }).then(() => true, () => false);
+  ok('se c\'è già un altro avviso, il suggerimento compare dopo', dopo);
+  // «Esci» dimentica i suggerimenti: chi entra dopo sullo stesso telefono li vede
+  await p.evaluate(() => { localStorage.setItem('libreria-suggerimenti', '{"pressione":1}'); window.libreriaHost.pulisci(); });
+  ok('«Esci» dimentica il suggerimento già visto', await p.evaluate(() => localStorage.getItem('libreria-suggerimenti') === null));
   ok('suggerimento: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }

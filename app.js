@@ -1360,12 +1360,14 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   let suggTimer = null;
   function pianificaSuggerimento() {
     if (suggTimer || state.view !== "libreria" || suggerimentoVisto("pressione")) return;
-    suggTimer = setTimeout(() => {
+    const prova = () => {
       suggTimer = null;
-      if (state.view !== "libreria" || suggerimentoVisto("pressione") || sheetOpen() || document.querySelector(".toast")) return;
+      if (state.view !== "libreria" || suggerimentoVisto("pressione")) return;
+      if (sheetOpen() || document.querySelector(".toast")) { suggTimer = setTimeout(prova, 4000); return; } // c'è già qualcosa da leggere: riprovo dopo
       segnaSuggerimento("pressione");
       toast("Suggerimento: tieni premuto su un libro per cambiarne lo stato al volo o per eliminarlo.", null, { ms: 6000 });
-    }, 1500);
+    };
+    suggTimer = setTimeout(prova, 1500);
   }
   function renderNotice() {
     const n = $("#notice");
@@ -3081,7 +3083,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     dataGen++; novita.busy = false; // i lavori in sottofondo dell'account che esce (Novità, copertine) non scrivono più
     if (soloAccount) { try { localStorage.removeItem(CLOUD_KEY); localStorage.removeItem(NOME_KEY); } catch {} mostraNome(); cloud.email = ""; if (PORTA) mostraPorta("accesso"); else render(); return; }
     try {
-      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY, NOME_KEY].includes(k)) localStorage.removeItem(k);
+      for (const k of Object.keys(localStorage)) if (k === LS_KEY || k.startsWith("libreria-spine-") || [TOMB_KEY, CLOUD_KEY, NOV_KEY, NOME_KEY, SUGG_KEY].includes(k)) localStorage.removeItem(k);
     } catch {}
     try { indexedDB.deleteDatabase("libreria-copie"); } catch {} // le copie di «Annulla» contengono i libri di questo account
     try { const s = getSet(); delete s.goals; delete s.goalsAt; delete s.lastBackup; localStorage.setItem(SET_KEY, JSON.stringify(s)); } catch {} // l'obiettivo è dell'account (va nel cloud): non deve passare al prossimo
