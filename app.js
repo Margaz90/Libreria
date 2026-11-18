@@ -63,7 +63,7 @@
         if (to) to.focus();
       }
       t.remove();
-    }, action ? 10000 : 2800);
+    }, opts.ms || (action ? 10000 : 2800));
   }
 
   /* ---------- impostazioni ---------- */
@@ -1356,16 +1356,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const SUGG_KEY = "libreria-suggerimenti";
   const suggerimentoVisto = k => { try { return !!(JSON.parse(localStorage.getItem(SUGG_KEY) || "{}") || {})[k]; } catch { return false; } };
   const segnaSuggerimento = k => { try { localStorage.setItem(SUGG_KEY, JSON.stringify({ ...(JSON.parse(localStorage.getItem(SUGG_KEY) || "{}") || {}), [k]: 1 })); } catch {} };
+  // v101: il gesto che non si scopre da soli, detto una volta con un messaggio temporaneo (mai sopra una scheda o un altro avviso).
+  let suggTimer = null;
+  function pianificaSuggerimento() {
+    if (suggTimer || state.view !== "libreria" || suggerimentoVisto("pressione")) return;
+    suggTimer = setTimeout(() => {
+      suggTimer = null;
+      if (state.view !== "libreria" || suggerimentoVisto("pressione") || sheetOpen() || document.querySelector(".toast")) return;
+      segnaSuggerimento("pressione");
+      toast("Suggerimento: tieni premuto su un libro per cambiarne lo stato al volo o per eliminarlo.", null, { ms: 6000 });
+    }, 1500);
+  }
   function renderNotice() {
     const n = $("#notice");
     $("#archive-dot").hidden = !backupDue();
-    if (state.books.length) { // v101: una volta sola, il gesto che non si scopre da soli
-      const mostra = state.view === "libreria" && !suggerimentoVisto("pressione");
-      n.hidden = !mostra;
-      n.innerHTML = mostra ? `<div class="notice suggerimento"><span><strong>Suggerimento:</strong> tieni premuto su un libro per cambiarne lo stato al volo o per eliminarlo.</span><span class="actions"><button class="btn" id="sugg-ok" type="button">Ho capito</button></span></div>` : "";
-      if (mostra) $("#sugg-ok").onclick = () => { segnaSuggerimento("pressione"); renderNotice(); };
-      return;
-    }
+    if (state.books.length) { n.hidden = true; n.innerHTML = ""; pianificaSuggerimento(); return; }
     n.hidden = false;
     // v89: dopo aver tolto l'app dalla Home i libri tornano dal cloud, quindi senza accesso «Accedi» viene prima.
     // v100: tre strade per chi parte da zero (un libro alla volta) o ha già una lista (Excel, CSV di Goodreads, backup).
@@ -2067,7 +2072,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     el.addEventListener("contextmenu", e => e.preventDefault());
   }
   function openQuick(b) {
-    if (!suggerimentoVisto("pressione")) { segnaSuggerimento("pressione"); renderNotice(); } // il gesto è stato scoperto
+    segnaSuggerimento("pressione"); // il gesto è stato scoperto: niente suggerimento
     const sheet = openSheet(`<div class="quick">
       <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
       <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
@@ -2193,7 +2198,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </div>
       <div class="grid2">
         <div class="field"><label for="d-genre">Genere</label><input id="d-genre" value="${esc(b.genre || "")}"></div>
-        <div class="field"><label for="d-call">Segnatura (facoltativa)</label><input id="d-call" value="${esc(b.callNo || "")}" placeholder="853.914 LEV"></div>
+        <div class="field"><label for="d-call">Segnatura</label><input id="d-call" value="${esc(b.callNo || "")}" placeholder="Facoltativa"></div>
       </div>`;
   }
   // `esistente`: scheda di un libro già in libreria. Lì cambiare lo stato è un passaggio (regole di lettura): l'inizio

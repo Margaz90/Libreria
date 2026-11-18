@@ -18,18 +18,21 @@ async function compatto(browser) {
 async function suggerimento(browser) {
   const p = await newPage(browser, { suggerimenti: true });
   await carica(p, libri108());
-  ok('suggerimento: «tieni premuto» compare una volta con dei libri', /tieni premuto/i.test(await p.locator('#notice').innerText().catch(() => '')) && await p.locator('#notice').isVisible());
-  await p.click('#sugg-ok'); await p.waitForTimeout(200);
-  ok('«Ho capito» lo toglie', !(await p.locator('#notice').isVisible()));
-  await p.reload(); await p.waitForSelector('#main [data-id]'); await p.waitForTimeout(300);
-  ok('e non torna riaprendo l\'app', !(await p.locator('#notice').isVisible()));
-  await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti')); await p.reload(); await p.waitForSelector('#main [data-id]'); await p.waitForTimeout(300);
+  ok('suggerimento: niente riquadro in cima alla pagina', !(await p.locator('#notice').isVisible()));
+  const t = await p.waitForFunction(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '), null, { timeout: 4000 }).then(h => h.jsonValue(), () => '');
+  ok('suggerimento: compare come messaggio temporaneo («tieni premuto…»)', /tieni premuto/i.test(t), t);
+  const via = await p.waitForFunction(() => !document.querySelector('.toast'), null, { timeout: 12000 }).then(() => true, () => false);
+  ok('il messaggio se ne va da solo', via);
+  await p.reload(); await p.waitForSelector('#main [data-id]'); await p.waitForTimeout(2500);
+  ok('e non torna riaprendo l\'app', !/tieni premuto/i.test(await p.evaluate(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '))));
+  await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti')); await p.reload(); await p.waitForSelector('#main [data-id]');
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.locator('#main [data-id]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 });
-  await p.waitForSelector('.quick'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
-  ok('usare la pressione prolungata vale come «Ho capito»', !(await p.locator('#notice').isVisible()));
-  await p.locator('.dock [data-view="stats"]').click(); await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti')); await p.locator('.dock [data-view="libreria"]').click(); await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(300);
-  ok('in Statistiche il suggerimento non compare', !(await p.locator('#notice').isVisible()));
+  await p.waitForSelector('.quick'); await p.keyboard.press('Escape'); await p.waitForTimeout(2500);
+  ok('chi usa già la pressione prolungata non lo vede', !/tieni premuto/i.test(await p.evaluate(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '))) && await p.evaluate(() => /pressione/.test(localStorage.getItem('libreria-suggerimenti') || '')));
+  await p.evaluate(() => localStorage.removeItem('libreria-suggerimenti'));
+  await p.reload(); await p.waitForSelector('#main [data-id]'); await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(2500);
+  ok('in Statistiche il suggerimento non compare', !/tieni premuto/i.test(await p.evaluate(() => [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '))));
   ok('suggerimento: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
@@ -43,7 +46,9 @@ async function nomi(browser) {
   ok('la scheda si chiama «Carica da un file»', (await p.locator('.sheet h2').innerText()) === 'Carica da un file');
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   await p.locator('.dock [data-act="add"]').click(); await p.waitForSelector('#a-mano'); await p.click('#a-mano');
-  ok('Nuovo libro: «Segnatura (facoltativa)»', /facoltativa/i.test(await p.locator('label[for="d-call"]').innerText()));
+  ok('Nuovo libro: la segnatura dice di essere facoltativa', /facoltativa/i.test(await p.getAttribute('#d-call', 'placeholder')));
+  const y = await p.evaluate(() => ['#d-genre', '#d-call'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top)));
+  ok('Nuovo libro: «Segnatura» alla stessa altezza di «Genere»', y[0] === y[1], y.join(' / '));
   ok('nomi: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
