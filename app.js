@@ -1344,12 +1344,6 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         ? `<b>${done} di ${goal}</b> libri nel ${y}<em>${goalPace(done, goal, y)}</em>`
         : `<b>${done} libri</b> letti nel ${y}<em>Tocca per fissare un obiettivo</em>`}</span></button>`;
     $("#goal-btn").onclick = openGoal;
-    // v103: sul telefono l'obiettivo sta in alto accanto alla nuvola (la riga dell'obiettivo non c'è più)
-    const c = 2 * Math.PI * 12, m = $("#goal-mini");
-    m.innerHTML = `<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" class="ring-bg${goal ? "" : " vuoto"}"/>${goal && done ? `<circle cx="15" cy="15" r="12" class="ring-fg" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 15 15)"/>` : ""}<text x="15" y="19.5">${done}</text></svg>${goal ? `<span>/${goal}</span>` : ""}`;
-    m.setAttribute("aria-label", goal ? `Obiettivo ${y}: ${done} di ${goal} libri` : `${done} libri letti nel ${y}: tocca per fissare un obiettivo`);
-    m.title = m.getAttribute("aria-label");
-    m.onclick = openGoal;
   }
   function goalPace(done, goal, y) {
     if (done >= goal) return "Obiettivo raggiunto!";
@@ -1592,13 +1586,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const order = (state.filter === "tutti" ? shelfOrder() : [state.filter]).filter(st => st !== "in-lettura");
     return order.map(st => shelfHTML(st, list)).join("");
   }
+  // v103: sul telefono l'obiettivo dell'anno sta sullo scaffale «Letti», con un anello piccolo (il riquadro dell'obiettivo resta sul computer).
+  function obiettivoScaffaleHTML() {
+    const y = new Date().getFullYear(), t = today(), done = state.books.filter(b => b.status === "letto" && lettura.annoLetto(b, t) === y).length;
+    const goal = (getSet().goals || {})[y] || 0, c = 2 * Math.PI * 9.5, pct = goal ? Math.min(1, done / goal) : 0;
+    const ring = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" class="ring-bg${goal ? "" : " vuoto"}"/>${goal && done ? `<circle cx="12" cy="12" r="9.5" class="ring-fg" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 12 12)"/>` : ""}</svg>`;
+    const label = goal ? `Obiettivo ${y}: ${done} di ${goal} libri` : `${done} libri letti nel ${y}: tocca per fissare un obiettivo`;
+    return `<button class="obiettivo-sc" type="button" data-goal aria-label="${label}" title="${label}">${ring}<span>${goal ? `<b>${done} di ${goal}</b> nel ${y}` : `<b>${done}</b> nel ${y}`}</span></button>`;
+  }
   function shelfHTML(st, list) {
     const all = sorted(list.filter(b => b.status === st));
     const books = st === "in-lettura" ? all : all.slice(0, state.limit[st] || PAGE); // le letture in corso sono poche: le mostro tutte
     const spines = books.map(b => spineHTML(b)).join("");
     const more = all.length - books.length;
     const moreBtn = st === "in-lettura" ? "" : pagerHTML(st, books.length, all.length);
-    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2>${st === "da-leggere" && all.length ? `<button class="btn choose" type="button" data-choose>Scegli per me</button>` : ""}<span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
+    return `<section class="shelf-block" data-shelf="${st}"><div class="shelf-head"><h2>${STATUS[st]}</h2>${st === "da-leggere" && all.length ? `<button class="btn choose" type="button" data-choose>Scegli per me</button>` : ""}${st === "letto" ? obiettivoScaffaleHTML() : ""}<span>${all.length} ${all.length === 1 ? "volume" : "volumi"}</span></div>
       ${st === "in-lettura" ? readingCards(books) : ""}
       ${st === "in-lettura" && books.length ? "" : `<div class="row">${spines || `<div class="empty-shelf">${st === "in-lettura" ? "Nessun libro in lettura. Tieni premuto un dorso per iniziarne uno." : st === "desiderato" ? "Nessun desiderio. Con + Libro puoi salvare un libro nella lista dei desideri." : "Scaffale vuoto."}</div>`}</div>`}
       ${moreBtn}</section>`;
@@ -1985,6 +1987,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     root.querySelectorAll("[data-story]").forEach(btn => btn.onclick = () => openStory(Number(btn.dataset.story)));
     const ym = root.querySelector("#ys-more");
     if (ym) ym.onclick = () => { statsOld = !statsOld; const box = $("#ys-old"); box.hidden = !statsOld; ym.setAttribute("aria-expanded", statsOld); ym.textContent = statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${box.querySelectorAll("section.ys").length})`; };
+    root.querySelectorAll("[data-goal]").forEach(btn => btn.onclick = openGoal);
     root.querySelectorAll("[data-choose]").forEach(btn => btn.onclick = () => { const s = openSheet(""); fillNext(s); $("button", s).focus(); });
     root.querySelectorAll("[data-id]").forEach(wireItem);
     root.querySelectorAll("[data-more]").forEach(btn => btn.onclick = () => {

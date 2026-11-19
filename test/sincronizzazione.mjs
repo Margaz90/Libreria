@@ -107,7 +107,7 @@ export default async function ({ browser }) {
 
   // 10. Obiettivo impostato su A arriva su B
   const year = new Date().getFullYear();
-  await A.locator('#goal-mini:visible, #tally .goal:visible').first().click(); await A.waitForSelector('#g-n'); await A.fill('#g-n', '5'); await A.click('#g-save');
+  await A.locator('.obiettivo-sc:visible, #tally .goal:visible').first().click(); await A.waitForSelector('#g-n'); await A.fill('#g-n', '5'); await A.click('#g-save');
   const goal = await wait(async () => (await B.evaluate(y => (JSON.parse(localStorage.getItem('libreria-settings') || '{}').goals || {})[y], year)) === 5, 8000).then(() => true, () => false);
   ok('obiettivo impostato su A arriva su B', goal);
 

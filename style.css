@@ -54,12 +54,15 @@ button { cursor: pointer; }
 
 header.top { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; position: relative; }
 /* v102: stato della sincronizzazione, in alto a destra (si tocca per aprire Account) */
-.goal-mini { display: none; position: absolute; top: 34px; right: 34px; height: 44px; min-width: 44px; align-items: center; gap: 4px; border: 0; background: none; padding: 0 4px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.goal-mini svg { width: 30px; height: 30px; flex: none; }
-.goal-mini .ring-bg { fill: none; stroke: var(--rule); stroke-width: 4; }
-.goal-mini .ring-bg.vuoto { stroke-dasharray: 3 3; }
-.goal-mini .ring-fg { fill: none; stroke: var(--coral); stroke-width: 4; stroke-linecap: round; }
-.goal-mini text { font-family: var(--display); font-size: 13px; fill: var(--ink); text-anchor: middle; }
+/* v103: obiettivo sullo scaffale «Letti» (telefono): anello piccolo e testo al posto del solo conteggio */
+.obiettivo-sc { display: none; align-items: center; gap: 6px; margin-left: auto; border: 0; background: none; padding: 0 2px; min-height: 44px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.obiettivo-sc b { color: var(--ink); font-weight: 600; }
+.obiettivo-sc svg { width: 24px; height: 24px; flex: none; }
+.obiettivo-sc .ring-bg { fill: none; stroke: var(--rule); stroke-width: 3.5; }
+.obiettivo-sc .ring-bg.vuoto { stroke-dasharray: 3 3; }
+.obiettivo-sc .ring-fg { fill: none; stroke: var(--coral); stroke-width: 3.5; stroke-linecap: round; }
+.shelf-head .obiettivo-sc span { font-family: var(--text, inherit); font-size: 12.5px; color: var(--muted); }
+.shelf-head .obiettivo-sc + span::before { content: "· "; }
 .sync-stato { position: absolute; top: 34px; right: -10px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 50%; }
 .sync-stato svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sync-stato[data-s="attesa"] { color: var(--title); }
@@ -240,8 +243,9 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   .filters { display: flex; flex-direction: row; align-items: center; gap: 4px; } /* v103: lente e vista a destra dei filtri */
   .filters .pills { flex: 1; min-width: 0; width: auto; align-self: auto; overflow-x: auto; scrollbar-width: none; }
   .filters .pill { flex: none; padding: 7px 10px; } /* filtri interi: quelli che non ci stanno si raggiungono scorrendo di lato */
-  .sumrow { display: none; } /* v103: l'obiettivo sta in alto accanto alla nuvola (#goal-mini) */
-  .goal-mini { display: flex; }
+  .sumrow { display: none; } /* v103: l'obiettivo sta sullo scaffale «Letti» (.obiettivo-sc) */
+  .obiettivo-sc { display: flex; }
+  .shelf-head:has(.obiettivo-sc) { align-items: center; }
   .sumrow .tally { flex: 1; min-width: 0; margin-top: 0; }
   .sumrow .tally .goal { width: auto; }
   .sumrow .viewsw-m { display: flex; flex: none; }
