@@ -51,7 +51,7 @@ async function libreria(browser) {
   ok('pallino sui dorsi: piccolo e senza «!»', bd.txt === '' && bd.w <= 13 && bd.h <= 13 && bd.h >= 10, JSON.stringify(bd));
   const pg = await stile(p, '#main .pager');
   ok('«Mostra altri 15»: senza riquadro tratteggiato', pg && pg.border !== 'dashed', JSON.stringify(pg));
-  const sw = () => p.evaluate(() => { const e = document.querySelector('.viewsw-m'); return !!e && !!e.offsetParent && getComputedStyle(e).display !== 'none'; });
+  const sw = () => p.evaluate(() => { const e = document.querySelector('.toolbar .viewsw'); /* v103: sul telefono sta a destra dei filtri */ return !!e && !!e.offsetParent && getComputedStyle(e).display !== 'none'; });
   ok('selettore Dorsi/Copertine visibile in Libreria', await sw());
   await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(400);
   ok('selettore Dorsi/Copertine nascosto in Statistiche', !(await sw()));
