@@ -1344,6 +1344,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         ? `<b>${done} di ${goal}</b> libri nel ${y}<em>${goalPace(done, goal, y)}</em>`
         : `<b>${done} libri</b> letti nel ${y}<em>Tocca per fissare un obiettivo</em>`}</span></button>`;
     $("#goal-btn").onclick = openGoal;
+    // v103: sul telefono l'obiettivo sta in alto accanto alla nuvola (la riga dell'obiettivo non c'è più)
+    const c = 2 * Math.PI * 12, m = $("#goal-mini");
+    m.innerHTML = `<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" class="ring-bg${goal ? "" : " vuoto"}"/>${goal && done ? `<circle cx="15" cy="15" r="12" class="ring-fg" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 15 15)"/>` : ""}<text x="15" y="19.5">${done}</text></svg>${goal ? `<span>/${goal}</span>` : ""}`;
+    m.setAttribute("aria-label", goal ? `Obiettivo ${y}: ${done} di ${goal} libri` : `${done} libri letti nel ${y}: tocca per fissare un obiettivo`);
+    m.title = m.getAttribute("aria-label");
+    m.onclick = openGoal;
   }
   function goalPace(done, goal, y) {
     if (done >= goal) return "Obiettivo raggiunto!";

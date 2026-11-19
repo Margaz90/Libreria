@@ -54,7 +54,13 @@ button { cursor: pointer; }
 
 header.top { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; position: relative; }
 /* v102: stato della sincronizzazione, in alto a destra (si tocca per aprire Account) */
-.sync-stato { position: absolute; top: 12px; right: -10px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 50%; }
+.goal-mini { display: none; position: absolute; top: 34px; right: 34px; height: 44px; min-width: 44px; align-items: center; gap: 4px; border: 0; background: none; padding: 0 4px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.goal-mini svg { width: 30px; height: 30px; flex: none; }
+.goal-mini .ring-bg { fill: none; stroke: var(--rule); stroke-width: 4; }
+.goal-mini .ring-bg.vuoto { stroke-dasharray: 3 3; }
+.goal-mini .ring-fg { fill: none; stroke: var(--coral); stroke-width: 4; stroke-linecap: round; }
+.goal-mini text { font-family: var(--display); font-size: 13px; fill: var(--ink); text-anchor: middle; }
+.sync-stato { position: absolute; top: 34px; right: -10px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 50%; }
 .sync-stato svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sync-stato[data-s="attesa"] { color: var(--title); }
 .sync-stato[data-s="offline"] { color: var(--accent); }
@@ -231,9 +237,11 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   #searchbar { order: 2; }
   .tally .goal { border: 0; background: none; padding: 0; border-radius: 0; gap: 8px; }
   .pace-extra { display: none; }
-  .filters { display: flex; flex-direction: column; align-items: stretch; }
-  .toolbar .viewsw { display: none; } /* sul telefono il selettore sta nella riga dell'obiettivo */
-  .sumrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
+  .filters { display: flex; flex-direction: row; align-items: center; gap: 4px; } /* v103: lente e vista a destra dei filtri */
+  .filters .pills { flex: 1; min-width: 0; width: auto; align-self: auto; overflow-x: auto; scrollbar-width: none; }
+  .filters .pill { flex: none; padding: 7px 10px; } /* filtri interi: quelli che non ci stanno si raggiungono scorrendo di lato */
+  .sumrow { display: none; } /* v103: l'obiettivo sta in alto accanto alla nuvola (#goal-mini) */
+  .goal-mini { display: flex; }
   .sumrow .tally { flex: 1; min-width: 0; margin-top: 0; }
   .sumrow .tally .goal { width: auto; }
   .sumrow .viewsw-m { display: flex; flex: none; }
@@ -249,7 +257,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   /* v100: ricerca e «Ordina» dietro la lente, aperti solo quando servono */
   #searchbar { display: none; }
   body.cerca-aperta #searchbar { display: flex; }
-  .cerca-apri { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -4px -6px 0; border: 0; background: none; color: var(--muted); border-radius: 10px; }
+  .cerca-apri { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: 0; border: 0; background: none; color: var(--muted); border-radius: 10px; }
   .cerca-apri[aria-expanded="true"] { color: var(--ink); background: var(--surface); }
   .tally .goal-txt em { display: none; } /* sul telefono niente "ne mancano": resta il conteggio */
   .goal svg { width: 30px; height: 30px; }
