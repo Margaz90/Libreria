@@ -1937,7 +1937,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("#n-all").textContent = n.tutti || "";
     document.querySelectorAll("#dock [data-view]").forEach(t => t.setAttribute("aria-current", t.dataset.view === state.view ? "page" : "false"));
     document.querySelectorAll(".viewsw [data-mode]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.mode === state.mode)));
+    sfumaFiltri();
   }
+  // v104: sul telefono i filtri che non ci stanno sfumano verso destra (invece di un taglio a metà parola); in fondo la sfumatura sparisce.
+  function sfumaFiltri() { const p = $("#pills"); if (!p) return; p.classList.toggle("scorre", p.scrollWidth - p.clientWidth - p.scrollLeft > 2); p.classList.toggle("scorre-sx", p.scrollLeft > 2); }
+  $("#pills").addEventListener("scroll", sfumaFiltri, { passive: true });
+  addEventListener("resize", sfumaFiltri);
   function render() {
     mostraNome();
     renderTally(); renderNotice(); renderNav(); renderHero();
