@@ -146,7 +146,7 @@ async function bollino(browser) {
   ok('classe long per 12.5 e 100, non per 3', await p.locator('#main [data-id="w1"] .sno.long').count() === 1 && await p.locator('#main [data-id="c1"] .sno.long').count() === 1 && await p.locator('#main [data-id="d1"] .sno.long').count() === 0);
   const rc = p.locator('#hero .rcard');
   ok('scheda In lettura: autore e poi «Slough House · 4» su una riga sua, senza bollino', /Slough House · 4/.test(await rc.locator('.rser').innerText().catch(() => '')) && !/Slough/.test(await rc.locator('.rmeta:not(.rser)').innerText().catch(() => '')) && await rc.locator('.sno').count() === 0);
-  await p.locator('.viewsw [data-mode="copertine"]').first().click();
+  await p.locator('.viewsw [data-mode=\"copertine\"]:visible').first().click();
   await p.waitForSelector('#main .card[data-id="d1"] .sno');
   // A volte, solo nella suite completa, il primo controllo arriva prima che le copertine siano stabili: aspetta lo stato atteso.
   await wait(async () => (await sno('d1').innerText()).trim() === '3' && await sno('n1').count() === 0).catch(() => {});

@@ -203,7 +203,7 @@ async function anello(browser) {
     { ...base, id: 'a4', title: 'Anno passato', status: 'letto', finished: `${Y - 1}-06-01` },
     { ...base, id: 'a5', title: 'Da leggere', status: 'da-leggere' },
   ], { 'libreria-settings': JSON.stringify({ goals: { [Y]: 10 } }) });
-  const tally = (await p.locator('#tally').innerText()).replace(/\s+/g, ' ');
+  const tally = (await p.locator('#tally .goal-txt').textContent()).replace(/\s+/g, ' '); // v103: sul telefono la riga è nascosta, il testo resta
   ok('anello: conta la fine passata e «solo l\'anno», non la fine futura', /\b2 di 10\b/.test(tally), tally);
   const stats = await p.evaluate(y => { const s = window.libreriaStats.compute(JSON.parse(localStorage.getItem('libreria-diego-v1')), new Date()); const yr = (s.anni || []).find(x => x.year === y); return yr ? yr.count : 0; }, Y);
   ok('anello: stesso numero delle Statistiche', stats === 2, String(stats));

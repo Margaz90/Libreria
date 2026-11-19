@@ -9,6 +9,8 @@ Per vedere una versione nuova sulla propria libreria prima che arrivi a tutti (1
 - Nell'anteprima si entra con il proprio account e si vede la propria libreria dal cloud. **Attenzione: è la stessa libreria, quindi una modifica fatta nell'anteprima è vera e arriva anche nell'app.**
 - Va aperta in Safari, senza aggiungerla alla Home. L'indirizzo `mylibrary-2ea05--anteprima-roidf2ds.web.app` è in `SITI` come sito «firebase»: porta d'ingresso e accesso con Google a pagina intera come sul sito vero.
 
+- **Ogni giro di anteprima vuole un `VERSION` diverso in `sw.js`** (per esempio `v103.2`, `v103.3`; in pubblicazione si torna al numero tondo): l'app si apre dalla copia sul telefono e la cambia solo quando cambia la versione, quindi due anteprime con lo stesso numero mostrano la vecchia (17 novembre 2026).
+
 ## Passo di Diego (una volta sola)
 L'accesso con Google o con il link via email funziona solo dagli indirizzi autorizzati in Firebase.
 
