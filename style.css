@@ -52,7 +52,12 @@ input, select, textarea { font-size: 16px; } /* evita lo zoom automatico di iOS 
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-header.top { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; }
+header.top { padding-top: 22px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+/* v102: stato della sincronizzazione, in alto a destra (si tocca per aprire Account) */
+.sync-stato { position: absolute; top: 12px; right: -10px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 50%; }
+.sync-stato svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sync-stato[data-s="attesa"] { color: var(--title); }
+.sync-stato[data-s="offline"] { color: var(--accent); }
 .exlibris { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 h1 { font-family: var(--display); font-weight: var(--dw); font-size: clamp(30px, 7vw, 44px); line-height: 1.05; letter-spacing: -.01em; margin: 0; white-space: nowrap; color: var(--title); }
 /* Segnalibro tra «My» e «Library»: scende sotto la riga, con la tacca a V; misure in em, segue la grandezza del titolo */
@@ -343,6 +348,10 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .sheet .piede { text-align: center; }
 .sheet .piede a, #porta .porta-privacy a { color: var(--accent); }
 #i-ver:not(:empty)::before { content: " · "; }
+.aiuto { display: flex; flex-direction: column; gap: 8px; }
+.aiuto h3 { margin: 6px 0 0; font-family: var(--display); font-weight: var(--dw); font-size: 17px; color: var(--title); }
+.aiuto p { margin: 0; font-size: 14px; line-height: 1.5; }
+.aiuto kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--rule); border-radius: 4px; padding: 0 5px; }
 .strumenti { display: flex; flex-direction: column; gap: 12px; }
 .strumenti .hint, .strumenti + .status-line + .glabel + div .hint { margin-top: 4px; }
 .uscita { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
