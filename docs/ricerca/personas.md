@@ -154,3 +154,5 @@ Runs: 2 — assumption persona (posto dell'indifferente)
 - Objections: «obiettivo annuale? statistiche? troppo per me» `[ASSUMPTION]`
 - Will not do: tornare se l'app non gli ricorda niente `[ASSUMPTION]`
 - No basis for: tutto
+
+Sessione: docs/ricerca/walkthroughs/2026-11-19-prima-settimana-con-mylibrary-session-001/ (P01–P05 giro 1, P06–P10 giro 2).
