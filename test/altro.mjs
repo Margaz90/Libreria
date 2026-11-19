@@ -33,7 +33,7 @@ async function pagina(browser, { dark = false } = {}) {
   const gruppi = await p.locator('.sheet .glabel').allInnerTexts();
   ok(`${tag}: gruppi «I miei libri» e «Strumenti»`, gruppi.some(g => /I miei libri/i.test(g)) && gruppi.some(g => /Strumenti/i.test(g)), gruppi.join(' | '));
   const voci = await p.locator('.sheet .menu-list [data-m]').evaluateAll(l => l.map(b => b.dataset.m));
-  ok(`${tag}: voci nell'ordine Carica, Backup, Annulla, Copertine e serie`, voci.join() === 'carica,backup,annulla,copertine', voci.join());
+  ok(`${tag}: voci nell'ordine Carica, Backup, Annulla, Copertine e serie, Come funziona`, voci.join() === 'carica,backup,annulla,copertine,aiuto', voci.join());
   ok(`${tag}: niente «Invitati» per chi non è l'amministratore`, (await p.locator('.sheet [data-m=inv]').count()) === 0);
   ok(`${tag}: privacy e versione in fondo`, (await p.locator('.sheet a[href="privacy.html"]').count()) === 1 && (await p.locator('.sheet #i-ver').count()) === 1);
   ok(`${tag}: niente scorrimento orizzontale`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.sheet').scrollWidth <= document.querySelector('.sheet').clientWidth + 1));
@@ -69,7 +69,9 @@ async function pagineInterne(browser) {
   await p.click('#i-close'); await p.waitForTimeout(250);
   await apri('sync');
   ok('riquadro senza accesso: apre la scheda di accesso, con «‹ Altro»', (await p.locator('#sy-email, #sy-google').count()) > 0 && (await p.locator('.sheet .indietro').count()) === 1);
-  ok('«‹ Altro» alto almeno 44 px', ((await p.locator('.sheet .indietro').boundingBox()) || {}).height >= 44);
+  // misura a scheda ferma: durante l'animazione di apertura la scheda è ancora rimpicciolita
+  const alto = await p.waitForFunction(() => { const e = document.querySelector('.sheet .indietro'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 2000 }).then(() => true, () => false);
+  ok('«‹ Altro» alto almeno 44 px', alto);
   await p.keyboard.press('Escape'); await p.waitForTimeout(250);
   ok('pagine interne: nessun errore in console', !p.errs.length, p.errs.join(' / '));
   await p.close2();

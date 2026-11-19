@@ -38,8 +38,8 @@
 
   /* ---- dal dispositivo al cloud ---- */
   const later = (ms = 600) => { clearTimeout(timer); timer = setTimeout(flush, ms); };
-  const changed = id => { if (!user || fermo) return; gone.delete(id); pending.add(id); later(); };
-  const removed = id => { if (!user || fermo) return; pending.delete(id); gone.add(id); later(); };
+  const changed = id => { if (!user || fermo) return; gone.delete(id); pending.add(id); later(); if (H.stato) H.stato("attesa"); };
+  const removed = id => { if (!user || fermo) return; pending.delete(id); gone.add(id); later(); if (H.stato) H.stato("attesa"); };
   // iOS può sospendere l'app subito dopo una modifica: in quel caso invio ora, senza aspettare il ritardo.
   const sendNow = () => { if (timer && (pending.size || gone.size)) flush(); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendNow(); });
@@ -153,6 +153,7 @@
   // Stato mostrato nella scheda: ci sono modifiche non ancora inviate? quanti libri ci sono nel cloud?
   let info = null;
   function showInfo() {
+    if (H.stato && info) H.stato(info.pending || pending.size || gone.size ? "attesa" : "salvato"); // v102: segno in alto
     if (!info) { H.info("Non ancora sincronizzato su questo dispositivo."); return; }
     const t = new Date(info.at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
     H.info(`Modifiche non ancora inviate: ${info.pending ? "sì" : "no"} · libri nel cloud: ${info.count} · aggiornato alle ${t}${info.fromCache ? " (copia locale: nessuna rete)" : ""}`);

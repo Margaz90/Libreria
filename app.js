@@ -102,6 +102,15 @@
     const hit = c && SPIEGA.find(([re]) => re.test(c));
     return hit ? hit[1] : `riprova tra poco (codice: ${c.length > 60 ? c.slice(0, 60) + "…" : c || "sconosciuto"})`;
   };
+  // v102: le fonti dei libri che non hanno risposto, con il loro nome («google-503» → «Google Books non risponde»).
+  const FONTI_NOMI = { google: "Google Books", apple: "Apple Books", openlibrary: "Open Library", wikidata: "Wikidata" };
+  const fontiGiu = errs => {
+    const codici = (errs || []).filter(Boolean).map(String);
+    if (!codici.length) return "";
+    const nomi = [...new Set(codici.map(c => FONTI_NOMI[c.split("-")[0]]).filter(Boolean))];
+    if (!nomi.length) return "alcune fonti non rispondono";
+    return (nomi.length > 1 ? nomi.slice(0, -1).join(", ") + " e " + nomi[nomi.length - 1] + " non rispondono" : nomi[0] + " non risponde") + " in questo momento";
+  };
   // </regole>
   const SITO = window.libreriaSito || sitoDi(location.hostname); // libreriaSito solo nei test
   // Su invito (v94): l'amministratore (Diego) per uid; stesso elenco in firestore.rules.
@@ -761,6 +770,17 @@
   function removeBook(id) {
     const t = getTombs(); t[id] = Date.now(); setTombs(t);
     state.books = state.books.filter(x => x.id !== id); schedulePersist(); render(); cloudHook("removed", id);
+  }
+  // v102: «Libro eliminato» con «Annulla»: il libro torna com'era (stesso id, foto del dorso compresa) e il cloud lo riceve di nuovo.
+  function eliminaConAnnulla(id) {
+    const copia = state.books.find(x => x.id === id); if (!copia) return;
+    removeBook(id);
+    toast("Libro eliminato", { label: "Annulla", run: () => {
+      if (state.books.some(x => x.id === id)) return;
+      const t = getTombs(); delete t[id]; setTombs(t);
+      state.books.push({ ...copia, updated: Date.now() }); schedulePersist(); render(); cloudHook("changed", id);
+      toast("Libro ripristinato");
+    } });
   }
 
   /* ---------- copie prima delle operazioni su molti libri (IndexedDB) ---------- */
@@ -2085,7 +2105,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const del = $("#q-del", sheet);
     del.onclick = () => {
       if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Conferma eliminazione"; return; }
-      removeBook(b.id); closeSheet(); toast("Libro eliminato");
+      eliminaConAnnulla(b.id); closeSheet();
     };
     $("#q-close", sheet).onclick = closeSheet;
   }
@@ -2466,7 +2486,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         results = found;
         status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
           : parseIsbn(q) && !results.errors.length ? "Nessuna fonte conosce questo ISBN."
-          : "Nessun risultato" + (results.errors.length ? ": alcune fonti non hanno risposto (" + results.errors.join(", ") + ")" : ": prova con meno parole") + ". Riprova più tardi o compila a mano.";
+          : "Nessun risultato: " + (fontiGiu(results.errors) || "prova con meno parole") + ". Riprova più tardi o inserisci il libro a mano.";
 
         box.innerHTML = results.map((r, i) => `<button class="result" type="button" data-i="${i}">
           ${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noimg"></span>`}
@@ -2775,7 +2795,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const del = $("#s-del", sheet);
     del.onclick = () => {
       if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Conferma eliminazione"; return; }
-      removeBook(b.id); closeSheet(); toast("Libro eliminato");
+      eliminaConAnnulla(b.id); closeSheet();
     };
     guardSheet(sheet, () => $("#s-save", sheet).click(), () => JSON.stringify(b));
   }
@@ -2865,6 +2885,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     inv: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c.8-3.5 3.3-5 6-5s5.2 1.5 6 5M17 8v6M14 11h6"/>',
     nome: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
     privacy: '<path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/>',
+    aiuto: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/>',
   };
   const voce = (m, titolo, sotto, cls = "") => `<button type="button" data-m="${m}" class="vr ${cls}"><i class="ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONE[m] || ""}</svg></i><span class="vt"><b>${titolo}</b><span>${sotto}</span></span></button>`;
   const indietro = `<button type="button" class="indietro">‹ Altro</button>`;
@@ -2907,6 +2928,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         ${voce("copertine", "Copertine e serie", missing ? `${plural(missing, "libro", "libri")} senza copertina` : "Copertine, autori e serie")}
         ${isAdmin(cloudInfo().uid) && cloud.email ? voce("inv", "Invitati", "Chi può usare MyLibrary") : ""}
       </div>
+      <div class="glabel">Aiuto</div>
+      <div class="menu-list">
+        ${voce("aiuto", "Come funziona", "Gesti, sincronizzazione e scorciatoie")}
+      </div>
       <p class="hint piede"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><span id="i-ver"></span></p>
       <div class="actions"><button class="btn ghost" id="m-close">Chiudi</button></div>`, "altro");
     appVersion().then(v => { const el = $("#i-ver", sheet); if (el && v) el.textContent = "Versione " + v; });
@@ -2917,12 +2942,32 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     $("[data-m=backup]", sheet).onclick = openBackup;
     $("[data-m=annulla]", sheet).onclick = openAnnulla;
     $("[data-m=copertine]", sheet).onclick = openCopertine;
+    $("[data-m=aiuto]", sheet).onclick = openAiuto;
     const inv = $("[data-m=inv]", sheet); if (inv) inv.onclick = openInvitati;
     $("#m-close", sheet).onclick = closeSheet;
   }
 
   /* ---------- accesso e sincronizzazione (Firebase, caricata solo quando serve) ---------- */
   const cloud = { email: cloudInfo().email || "" };
+  // v102: lo stato della sincronizzazione sempre visibile in alto, per chi è collegato.
+  const NUVOLA = '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 6.9 9.2 4.4 4.4 0 0 0 7 18z"/>';
+  const SYNC = {
+    salvato: ["Tutto salvato nel cloud", NUVOLA + '<path d="m9.5 13.5 2 2 3.5-3.5"/>'],
+    attesa: ["Modifiche in attesa di essere inviate al cloud", NUVOLA + '<path d="M12 16v-4.5M10 13.5l2-2 2 2"/>'],
+    offline: ["Senza rete: le modifiche partono appena torna", NUVOLA + '<path d="M4 4l16 16"/>'],
+  };
+  let syncStato = null;
+  function mostraSync(s) {
+    if (s) syncStato = s;
+    const b = $("#sync-stato"); if (!b) return;
+    const k = !cloud.email ? null : !navigator.onLine ? "offline" : syncStato;
+    b.hidden = !k; if (!k) return;
+    b.dataset.s = k; b.setAttribute("aria-label", "Sincronizzazione: " + SYNC[k][0].toLowerCase()); b.title = SYNC[k][0];
+    b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${SYNC[k][1]}</svg>`;
+  }
+  $("#sync-stato").onclick = () => openSync();
+  addEventListener("online", () => mostraSync()); addEventListener("offline", () => mostraSync());
+  mostraSync();
   const CLOUD_SCRIPTS = [
     "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-app-compat.js",
     "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firebase-auth-compat.js",
@@ -2963,7 +3008,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     error(msg) { const el = $("#sy-status"); if (el) el.textContent = msg; const info = $("#sy-info"); if (info) info.textContent = msg; else toast(msg, null, { top: true }); },
     done(msg) { if ($("#sy-status")) closeSheet(); toast(msg, null, { top: true }); },
     notice(msg) { if ($("#sy-status")) closeSheet(); toast(msg, { label: "OK", run: () => {} }, { top: true }); }, // messaggio lungo: resta 10 secondi
-    connected(email) { cloud.email = email || ""; },
+    connected(email) { cloud.email = email || ""; if (!email) syncStato = null; mostraSync(); },
+    stato(s) { mostraSync(s); }, // v102: "salvato" | "attesa"
     goals: () => ({ goals: getSet().goals || {}, updated: getSet().goalsAt || 0 }),
     setGoals(goals, updated) { try { localStorage.setItem(SET_KEY, JSON.stringify({ ...getSet(), goals, goalsAt: updated })); } catch {} },
     info(text) { const el = $("#sy-info"); if (el) el.textContent = text; },
@@ -3462,6 +3508,29 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sw = navigator.serviceWorker && navigator.serviceWorker.controller;
     if (!sw) return Promise.resolve("");
     return new Promise(res => { const ch = new MessageChannel(); ch.port1.onmessage = e => res(String(e.data || "")); sw.postMessage("version", [ch.port2]); setTimeout(() => res(""), 1500); });
+  }
+  // v102: «Come funziona», una pagina breve con quello che non si scopre da soli.
+  function openAiuto() {
+    const sheet = openSheet(`${indietro}<h2>Come funziona</h2>
+      <section class="aiuto">
+        <h3>Sugli scaffali</h3>
+        <p>Tocca un libro per aprirne la scheda. <b>Tieni premuto</b> su un libro per cambiarne lo stato al volo (Da leggere, In lettura, Letto) o per eliminarlo: dopo «Elimina» puoi sempre toccare «Annulla».</p>
+        <p>Il pallino rosso su un dorso vuol dire che mancano le date di lettura o il voto: lo trovi spiegato nella scheda.</p>
+        <h3>Mentre leggi</h3>
+        <p>In alto trovi il libro in lettura: sposta la barra o tocca <b>+10</b> per aggiornare la pagina. Quando non stai leggendo nulla, «Cosa leggo adesso?» ti propone il prossimo libro; scorri con il dito tra le proposte.</p>
+        <h3>Aggiungere libri</h3>
+        <p>Tocca <b>+</b> e cerca per titolo, autore o ISBN, oppure inquadra il codice a barre con «ISBN». Se non lo trovi, «Inserisci a mano». Una lista intera la carichi da Altro → Carica da un file (Excel, CSV di Goodreads o backup).</p>
+        <h3>Sincronizzazione</h3>
+        <p>Da collegato, ogni modifica va nel cloud e arriva sugli altri dispositivi. Il simbolo della nuvola in alto ti dice se è tutto salvato, se ci sono modifiche in attesa o se sei senza rete: toccandolo apri l'Account.</p>
+        <h3>Se qualcosa va storto</h3>
+        <p>Prima di caricare o completare molti libri l'app salva una copia: la ritrovi in Altro → Annulla una modifica. Ogni tanto fai anche un backup da Altro → Backup.</p>
+        <h3>Scorciatoie dal computer</h3>
+        <p><kbd>/</kbd> cerca, <kbd>N</kbd> nuovo libro, <kbd>1</kbd> e <kbd>2</kbd> passano tra le sezioni.</p>
+      </section>
+      <p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy: cosa salva l'app e dove</a></p>
+      <div class="actions"><button class="btn ghost" id="i-close">Chiudi</button></div>`);
+    collegaIndietro(sheet);
+    $("#i-close", sheet).onclick = closeSheet;
   }
   function openBackup() {
     const sheet = openSheet(`${indietro}<h2>Backup</h2>

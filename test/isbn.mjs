@@ -166,7 +166,7 @@ export default async function ({ browser }) {
   p = await apri(browser, u => (/isbn/.test(decodeURIComponent(u)) ? { status: 503, body: { error: { code: 503 } } } : { body: VUOTO }));
   await p.goto(APP + '/'); await p.waitForTimeout(300);
   r = await cerca(p, ISBN);
-  ok('Google sempre 503 per un ISBN: «alcune fonti non hanno risposto (google-503)»', /google-503/.test(r.stato) && !/nessuna fonte/i.test(r.stato), r.stato);
+  ok('Google sempre 503 per un ISBN: «Google Books non risponde» (v102: il nome, non il codice)', /Google Books non risponde/.test(r.stato) && !/google-503/.test(r.stato) && !/nessuna fonte/i.test(r.stato), r.stato);
   await p.close2();
 
   // 6. Apple Books per ISBN (lookup?isbn=): trova l'edizione anche se Google, Open Library e Wikidata non la conoscono

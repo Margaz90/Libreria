@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ok, ROOT, libri108 } from './lib.mjs';
 import { creaXlsx, creaZip } from './xlsx.mjs';
 
-const EXPORTS = ['spiega', 'STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
+const EXPORTS = ['spiega', 'fontiGiu', 'STATUS_ONE', 'FIELDS', 'volNo', 'seriesKey', 'today', 'clean', 'lettura', 'tidy', 'norm', 'isbn13From10', 'isbn10From13', 'wdIsbn', 'parseIsbn',
   'computeStats', 'statDim', 'ysRows', 'MONTHS', 'num', 'nextInSeries', 'nextBooks', 'titleCore', 'sameTitle', 'isoOk', 'longDate', 'dayDiff', 'addDays', 'periodText', 'readingPace', 'paceText', 'linguaTesto', 'linguaDi', 'tramaMigliore', 'linguaEdizione', 'primaNellaLingua', 'gustiDi', 'idNovita', 'votoMostrato', 'novitaDa', 'perche', 'pulisciViste', 'stessoLibro', 'riedizione', 'linguaNov', 'sitoDi', 'decodificaTesto', 'parseCSV', 'libriDaTabella', 'ESEMPI_MODELLO', 'leggiZip', 'righeXlsx'];
 
 export function caricaRegole() {
@@ -111,6 +111,8 @@ export default async function run() {
     [{ message: 'Unable to process request due to missing initial state.' }, /link via email/], [{ code: 'strano/codice' }, /riprova tra poco \(codice: strano\/codice\)/],
     [null, /riprova tra poco/], ['auth/invalid-email', /email non sembra corretto/]];
   ok('spiega: codici d\'errore in italiano semplice, il codice solo se sconosciuto', casiErr.every(([e, re]) => re.test(R.spiega(e)) && !/auth\//.test(R.spiega(e).replace(/codice: .*/, ''))), j(casiErr.map(([e]) => R.spiega(e))));
+  ok('fontiGiu: nomi delle fonti, niente codici', R.fontiGiu(['google-503', 'apple-timeout', 'google-rete']) === 'Google Books e Apple Books non rispondono in questo momento' && R.fontiGiu(['openlibrary-rete']) === 'Open Library non risponde in questo momento'
+    && R.fontiGiu(['google-503', 'apple-rete', 'openlibrary-500']) === 'Google Books, Apple Books e Open Library non rispondono in questo momento' && R.fontiGiu([]) === '' && R.fontiGiu([undefined]) === '' && R.fontiGiu(['boh']) === 'alcune fonti non rispondono', R.fontiGiu(['google-503', 'apple-timeout']));
   ok('spiega: un messaggio lungo sconosciuto non diventa un muro di testo', R.spiega({ message: 'x'.repeat(500) }).length < 140);
 
   // ---- Regole della lettura: invarianti su 2000 libri e passaggi generati a caso ----
