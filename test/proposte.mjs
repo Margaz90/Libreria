@@ -20,7 +20,18 @@ async function hero(browser, dark) {
   ok(`${tag}: «Non ora» è una × accanto al titolo, da 44 px`, x && h3 && Math.abs(x.top + x.h / 2 - (h3.top + h3.h / 2)) <= 12 && x.h >= 44 && x.w >= 44 && (await p.getAttribute('#n-later', 'aria-label')) === 'Non ora', JSON.stringify({ x, h3 }));
   ok(`${tag}: in basso restano «Inizia» e «Altre proposte»`, (await p.locator('#hero .nfoot button').count()) === 2);
   const h = (await box(p, '#hero')).h;
-  ok(`${tag}: il riquadro è più basso (era 290 px)`, h <= 270, String(h));
+  ok(`${tag}: il riquadro non è più alto di prima (290 px)`, h <= 290, String(h));
+  // v106: stile «copertina protagonista»: copertina grande a sinistra, criterio in un'etichetta, lineetta corallo accanto alla motivazione
+  const st2 = await p.evaluate(() => {
+    const c = document.querySelector('#hero .ncard:not([hidden])'), cv = c.querySelector('.cover').getBoundingClientRect(), t = c.querySelector('b').getBoundingClientRect();
+    const why = getComputedStyle(c.querySelector('.why')), crit = getComputedStyle(c.querySelector('.ncrit'));
+    const k = document.createElement('i'); k.style.color = 'var(--coral)'; document.body.append(k); const coral = getComputedStyle(k).color; k.remove();
+    return { coverSx: cv.right <= t.left, coverW: Math.round(cv.width), lineetta: why.borderLeftStyle === 'solid' && why.borderLeftColor === coral, corsivo: why.fontStyle,
+      foro: getComputedStyle(c.querySelector('.hole')).display, segnatura: getComputedStyle(c.querySelector('.call')).display, etichetta: parseFloat(crit.borderTopLeftRadius) >= 8 };
+  });
+  ok(`${tag}: copertina grande a sinistra del titolo`, st2.coverSx && st2.coverW >= 76, JSON.stringify(st2));
+  ok(`${tag}: lineetta corallo accanto alla motivazione`, st2.lineetta, JSON.stringify(st2));
+  ok(`${tag}: criterio in un'etichetta, niente forellino né segnatura`, st2.etichetta && st2.foro === 'none' && st2.segnatura === 'none', JSON.stringify(st2));
   ok(`${tag}: niente scorrimento orizzontale`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await p.locator('[data-choose]').first().click(); await p.waitForSelector('.sheet .next');
   const st = await box(p, '.sheet [role=tab]');
