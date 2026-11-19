@@ -242,7 +242,11 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   .pace-extra { display: none; }
   .filters { display: flex; flex-direction: row; align-items: center; gap: 4px; } /* v103: lente e vista a destra dei filtri */
   .filters .pills { flex: 1; min-width: 0; width: auto; align-self: auto; overflow-x: auto; scrollbar-width: none; }
-  .filters .pill { flex: none; padding: 7px 10px; } /* filtri interi: quelli che non ci stanno si raggiungono scorrendo di lato */
+  .filters .pill { flex: none; padding: 7px 10px; }
+  .filters .pills::after { content: ""; position: sticky; right: -3px; flex: none; width: 28px; margin: -3px -3px -3px -28px; background: linear-gradient(to right, transparent, var(--surface) 85%); pointer-events: none; opacity: 0; transition: opacity .2s; border-radius: 0 11px 11px 0; }
+  .filters .pills.scorre::after { opacity: 1; }
+  .filters .pills::before { content: ""; position: sticky; left: -3px; flex: none; width: 28px; margin: -3px -28px -3px -3px; background: linear-gradient(to left, transparent, var(--surface) 85%); pointer-events: none; opacity: 0; transition: opacity .2s; border-radius: 11px 0 0 11px; z-index: 1; }
+  .filters .pills.scorre-sx::before { opacity: 1; } /* filtri interi: quelli che non ci stanno si raggiungono scorrendo di lato */
   .sumrow { display: none; } /* v103: l'obiettivo sta sullo scaffale «Letti» (.obiettivo-sc) */
   .obiettivo-sc { display: flex; }
   .shelf-head:has(.obiettivo-sc) { align-items: center; }

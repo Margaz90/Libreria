@@ -27,6 +27,14 @@ async function telefono(browser, dark) {
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   await p.evaluate(() => window.scrollTo(0, 1500)); await p.waitForTimeout(300); await p.evaluate(() => window.scrollTo(0, 1400)); await p.waitForTimeout(400);
   ok(`${tag}: scorrendo, filtri e lente restano raggiungibili in alto`, await vis(p, '#cerca-apri') && (await top(p, '#cerca-apri')) >= 0 && (await top(p, '#cerca-apri')) < 120);
+  // v104: i filtri che non ci stanno sfumano verso destra invece di essere tagliati; in fondo la sfumatura sparisce
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(300);
+  const sf = () => p.evaluate(() => { const e = document.querySelector('#pills'); return { cls: e.classList.contains('scorre'), op: getComputedStyle(e, '::after').opacity }; });
+  const a1 = await sf();
+  ok(`${tag}: filtri che non ci stanno: sfumatura a destra`, a1.cls && a1.op === '1', JSON.stringify(a1));
+  await p.evaluate(() => { const e = document.querySelector('#pills'); e.scrollLeft = e.scrollWidth; e.dispatchEvent(new Event('scroll')); }); await p.waitForTimeout(400);
+  const a2 = await sf();
+  ok(`${tag}: in fondo ai filtri la sfumatura sparisce`, !a2.cls && a2.op === '0', JSON.stringify(a2));
   ok(`${tag}: nessun errore in console`, !p.errs.length, p.errs.join(' / '));
   await p.close2();
 }
