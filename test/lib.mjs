@@ -65,9 +65,11 @@ export const wait = (fn, ms = 8000) => new Promise((res, rej) => {
 });
 
 // Nuova pagina con il finto Firebase al posto dell'SDK e le ricerche esterne bloccate (a meno che il test non le simuli).
-export async function newPage(browser, { width = 390, height = 844, dark = false, standalone = false, init = null, external = 'abort' } = {}) {
+export async function newPage(browser, { width = 390, height = 844, dark = false, standalone = false, init = null, external = 'abort', suggerimenti = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: dark ? 'dark' : 'light', isMobile: width < 500, hasTouch: width < 500, serviceWorkers: 'block' });
   if (standalone) await ctx.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
+  // v101: il suggerimento della pressione prolungata compare una volta sola; nei test è già visto, salvo chi lo prova.
+  if (!suggerimenti) await ctx.addInitScript(() => { try { localStorage.setItem('libreria-suggerimenti', '{"pressione":1}'); } catch {} });
   if (init) await ctx.addInitScript(init.fn, init.arg);
   const p = await ctx.newPage();
   p.errs = [];

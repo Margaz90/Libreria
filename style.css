@@ -232,6 +232,15 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
   .sumrow .tally { flex: 1; min-width: 0; margin-top: 0; }
   .sumrow .tally .goal { width: auto; }
   .sumrow .viewsw-m { display: flex; flex: none; }
+  /* v101: «Cosa leggo adesso?» più compatto sul telefono (stessa scheda, meno altezza) */
+  #hero .next { gap: 6px; }
+  #hero .ntab { margin-top: 4px; padding: 6px 6px 8px; font-size: 13px; }
+  #hero .ncard { padding: 8px 14px 16px; }
+  #hero .nhead { padding-bottom: 3px; margin-bottom: 6px; }
+  #hero .nbody { grid-template-columns: minmax(0, 1fr) 44px; gap: 2px 12px; }
+  #hero .nbody b { font-size: 19px; }
+  #hero .ncard .cover { width: 44px; }
+  #hero .nbody .meta { display: none; }
   /* v100: ricerca e «Ordina» dietro la lente, aperti solo quando servono */
   #searchbar { display: none; }
   body.cerca-aperta #searchbar { display: flex; }
@@ -373,7 +382,7 @@ h1 .rib { display: inline-block; width: .18em; height: 1.08em; margin: 0 .1em 0 
 .field label.frase { text-transform: none; letter-spacing: normal; font-size: 13.5px; font-weight: 500; color: var(--ink); } /* v99: istruzioni lunghe in testo normale, il maiuscoletto resta per le etichette brevi */
 .field input, .field select, .field textarea { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); width: 100%; }
 .field textarea { min-height: 76px; resize: vertical; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; } /* v101: se un'etichetta va a capo, i campi restano allineati */
 .grid2 > * { min-width: 0; }
 .rate { display: flex; gap: 2px; }
 .rate button { border: 0; background: none; font-size: 26px; line-height: 1; padding: 2px 4px; color: var(--rule); }

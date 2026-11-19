@@ -12,7 +12,7 @@ async function carica(browser) {
   await apri();
   const h2 = await p.locator('.sheet h2').first().innerText(), link = p.locator('.sheet a[href="modello-libri.xlsx"][download][target="_blank"][rel="noopener"]'); // nell'app installata su iPhone si apre in una vista con «Fine»
   const stato = await p.evaluate(() => fetch('modello-libri.xlsx').then(r => r.status));
-  ok('«Carica i libri» apre la scheda con il modello Excel da scaricare', h2 === 'Carica i libri' && (await link.count()) === 1 && stato === 200, `${h2} ${await link.count()} ${stato}`);
+  ok('«Carica i libri» apre la scheda con il modello Excel da scaricare', h2 === 'Carica da un file' && (await link.count()) === 1 && stato === 200, `${h2} ${await link.count()} ${stato}`);
   const C = (r, v) => `<c r="${r}" t="inlineStr"><is><t>${v}</t></is></c>`, N = (r, v) => `<c r="${r}"><v>${v}</v></c>`;
   const testa = ['Titolo', 'Autore', 'Stato', 'Voto', 'Data di fine', 'ISBN'].map((t, i) => C('ABCDEF'[i] + '1', t)).join('');
   const x = creaXlsx({ fogli: [{ nome: 'Libri', celle: `<row r="1">${testa}</row>`
