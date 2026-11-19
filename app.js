@@ -1471,18 +1471,21 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     return nx.list = nx.list.map(x => ({ ...x, book: pile.find(b => b.id === x.book.id) || x.book })); // dati aggiornati (titolo, copertina…)
   }
   const tabLabel = (list, i) => { const k = list[i].kind; return k === "affine" ? "Affine" : k === "vecchio" ? "Il più vecchio" : list.slice(0, i).some(x => x.kind === "caso") ? "Ancora a caso" : "A caso"; };
+  const critLabel = (list, i) => { const k = list[i].kind; return k === "affine" ? "Affine ai tuoi gusti" : k === "vecchio" ? "Il più vecchio in pila" : list.slice(0, i).some(x => x.kind === "caso") ? "Ancora a caso" : "Scelto a caso"; };
   function nextHTML(list, h = "h3", sel = null) {
     const hero = h === "h3", px = hero ? "nh-" : "ns-", n = list.length;
     if (hero && sel === null) sel = nx.sel;
     const more = state.books.filter(b => b.status === "da-leggere").length > n, at = Math.max(0, list.findIndex(x => x.book.id === sel));
-    const tabs = n < 2 ? "" : `<div class="ntabs" role="tablist" aria-label="Criteri della proposta" style="--nt:${n}">${list.map(({ book: b }, i) => `<button class="ntab" type="button" role="tab" id="${px}t${i}" aria-controls="${px}p${i}" aria-selected="${i === at}" tabindex="${i === at ? 0 : -1}" data-tab="${esc(b.id)}">${tabLabel(list, i)}</button>`).join("")}</div>`;
+    const tabs = n < 2 ? "" : `<div class="ntabs${hero ? " ndots" : ""}" role="tablist" aria-label="Criteri della proposta" style="--nt:${n}">${list.map(({ book: b }, i) => `<button class="ntab" type="button" role="tab" id="${px}t${i}" aria-controls="${px}p${i}" aria-selected="${i === at}" tabindex="${i === at ? 0 : -1}" data-tab="${esc(b.id)}">${hero ? `<span class="sr">${tabLabel(list, i)}</span>` : tabLabel(list, i)}</button>`).join("")}</div>`;
     const cards = list.map(({ book: b, reason }, i) => `<div class="ncard" data-next="${esc(b.id)}" ${n < 2 ? 'role="region" aria-label="Proposta"' : `role="tabpanel" id="${px}p${i}" aria-labelledby="${px}t${i}" tabindex="0"`}${i === at ? "" : " hidden"}>
-        <div class="nhead"><span class="call">${b.callNo ? `<span class="sr">Segnatura </span>${esc(b.callNo)}` : ""}</span>${n < 2 ? "" : `<span class="n" aria-hidden="true">${i + 1} di ${n}</span>`}</div>
+        <div class="nhead">${hero && n > 1 ? `<span class="ncrit">${critLabel(list, i)}</span>` : ""}<span class="call">${b.callNo ? `<span class="sr">Segnatura </span>${esc(b.callNo)}` : ""}</span>${n < 2 ? "" : `<span class="n" aria-hidden="true">${i + 1} di ${n}</span>`}</div>
         <div class="nbody"><div><b>${esc(b.title)}</b>${b.author ? `<span class="au">${esc(b.author)}</span>` : ""}</div>${coverHTML(b, 120)}<span class="why">${esc(reason)}</span>${(m => m ? `<span class="meta">${esc(m)}</span>` : "")([serLabel(b), b.pages && b.pages + " pagine", b.genre].filter(Boolean).join(" · "))}</div>
         <span class="hole" aria-hidden="true"></span></div>`).join("");
     const cur = list[at].book;
-    return `<section class="next"><${h}>Cosa leggo adesso?</${h}><div class="drawer${n > 1 ? " many" : ""}">${tabs}<div class="nstack">${cards}</div></div>
-      <div class="nfoot"><button class="btn primary" type="button" data-start="${esc(cur.id)}" aria-label="Inizia ${esc(cur.title)}">Inizia</button>${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}<button class="btn ghost" type="button" data-n="later"${hero ? ' id="n-later"' : ""}>${hero ? "Non ora" : "Chiudi"}</button></div></section>`;
+    const chiudi = hero ? `<button class="nchiudi" type="button" data-n="later" id="n-later" aria-label="Non ora" title="Non ora"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>` : "";
+    // v105: nell'hero le linguette diventano puntini sotto la scheda (restano linguette per VoiceOver) e «Non ora» una × accanto al titolo
+    return `<section class="next${hero ? " compatta" : ""}"><div class="nsec"><${h}>Cosa leggo adesso?</${h}>${chiudi}</div><div class="drawer${n > 1 ? " many" : ""}">${hero ? "" : tabs}<div class="nstack">${cards}</div></div>${hero ? tabs : ""}
+      <div class="nfoot"><button class="btn primary" type="button" data-start="${esc(cur.id)}" aria-label="Inizia ${esc(cur.title)}">Inizia</button>${more ? `<button class="btn" type="button" data-n="more"${hero ? ' id="n-more"' : ""}>Altre proposte</button>` : "<span></span>"}${hero ? "" : `<button class="btn ghost" type="button" data-n="later">Chiudi</button>`}</div></section>`;
   }
   function announce(text) {
     let l = $("#n-live"); if (!l) { l = document.createElement("div"); l.id = "n-live"; l.className = "sr"; l.setAttribute("aria-live", "polite"); document.body.append(l); }

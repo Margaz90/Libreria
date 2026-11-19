@@ -724,6 +724,32 @@ html { scroll-behavior: smooth; }
 .hole { position: absolute; left: 50%; bottom: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--hole, var(--bg)); box-shadow: inset 0 1px 2px var(--shadow); }
 .sheet .next { --hole: var(--surface); }
 .nfoot { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+/* v105: «Cosa leggo adesso?» nell'hero: × al posto di «Non ora», puntini al posto delle linguette, criterio nella scheda */
+.nsec { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nchiudi { flex: none; width: 44px; height: 44px; margin: -10px -12px -10px 0; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 50%; }
+.nchiudi svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+#hero .nfoot { grid-template-columns: 1fr 1fr; }
+#hero .ndots { display: flex; justify-content: center; gap: 0; padding: 0; margin: -18px 0 -6px; position: relative; z-index: 2; } /* area da 44 px che si sovrappone al bordo della scheda e ai pulsanti: i puntini restano facili da toccare senza una riga intera */
+#hero .ndots .ntab { width: 24px; min-height: 44px; padding: 0; margin: 0; background: none; box-shadow: none; border-radius: 0; display: grid; place-items: center; }
+#hero .ndots .ntab::before { content: ""; width: 7px; height: 7px; border-radius: 4px; background: var(--rule); transition: width .2s, background .2s; }
+#hero .ndots .ntab[aria-selected="true"]::before { width: 18px; background: var(--coral); }
+#hero .nhead .n { display: none; }
+.ncrit { font-size: 12px; font-weight: 600; color: var(--accent); }
+/* v106: nell'hero la scheda «copertina protagonista»: copertina grande a sinistra, criterio in un'etichetta, velo corallo, lineetta accanto alla motivazione */
+#hero .next.compatta .drawer { padding-bottom: 0; }
+#hero .next.compatta .ndots { margin-top: -8px; }
+#hero .next.compatta .drawer.many::before, #hero .next.compatta .drawer.many::after { display: none; }
+#hero .next.compatta .ncard, #hero .next.compatta .ncard[hidden] { display: grid !important; grid-template-columns: 84px minmax(0, 1fr); grid-template-areas: "cv h" "cv t" "cv w"; align-content: center; column-gap: 14px; row-gap: 6px;
+  border-radius: 16px; padding: 14px; border: 1px solid var(--rule); box-shadow: none; background-image: linear-gradient(135deg, color-mix(in srgb, var(--coral) 22%, transparent), transparent 70%); background-color: var(--surface); background-position: 0 0; }
+#hero .next.compatta .nbody { display: contents; }
+#hero .next.compatta .nhead { grid-area: h; border: 0; padding: 0; margin: 0; justify-content: flex-start; }
+#hero .next.compatta .nbody > div { grid-area: t; }
+#hero .next.compatta .ncard .cover { grid-area: cv; width: 84px; align-self: center; box-shadow: 0 8px 18px -8px var(--shadow); }
+#hero .next.compatta .nbody b { font-size: 21px; line-height: 1.12; }
+#hero .next.compatta .au { font-size: 13px; color: var(--muted); }
+#hero .next.compatta .why { grid-area: w; margin: 2px 0 0; font: 400 13.5px/1.4 var(--text); color: var(--ink); border-left: 2px solid var(--coral); padding-left: 8px; }
+#hero .next.compatta .meta, #hero .next.compatta .call, #hero .next.compatta .hole { display: none; }
+#hero .next.compatta .ncrit { display: inline-block; font-size: 11px; border: 1px solid currentColor; border-radius: 99px; padding: 2px 8px; }
 .nfoot .btn, .ntab { min-height: 44px; }
 .ncard.flip { animation: nflip .35s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes nflip { from { transform: translateY(-10px) rotate(-.6deg); opacity: .2; } }
