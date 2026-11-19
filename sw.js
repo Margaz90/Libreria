@@ -3,7 +3,7 @@
      Una versione nuova (VERSION) si scarica intera all'installazione, fresca dal server, e arriva con «Aggiorna».
    - Font e copertine: copia locale prima, rete solo la prima volta.
    - Ricerche su Google Books: sempre dalla rete. */
-const VERSION = "v105.2";
+const VERSION = "v105";
 const SHELL = `libreria-shell-${VERSION}`;
 const ASSETS = "libreria-asset-v1";
 const LIBS = "libreria-lib-v1"; // lettore ISBN: resta in cache tra una versione e l'altra, così funziona anche offline
