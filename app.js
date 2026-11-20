@@ -1612,7 +1612,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     // Il libro com'è adesso: chi chiama (menu rapido aperto, hero) può tenere una copia superata da un salvataggio in sottofondo.
     const b = state.books.find(x => x.id === b0.id) || b0;
     // v83: a Letto solo con le stelle; senza, prima si chiedono (chiudendo senza sceglierle il libro resta com'era).
-    if (st === "letto" && b.status !== "letto" && !(Number(b.rating) > 0) && !(Number(extra.rating) > 0)) { chiediStelle(b, n => setStatus(b, st, { ...extra, rating: n })); return; }
+    if (st === "letto" && b.status !== "letto" && !(Number(b.rating) > 0) && !("rating" in extra)) { chiediStelle(b, n => setStatus(b, st, { ...extra, rating: n })); return; }
     const nb = lettura.passa({ ...b, ...extra }, st, today());
     salvaLibro(nb);
     // Se il cambio toglie delle date (fine, anno, vecchio inizio), un tocco sbagliato si recupera con «Annulla».
@@ -1630,10 +1630,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   // «Quante stelle?»: scheda piccola con le 5 stelle; onPick(n) solo se ne scegli una.
   function chiediStelle(b, onPick) {
-    const sheet = openSheet(`<div class="ask-rate"><h2>Quante stelle?</h2><p class="sub">«${esc(b.title)}» passa tra i letti quando scegli il voto.</p>
+    const sheet = openSheet(`<div class="ask-rate"><h2>Quante stelle?</h2><p class="sub">«${esc(b.title)}» passa tra i letti.</p>
       <div class="rate" id="q-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} ${n === 1 ? "stella" : "stelle"}">★</button>`).join("")}</div>
       <p class="verdict" id="q-verdict" aria-live="polite"></p>
-      <div class="actions"><button class="btn ghost" type="button" id="q-rate-no">Annulla</button></div></div>`);
+      <div class="actions"><button class="btn" type="button" id="q-rate-skip">Senza voto</button><button class="btn ghost" type="button" id="q-rate-no">Annulla</button></div></div>`);
     const bs = sheet.querySelectorAll("#q-rate button");
     bs.forEach(btn => {
       const n = Number(btn.dataset.n);
@@ -1641,6 +1641,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       btn.onpointerenter = show; btn.onfocus = show;
       btn.onclick = () => { closeSheet(); onPick(n); };
     });
+    $("#q-rate-skip", sheet).onclick = () => { closeSheet(); onPick(0); };
     $("#q-rate-no", sheet).onclick = () => closeSheet();
     bs[0].focus();
   }
@@ -2115,7 +2116,8 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sheet = openSheet(`<div class="quick">
       <div class="quick-top">${coverHTML(b)}<div><h2>${esc(b.title)}</h2><div class="sub">${esc(b.author || "")}</div></div></div>
       <div class="quick-list">${["da-leggere", "in-lettura", "letto"].map(k => `<button class="btn${b.status === k ? " current" : ""}" data-st="${k}" ${b.status === k ? "disabled" : ""}>${{ "da-leggere": b.status === "desiderato" ? "Ho acquistato" : "Da leggere", "in-lettura": "Inizia a leggerlo", "letto": "Letto" }[k]}${b.status === k ? " · ora qui" : ""}</button>`).join("")}</div>
-      <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn danger" id="q-del" type="button">Elimina</button><button class="btn ghost" id="q-close">Chiudi</button></div></div>`);
+      <div class="actions"><button class="btn" id="q-open">Apri la scheda</button><button class="btn ghost" id="q-close">Chiudi</button></div>
+      <div class="actions q-del-row"><button class="btn danger" id="q-del" type="button">Elimina</button></div></div>`);
     sheet.querySelectorAll("[data-st]").forEach(btn => btn.onclick = () => { closeSheet(); setStatus(b, btn.dataset.st); });
     $("#q-open", sheet).onclick = () => { closeSheet(); openBook(state.books.find(x => x.id === b.id) || b); };
     // Eliminazione in due tocchi, come nella scheda del libro.
@@ -2178,7 +2180,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
   const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
-  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p><p class="hint err" id="f-rate-err" role="alert" hidden></p></div>`;
+  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p><p class="hint err" id="f-rate-err" role="alert" hidden></p><button type="button" class="btn ghost" id="f-rate-skip" hidden>Senza voto</button></div>`;
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
   function readingHead(b, rate = true) {
     return `<div class="rf rf-head">
@@ -2272,7 +2274,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
-      const re = $("#f-rate-err", sheet); if (re && holder.rating) re.hidden = true;
+      const re = $("#f-rate-err", sheet); if (re && holder.rating) { re.hidden = true; const sk = $("#f-rate-skip", sheet); if (sk) sk.hidden = true; }
       sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
       const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating, ($("#f-status", sheet) || { value: "letto" }).value);
     });
@@ -2400,9 +2402,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
   // v83: un libro Letto si salva solo con le stelle (scheda e Nuovo libro).
+  // v107: le stelle si chiedono a chi passa a Letto, ma si può salvare senza voto; un Letto già senza voto (es. importato) si salva.
+  const saltaVoto = new WeakSet();
   function badRating(sheet, holder) {
-    const st = $("#f-status", sheet); if (!st || st.value !== "letto" || Number(holder.rating) > 0) return false;
-    const err = $("#f-rate-err", sheet); if (err) { err.hidden = false; err.textContent = "Scegli le stelle per segnarlo come letto."; }
+    const st = $("#f-status", sheet); if (!st || st.value !== "letto" || Number(holder.rating) > 0 || holder.status === "letto" || saltaVoto.has(holder)) return false;
+    const err = $("#f-rate-err", sheet); if (err) { err.hidden = false; err.textContent = "Scegli le stelle, oppure salvalo senza voto."; }
+    const sk = $("#f-rate-skip", sheet);
+    if (sk) { sk.hidden = false; sk.onclick = () => { saltaVoto.add(holder); const sv = $("#s-save, #a-save", sheet); if (sv) sv.click(); }; }
     const first = $("#f-rate button", sheet); if (first) first.focus();
     return true;
   }
@@ -2873,7 +2879,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const sb = $("#s-scan", sheet);
     // La fotocamera può partire solo da un tocco dell'utente: la pressione prolungata apre la scheda con il pulsante ISBN in evidenza.
     if (sb && !sb.hidden) loadZXing().catch(() => {}); // libreria del lettore pronta prima del tocco
-    if (scan && sb && !sb.hidden) toast("Tocca «ISBN» per inquadrare il codice");
+    if (scan && sb && !sb.hidden) toast("Tocca «Codice» per inquadrare il codice a barre");
     if (!scan) setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || !sheet.contains(a)) $("#s-q", sheet).focus(); }, 50); // non rubo il cursore a un campo già scelto
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {

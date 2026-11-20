@@ -99,8 +99,45 @@ async function segnale(browser) {
   await p.close2();
 }
 
+
+// v107 (focus group): le stelle si chiedono ma si può dire «Senza voto»; un Letto già senza voto si salva.
+async function senzaVotoOk(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, author: 'A', pages: 200 };
+  await load(p, [
+    { ...base, id: 'k1', title: 'Da chiudere', status: 'da-leggere', rating: 0 },
+    { ...base, id: 'k2', title: 'Importato', status: 'letto', rating: 0, finished: '2024-05-01' },
+    { ...base, id: 'k3', title: 'Dalla scheda', status: 'da-leggere', rating: 0 },
+  ]);
+  await quick(p, 'k1', 'letto');
+  ok('«Quante stelle?»: c\'è «Senza voto»', await p.locator('#q-rate-skip').count() === 1);
+  await p.locator('#q-rate-skip').click(); await p.waitForTimeout(1000);
+  const k1 = await book(p, 'k1');
+  ok('«Senza voto»: il libro va tra i Letti con voto 0, senza richiedere di nuovo', k1.status === 'letto' && !(k1.rating > 0) && await p.locator('.ask-rate').count() === 0, JSON.stringify(k1));
+  await openBook(p, 'k2'); await p.fill('#f-notes', 'una nota'); await p.locator('#s-save').click(); await p.waitForTimeout(900);
+  ok('scheda: un Letto già senza voto si salva (es. importato)', (await book(p, 'k2')).notes === 'una nota');
+  await openBook(p, 'k3'); await p.locator('.seg [data-v="letto"]').click(); await p.locator('#s-save').click(); await p.waitForTimeout(400);
+  ok('scheda: passando a Letto senza stelle compare «Senza voto»', await p.locator('#f-rate-skip').isVisible());
+  await p.locator('#f-rate-skip').click(); await p.waitForTimeout(900);
+  const k3 = await book(p, 'k3');
+  ok('scheda: «Senza voto» salva il Letto', k3.status === 'letto' && !(k3.rating > 0), JSON.stringify(k3));
+  ok('senza voto: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
+async function eliminaStaccato(browser) {
+  const p = await newPage(browser);
+  await load(p, [{ added: 1, author: 'A', id: 'e1', title: 'Uno', status: 'da-leggere', rating: 0 }]);
+  await p.locator('#main [data-id="e1"]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 }); await p.waitForSelector('.quick'); await p.waitForTimeout(200);
+  const g = await p.evaluate(() => { const d = document.querySelector('#q-del'), o = document.querySelector('#q-open'), l = document.querySelector('.quick [data-st="letto"]'); const rd = d.getBoundingClientRect(), ro = o.getBoundingClientRect(), rl = l.getBoundingClientRect(); return { stessaRiga: Math.abs(rd.top - ro.top) < 4, gap: rd.top - Math.max(ro.bottom, rl.bottom) }; });
+  ok('menu rapido: «Elimina» su una riga sua, staccato dagli altri pulsanti', !g.stessaRiga && g.gap >= 16, JSON.stringify(g));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
   await gesti(browser);
   await salva(browser);
   await segnale(browser);
+  await senzaVotoOk(browser);
+  await eliminaStaccato(browser);
 }
