@@ -170,7 +170,7 @@ async function pagina(browser) {
   ok('mesi: leggi di più ad agosto', /Leggi di più ad agosto: 3 libri\./.test(await txt('[data-panel="mesi"]')));
   ok('autori: Stephen King con 2 mini-dorsi nascosti a VoiceOver', await p.$eval('[data-panel="autori"] li', li => li.textContent.includes('Stephen King') && li.querySelectorAll('.mini i').length === 2 && li.querySelector('.mini').getAttribute('aria-hidden') === 'true'));
   ok('mensole 2025, 2024, 2019', (await p.$$eval('section.ys', els => els.map(e => e.dataset.year).join())) === '2025,2024,2019');
-  ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /1 libro letto senza anno\./.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
+  ok('nota: 1 senza anno, 1 con la data di fine nel futuro', /Un libro letto non ha l'anno/.test(await txt('.stats-noyear')) && /data di fine nel futuro/.test(await txt('.stats-future')));
   ok('stelle dei voti leggibili da VoiceOver', (await p.locator('[data-panel="voti"] [role="img"][aria-label="5 stelle"]').count()) === 1);
   ok('barre con il numero accanto (Generi: Thriller 3)', /Thriller\s*3/.test(await txt('[data-panel="generi"]')));
   await p.close2();
