@@ -2180,7 +2180,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   const VERDICTS = ["", "Non mi è piaciuto", "Così così", "Mi è piaciuto", "Bellissimo", "Lo rileggerei"];
   const verdict = (n, status) => n >= 1 && n <= 5 ? VERDICTS[n] : status === "letto" ? "Tocca una stella per dare il voto" : "Il voto, quando vuoi";
-  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p><p class="hint err" id="f-rate-err" role="alert" hidden></p><button type="button" class="btn ghost" id="f-rate-skip" hidden>Senza voto</button></div>`;
+  const rateHTML = b => `<div class="field rate-f"><span class="label">Voto</span><div class="rate" id="f-rate">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" class="${(b.rating || 0) >= n ? "on" : ""}" aria-label="${n} stelle">★</button>`).join("")}</div><p class="verdict" id="f-verdict" aria-live="polite">${verdict(b.rating || 0, b.status || "letto")}</p></div>`;
   // Blocchi della lettura: stato, voto (se Letto), date, pagina; poi citazione, note e voto (se non Letto). Usati dalla scheda del libro e da Nuovo libro.
   function readingHead(b, rate = true) {
     return `<div class="rf rf-head">
@@ -2274,8 +2274,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     }
     sheet.querySelectorAll("#f-rate button").forEach(btn => btn.onclick = () => {
       const n = Number(btn.dataset.n); holder.rating = holder.rating === n ? 0 : n;
-      const re = $("#f-rate-err", sheet); if (re && holder.rating) { re.hidden = true; const sk = $("#f-rate-skip", sheet); if (sk) sk.hidden = true; }
-      sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
+            sheet.querySelectorAll("#f-rate button").forEach(x => x.classList.toggle("on", Number(x.dataset.n) <= holder.rating));
       const vd = $("#f-verdict", sheet); if (vd) vd.textContent = verdict(holder.rating, ($("#f-status", sheet) || { value: "letto" }).value);
     });
   }
@@ -2402,16 +2401,10 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   }
   // «Solo l'anno» scritto ma fuori da 1900–anno corrente: avviso sotto il campo e niente salvataggio.
   // v83: un libro Letto si salva solo con le stelle (scheda e Nuovo libro).
-  // v107: le stelle si chiedono a chi passa a Letto, ma si può salvare senza voto; un Letto già senza voto (es. importato) si salva.
-  const saltaVoto = new WeakSet();
-  function badRating(sheet, holder) {
-    const st = $("#f-status", sheet); if (!st || st.value !== "letto" || Number(holder.rating) > 0 || holder.status === "letto" || saltaVoto.has(holder)) return false;
-    const err = $("#f-rate-err", sheet); if (err) { err.hidden = false; err.textContent = "Scegli le stelle, oppure salvalo senza voto."; }
-    const sk = $("#f-rate-skip", sheet);
-    if (sk) { sk.hidden = false; sk.onclick = () => { saltaVoto.add(holder); const sv = $("#s-save, #a-save", sheet); if (sv) sv.click(); }; }
-    const first = $("#f-rate button", sheet); if (first) first.focus();
-    return true;
-  }
+  // v107: il voto è facoltativo. Chi salva un libro appena passato a Letto senza stelle non viene fermato:
+  // un avviso dopo il salvataggio offre «Dai le stelle» (il pallino «voto da aggiungere» resta come promemoria).
+  const nuovoSenzaVoto = (sheet, holder) => { const st = $("#f-status", sheet); return !!st && st.value === "letto" && !(Number(holder.rating) > 0) && holder.status !== "letto"; };
+  const avvisoSenzaVoto = (id, testo) => toast(testo + " · senza voto", { label: "Dai le stelle", run: () => { const x = state.books.find(y => y.id === id); if (x) chiediStelle(x, n => { if (n) salvaLibro({ ...x, rating: n }); }); } });
   function badYear(sheet) {
     const row = $("#f-year-row", sheet), inp = $("#f-year", sheet), err = $("#f-year-err", sheet);
     if (!row || !inp) return false;
@@ -2808,11 +2801,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       toast("Aggiunto alla lista dei desideri", { label: "Annulla", run: () => removeBook(id) });
     });
     $("#s-save", sheet).onclick = () => {
-      if (badYear(sheet) || badDates(sheet) || badRating(sheet, b)) return;
+      if (badYear(sheet) || badDates(sheet)) return;
+      const senza = nuovoSenzaVoto(sheet, b);
       readReading(sheet, b); readData(sheet, b);
       const live = state.books.find(x => x.id === b.id); // serie arrivata in sottofondo a scheda aperta: si tiene
       if (live && SER.every(k => (b[k] || "") === (ser0[k] || ""))) SER.forEach(k => { b[k] = live[k]; });
-      salvaLibro(b); closeSheet(); toast("Salvato");
+      salvaLibro(b); closeSheet(); if (senza) avvisoSenzaVoto(b.id, "Salvato tra i Letti"); else toast("Salvato");
     };
     const bought = $("#s-bought", sheet);
     if (bought) bought.onclick = () => { const cur = state.books.find(x => x.id === b.id) || b; closeSheet(); setStatus(cur, "da-leggere"); };
@@ -2883,12 +2877,13 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     if (!scan) setTimeout(() => { const a = document.activeElement; if (!a || a === document.body || !sheet.contains(a)) $("#s-q", sheet).focus(); }, 50); // non rubo il cursore a un campo già scelto
     $("#a-cancel", sheet).onclick = dismissSheet;
     $("#a-save", sheet).onclick = () => {
-      if (badYear(sheet) || badDates(sheet) || badRating(sheet, b)) return;
+      if (badYear(sheet) || badDates(sheet)) return;
+      const senza = nuovoSenzaVoto(sheet, b);
       readData(sheet, b);
       if (!$("#d-title", sheet).value.trim()) { $("#s-status", sheet).textContent = "Il titolo è obbligatorio."; $("#d-title", sheet).focus(); return; }
       readReading(sheet, b);
       if (state.books.some(x => keyOf(x) === keyOf(b))) { toast("Questo libro è già nella libreria."); return; }
-      seriesLater(salvaLibro(b).id); closeSheet(); toast("Aggiunto alla libreria");
+      const nid = salvaLibro(b).id; seriesLater(nid); closeSheet(); if (senza) avvisoSenzaVoto(nid, "Aggiunto ai Letti"); else toast("Aggiunto alla libreria");
     };
     $("#a-wish", sheet).onclick = () => {
       readData(sheet, b);
