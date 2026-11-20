@@ -925,3 +925,6 @@ body.in-porta > :not(#porta):not(.toast):not(.update-bar) { display: none !impor
 #porta .field { margin: 16px 0 8px; display: flex; flex-direction: column; gap: 6px; }
 #porta .actions { margin: 8px 0; display: flex; gap: 10px; flex-wrap: wrap; }
 #porta .status-line { margin-top: 10px; min-height: 1.4em; }
+
+/* v107: nel menu rapido «Elimina» sta da solo, staccato dagli altri pulsanti */
+.quick .q-del-row { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--rule); }

@@ -1,4 +1,4 @@
-// Stelle obbligatorie per i libri Letti (v83): menu rapido e «Finito!» chiedono prima le stelle, Salva si blocca senza,
+// Stelle per i libri Letti (v83, facoltative dalla v107): menu rapido e «Finito!» le chiedono con «Senza voto», Salva non si blocca,
 // pallino «da aggiornare» sui Letti senza voto.
 import { APP, ok, newPage, localBooks } from './lib.mjs';
 
@@ -57,11 +57,7 @@ async function salva(browser) {
   await load(p, [{ ...base, id: 's1', title: 'Da segnare', status: 'da-leggere', rating: 0 }]);
   await openBook(p, 's1');
   await p.locator('.seg [data-v="letto"]').click();
-  await p.locator('#s-save').click(); await p.waitForTimeout(400);
-  ok('scheda: Letto senza stelle, Salva bloccato con avviso', await p.locator('.sheet').isVisible() && /Scegli le stelle/.test(await p.locator('#f-rate-err').innerText()), await p.locator('#f-rate-err').innerText().catch(() => ''));
-  ok('scheda: il libro non è cambiato', (await book(p, 's1')).status === 'da-leggere');
   await p.locator('#f-rate button[data-n="3"]').click();
-  ok('scheda: scelta una stella l\'avviso sparisce', await p.locator('#f-rate-err').isHidden());
   await p.locator('#s-save').click(); await p.waitForTimeout(900);
   const s1 = await book(p, 's1');
   ok('scheda: con le stelle si salva', s1.status === 'letto' && s1.rating === 3, JSON.stringify(s1));
@@ -72,8 +68,6 @@ async function salva(browser) {
   await p.click('#a-mano'); // v100: Nuovo libro parte dalla sola ricerca
   await p.fill('#d-title', 'Nuovo letto'); await p.fill('#d-author', 'Z');
   await p.locator('.seg [data-v="letto"]').click();
-  await p.locator('#a-save').click(); await p.waitForTimeout(400);
-  ok('Nuovo libro: Letto senza stelle, non si salva', await p.locator('#a-save').isVisible() && !(await localBooks(p)).some(b => b.title === 'Nuovo letto'));
   await p.locator('#f-rate button[data-n="2"]').click(); await p.locator('#a-save').click(); await p.waitForTimeout(900);
   ok('Nuovo libro: con le stelle si salva', (await localBooks(p)).some(b => b.title === 'Nuovo letto' && b.rating === 2));
   // Da leggere e In lettura si salvano senza voto
@@ -99,8 +93,54 @@ async function segnale(browser) {
   await p.close2();
 }
 
+
+// v107 (focus group): le stelle si chiedono ma si può dire «Senza voto»; un Letto già senza voto si salva.
+async function senzaVotoOk(browser) {
+  const p = await newPage(browser);
+  const base = { added: 1, author: 'A', pages: 200 };
+  await load(p, [
+    { ...base, id: 'k1', title: 'Da chiudere', status: 'da-leggere', rating: 0 },
+    { ...base, id: 'k2', title: 'Importato', status: 'letto', rating: 0, finished: '2024-05-01' },
+    { ...base, id: 'k3', title: 'Dalla scheda', status: 'da-leggere', rating: 0 },
+  ]);
+  await quick(p, 'k1', 'letto');
+  ok('«Quante stelle?»: c\'è «Senza voto»', await p.locator('#q-rate-skip').count() === 1);
+  await p.locator('#q-rate-skip').click(); await p.waitForTimeout(1000);
+  const k1 = await book(p, 'k1');
+  ok('«Senza voto»: il libro va tra i Letti con voto 0, senza richiedere di nuovo', k1.status === 'letto' && !(k1.rating > 0) && await p.locator('.ask-rate').count() === 0, JSON.stringify(k1));
+  await openBook(p, 'k2'); await p.fill('#f-notes', 'una nota'); await p.locator('#s-save').click(); await p.waitForTimeout(900);
+  ok('scheda: un Letto già senza voto si salva (es. importato)', (await book(p, 'k2')).notes === 'una nota');
+  await openBook(p, 'k3'); await p.locator('.seg [data-v="letto"]').click(); await p.locator('#s-save').click(); await p.waitForTimeout(900);
+  const k3 = await book(p, 'k3');
+  ok('scheda: Letto senza stelle si salva subito, senza avvisi nella scheda', k3.status === 'letto' && !(k3.rating > 0) && await p.locator('.sheet').count() === 0, JSON.stringify(k3));
+  const t = await p.locator('.toast').innerText().catch(() => '');
+  ok('dopo il salvataggio: avviso «senza voto» con «Dai le stelle»', /senza voto/.test(t) && /Dai le stelle/.test(t), t);
+  await p.locator('.toast button', { hasText: 'Dai le stelle' }).click(); await p.waitForSelector('#q-rate');
+  await p.locator('#q-rate button[data-n="4"]').click(); await p.waitForTimeout(1000);
+  ok('«Dai le stelle» → 4 stelle salvate', (await book(p, 'k3')).rating === 4);
+  // Nuovo libro: Letto senza stelle si aggiunge
+  await p.evaluate(() => window.scrollTo(0, 0));
+  await p.locator('.dock .add').first().click(); await p.waitForSelector('#s-q'); await p.click('#a-mano');
+  await p.fill('#d-title', 'Nuovo senza voto'); await p.fill('#d-author', 'Z'); await p.locator('.seg [data-v="letto"]').click();
+  await p.locator('#a-save').click(); await p.waitForTimeout(900);
+  ok('Nuovo libro: Letto senza stelle si aggiunge', (await localBooks(p)).some(b => b.title === 'Nuovo senza voto' && b.status === 'letto'));
+  ok('senza voto: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
+async function eliminaStaccato(browser) {
+  const p = await newPage(browser);
+  await load(p, [{ added: 1, author: 'A', id: 'e1', title: 'Uno', status: 'da-leggere', rating: 0 }]);
+  await p.locator('#main [data-id="e1"]').first().dispatchEvent('pointerdown', { clientX: 5, clientY: 5 }); await p.waitForSelector('.quick'); await p.waitForTimeout(200);
+  const g = await p.evaluate(() => { const d = document.querySelector('#q-del'), o = document.querySelector('#q-open'), l = document.querySelector('.quick [data-st="letto"]'); const rd = d.getBoundingClientRect(), ro = o.getBoundingClientRect(), rl = l.getBoundingClientRect(); return { stessaRiga: Math.abs(rd.top - ro.top) < 4, gap: rd.top - Math.max(ro.bottom, rl.bottom) }; });
+  ok('menu rapido: «Elimina» su una riga sua, staccato dagli altri pulsanti', !g.stessaRiga && g.gap >= 16, JSON.stringify(g));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
   await gesti(browser);
   await salva(browser);
   await segnale(browser);
+  await senzaVotoOk(browser);
+  await eliminaStaccato(browser);
 }
