@@ -1841,7 +1841,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         ${st.anni.filter(a => a.year >= curY - 1).map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}
         ${old.length ? `<button class="btn ys-more" id="ys-more" type="button" aria-expanded="${statsOld}" aria-controls="ys-old">${statsOld ? "Nascondi gli anni precedenti" : `Mostra gli anni precedenti (${old.length})`}</button><div class="ys-old" id="ys-old"${statsOld ? "" : " hidden"}>${old.map(a => yearHTML(a, st.racconti.includes(a.year))).join("")}</div>` : ""}
         ${st.future ? `<p class="hint stats-future">${st.future === 1 ? "1 libro letto ha" : `${num(st.future)} libri letti hanno`} una data di fine nel futuro: correggila dalla scheda del libro per vederlo negli anni.</p>` : ""}
-        ${st.noYear ? `<div class="stats-noyear"><b>${st.noYear === 1 ? "1 libro letto senza anno." : `${num(st.noYear)} libri letti senza anno.`}</b> Aggiungi «Finito il» o solo l'anno dalla scheda del libro: comparirà sulla sua mensola.</div>` : ""}
+        ${st.noYear ? `<div class="stats-noyear">${st.noYear === 1 ? "Un libro letto non ha l'anno" : `${num(st.noYear)} libri letti non hanno l'anno`}: se vuoi, aggiungilo dalla scheda del libro e comparirà sulla sua mensola.</div>` : ""}
       </div><div class="sempre"><h2 class="sr">Sempre</h2>
         ${blk("autori", "Autori", "", autori, " span2")}
         ${blk("tempo", "Tempo di lettura", D ? plural(D.count, "libro con le date", "libri con le date") : "", tempo)}
@@ -2361,6 +2361,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     else if (st === "in-lettura") l1 = isoOk(S) ? "In lettura dal mese di " + MFMT.format(new Date(S + "T12:00")) : "In lettura";
     else if (st === "da-leggere") l1 = "In attesa di essere letto";
     $(".l1", colo).textContent = l1;
+    $(".l2", colo).textContent = nomeLibreria().replace(/^Libreria di /, "nella libreria di ").replace(/^La mia libreria$/, "nella mia libreria");
   }
   // Data toccabile: il campo vero è sovrapposto e trasparente; sul computer il clic apre il calendario con showPicker().
   function wireDateSlots(sheet) {
@@ -2475,7 +2476,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
 
   function searchBlock(prefill, scan = false) {
     return `<div class="field"><label for="s-q">Cerca il libro</label>
-        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button>${scan ? `<button class="btn" id="s-scan" type="button" aria-label="Scansiona il codice a barre"><svg class="ico-scan" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M17 9v6"/></svg>ISBN</button>` : ""}</div></div>
+        <div class="search"><input id="s-q" type="search" value="${esc(prefill || "")}" placeholder="Titolo, autore o ISBN" autocomplete="off"><button class="btn" id="s-go" type="button">Cerca</button>${scan ? `<button class="btn" id="s-scan" type="button" aria-label="Scansiona il codice a barre"><svg class="ico-scan" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M17 9v6"/></svg>Codice</button>` : ""}</div></div>
       <div class="scanner" id="s-scanner" hidden><video id="s-video" playsinline muted></video><div class="scan-frame"></div><button class="btn" id="s-scan-stop" type="button">Chiudi fotocamera</button></div>
       <div class="status-line" id="s-status" aria-live="polite"></div>
       <div class="results" id="s-results"></div>`;
@@ -2501,7 +2502,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         const found = await searchBooks(q, { onTry: (n, tot) => { if (mine === seq) status.textContent = `Cerco… Google risponde a intermittenza: tentativo ${n} di ${tot}, aspetta qualche secondo.`; } });
         if (mine !== seq) return;
         results = found;
-        status.textContent = results.length ? "Tocca l'edizione giusta per usarne i dati."
+        status.textContent = results.length ? "Tocca il tuo libro: copertina e dati arrivano da soli."
           : parseIsbn(q) && !results.errors.length ? "Nessuna fonte conosce questo ISBN."
           : "Nessun risultato: " + (fontiGiu(results.errors) || "prova con meno parole") + ". Riprova più tardi o inserisci il libro a mano.";
 
@@ -2663,7 +2664,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
     const synB = `<section class="syn-b" id="s-syn-b"${b.synopsis ? "" : " hidden"}><h3>Trama</h3><p class="synopsis" id="s-syn">${esc(b.synopsis || "")}</p><button class="syn-more" id="s-syn-more" type="button" aria-expanded="false" aria-label="Mostra tutta la trama" hidden>…</button></section>`;
     const colo = `<section class="colo" id="s-colo" data-st="${esc(b.status || "")}" data-isbn="${esc(b.isbn || "")}">
         <div id="s-colo-facts"></div>
-        <p id="s-colo-fin"><span class="l1"></span><span class="l2">nella libreria di Diego</span></p>
+        <p id="s-colo-fin"><span class="l1"></span><span class="l2"></span></p>
         <div class="refresh"><button class="btn" id="s-refresh" type="button">Aggiorna informazioni</button><div class="status-line" id="s-ref-status" aria-live="polite"></div></div>
         <details class="edit"><summary>Modifica i dati del libro</summary><div class="inner">
           ${searchBlock(b.title + " " + (b.author || ""))}
@@ -2910,13 +2911,12 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
   const indietroSe = o => o && o.daAltro === true ? indietro : ""; // le schede aperte anche da altri punti hanno «‹ Altro» solo se arrivano da Altro
   const backupInfo = () => {
     const last = getSet().lastBackup, days = last ? Math.floor((Date.now() - last) / 864e5) : null;
-    return days === null ? "Nessun backup ancora" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`;
+    return days === null ? "Salva una copia dei tuoi libri" : days === 0 ? "Ultimo backup: oggi" : `Ultimo backup: ${days} ${days === 1 ? "giorno" : "giorni"} fa`;
   };
   function openMore() {
     const y = new Date().getFullYear(), goal = (getSet().goals || {})[y];
     const t = today(), done = state.books.filter(b => lettura.annoLetto(b, t) === y).length;
     const tot = state.books.filter(b => b.status !== "desiderato").length;
-    const missing = state.books.filter(b => !b.cover && !b.noCover).length;
     const nome = nomeLibreria(), iniziale = (leggiNome() || cloud.email || "").trim().charAt(0).toUpperCase();
     const C = 2 * Math.PI * 27, pieno = goal ? Math.min(1, done / goal) * C : 0;
     const anello = goal
@@ -2942,7 +2942,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       </div>
       <div class="glabel">Strumenti</div>
       <div class="menu-list">
-        ${voce("copertine", "Copertine e serie", missing ? `${plural(missing, "libro", "libri")} senza copertina` : "Copertine, autori e serie")}
+        ${voce("copertine", "Copertine e serie", "Copertine, autori e serie")}
         ${isAdmin(cloudInfo().uid) && cloud.email ? voce("inv", "Invitati", "Chi può usare MyLibrary") : ""}
       </div>
       <div class="glabel">Aiuto</div>
@@ -3054,7 +3054,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
         : `<div class="actions"><button class="btn primary" id="sy-google" disabled>Accedi con Google</button></div>`}
       <div class="field"><label class="frase" for="sy-email">${!googleQui ? "Accedi con un link via email (senza password)" : "Oppure con un link via email (senza password)"}</label><input id="sy-email" type="email" autocomplete="email" inputmode="email" placeholder="tua@email.it" value="${esc(cloudInfo().lastEmail || "")}"></div>
       <div class="actions"><button class="btn" id="sy-link" disabled>Invia il link</button></div>
-      <div class="field"><label class="frase" for="sy-paste">Hai ricevuto il link? Copialo (tieni premuto, poi Copia) e incollalo qui senza aprirlo</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
+      <div class="field"><label class="frase" for="sy-paste">Arrivata l'email? Tieni premuto il link, scegli «Copia» e incollalo qui. Non toccarlo: si aprirebbe un'altra pagina</label><input id="sy-paste" type="url" autocomplete="off" placeholder="https://…"></div>
       <div class="actions"><button class="btn" id="sy-paste-go" disabled>Accedi con il link</button></div>
       <div class="status-line" id="sy-status" aria-live="polite">Preparo l'accesso…</div>`;
   }
@@ -3086,7 +3086,7 @@ FILTER NOT EXISTS { ?work wdt:P629 ?e0 } } LIMIT 500`, true) : []);
       if (!/^\S+@\S+\.\S+$/.test(email)) { st("Scrivi un indirizzo email valido."); return; }
       st("Invio il link…");
       window.libreriaCloud.sendLink(email)
-        .then(() => { setCloudInfo({ lastEmail: email }); st("Link inviato a " + email + ". Copialo dall'email e incollalo qui sopra, senza aprirlo."); })
+        .then(() => { setCloudInfo({ lastEmail: email }); st("Link inviato a " + email + ". Nell'email tieni premuto il link, scegli «Copia» e incollalo qui sopra."); })
         .catch(e => st("Non riesco a inviare il link: " + spiega(e) + "."));
     };
     $("#sy-paste-go", root).onclick = () => {

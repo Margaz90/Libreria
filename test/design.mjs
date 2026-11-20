@@ -75,9 +75,49 @@ async function nuovoLibro(browser) {
   await p.close2();
 }
 
+
+// v106 (focus group simulato): testi più chiari per chi arriva su invito, niente nome di Diego nella scheda degli altri.
+async function testiInvitati(browser) {
+  let p = await newPage(browser, { init: { fn: () => { window.libreriaPorta = true; } } });
+  await p.goto(APP + '/'); await p.waitForSelector('#porta #sy-paste');
+  const lab = await p.locator('#porta label[for="sy-paste"]').innerText();
+  ok('porta: il link si copia dall\'email in due passi chiari', !/senza aprirlo/.test(lab) && /tieni premuto il link/i.test(lab) && /«Copia»/.test(lab), lab);
+  await p.close2();
+
+  p = await newPage(browser);
+  const b = libri108(); b[0].status = 'letto'; b[0].rating = 4; b[0].finished = '2025-01-10'; b[0].cover = ''; b[0].noCover = false;
+  await load(p, b);
+  await p.locator('.dock .more').click(); await p.waitForTimeout(400);
+  const altro = await p.locator('.sheet').innerText();
+  ok('Altro: niente «Nessun backup ancora» né conteggio dei libri senza copertina', !/Nessun backup ancora/.test(altro) && !/senza copertina/.test(altro), altro.slice(0, 400));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  await p.locator('.dock [data-view="stats"]').click(); await p.waitForTimeout(500);
+  const ny = await p.locator('.stats-noyear').innerText().catch(() => '');
+  ok('Statistiche: i letti senza anno detti senza tono da compito', /se vuoi/i.test(ny) && !/^\d+ libri letti senza anno\./.test(ny), ny);
+  await p.close2();
+
+  p = await newPage(browser);
+  await p.goto(APP + '/'); await p.evaluate(() => { localStorage.setItem('libreria-nome', 'Anna Rossi'); localStorage.setItem('libreria-diego-v1', JSON.stringify([{ id: 'n1', title: 'Uno', author: 'A', status: 'letto', rating: 3, finished: '2025-02-01', added: 1 }])); });
+  await p.reload(); await p.waitForSelector('#main [data-id]');
+  await p.locator('#main [data-id="n1"]').first().click(); await p.waitForSelector('#s-colo .l2');
+  const l2 = (await p.locator('#s-colo .l2').innerText()).trim();
+  ok('scheda: «nella libreria di» chi è entrato, non di Diego', l2 === 'nella libreria di Anna Rossi', l2);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  await p.locator('.dock [data-act="add"]').click(); await p.waitForSelector('#s-q');
+  const scan = await p.locator('#s-scan').innerText().catch(() => '');
+  ok('Nuovo libro: il pulsante dice «Codice», non «ISBN»', !scan || /^Codice$/.test(scan.trim()), scan);
+  const qw = await p.evaluate(() => document.querySelector('#s-q').getBoundingClientRect().width);
+  ok('Nuovo libro: il campo di ricerca resta largo almeno 140 px', qw >= 140, String(qw));
+  const w = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  ok('Nuovo libro: niente scorrimento orizzontale', w);
+  ok('testi per gli invitati: nessun errore in console', !p.errs.length, p.errs.join(' / '));
+  await p.close2();
+}
+
 export default async function run({ browser }) {
   await porta(browser);
   await etichette(browser);
   await libreria(browser);
   await nuovoLibro(browser);
+  await testiInvitati(browser);
 }

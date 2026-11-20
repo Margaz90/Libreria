@@ -321,7 +321,7 @@ async function colophon(browser) {
   const facts = () => p.locator('#s-colo-facts p').evaluateAll(a => a.map(e => e.innerText.trim()));
   const fin = async () => (await txt(p, '#s-colo .l1')) + ' | ' + (await txt(p, '#s-colo .l2'));
   await openBook(p, 'c1');
-  ok('colophon completo', JSON.stringify(await facts()) === JSON.stringify(['Pubblicato nel 2016', '369 pagine, spionaggio', 'Segnatura 823.92 HER', 'ISBN 9788834746219']) && await fin() === 'Finito di leggere nel mese di gennaio 2025 | nella libreria di Diego', JSON.stringify(await facts()) + await fin());
+  ok('colophon completo', JSON.stringify(await facts()) === JSON.stringify(['Pubblicato nel 2016', '369 pagine, spionaggio', 'Segnatura 823.92 HER', 'ISBN 9788834746219']) && await fin() === 'Finito di leggere nel mese di gennaio 2025 | nella mia libreria', JSON.stringify(await facts()) + await fin());
   await p.locator('details.edit summary').click();
   await p.fill('#d-pages', '400');
   ok('pagine cambiate: colophon aggiornato', (await facts())[1] === '400 pagine, spionaggio', JSON.stringify(await facts()));
